@@ -32,6 +32,7 @@ export default function LeadDetails() {
     addFollowup,
     toggleFollowupDone,
     activeServices,
+    qualificationFields,
   } = useLeads();
 
   const currentLead = leads.find((l) => l.id === id);
@@ -521,117 +522,140 @@ export default function LeadDetails() {
         </div>
 
         {/* AI Captured Details (Conditional) */}
-        {(currentLead.aiQualification?.liftType ||
-          currentLead.aiQualification?.propertyType ||
-          currentLead.aiQualification?.numberOfFloors ||
-          currentLead.aiQualification?.capacity ||
-          currentLead.aiQualification?.constructionStage ||
-          currentLead.aiQualification?.doorType ||
-          currentLead.aiQualification?.machineRoomAvailable ||
-          currentLead.aiQualification?.issueDescription ||
-          currentLead.aiQualification?.preferredCallDate ||
-          currentLead.aiQualification?.preferredVisitDate ||
-          currentLead.aiQualification?.city ||
-          currentLead.aiQualification?.intent) && (
+        {currentLead.aiQualification &&
+          Object.entries(currentLead.aiQualification).some(
+            ([k, v]) =>
+              !["_id", "__v", "id"].includes(k) &&
+              v !== undefined &&
+              v !== null &&
+              v !== "",
+          ) && (
           <div className="bg-brand-light border border-purple-500/30 rounded-xl shadow-sm overflow-hidden mb-6">
             <div className="p-4 border-b border-purple-500/20 bg-purple-500/5">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
-                <h3 className="font-bold text-purple-600">AI Captured Elevator Specifications</h3>
+                <h3 className="font-bold text-purple-600">AI Captured Lead Specifications</h3>
                 <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded bg-purple-500/10 text-purple-600">
                   Auto-extracted
                 </span>
               </div>
             </div>
             <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-              {currentLead.aiQualification?.liftType && (
+              {/* Product / Service Intent */}
+              {(currentLead.aiQualification?.intent || currentLead.service) && (
                 <div className="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30">
                   <span className="text-[10px] uppercase font-bold text-purple-600 block mb-1">
-                    Lift Product Type
+                    Service / Product Line
                   </span>
                   <span className="text-sm font-bold text-purple-700">
-                    {currentLead.aiQualification.liftType}
+                    {currentLead.service || currentLead.aiQualification?.intent}
                   </span>
                 </div>
               )}
-              {currentLead.aiQualification?.numberOfFloors && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Floors / Stops
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary">
-                    {currentLead.aiQualification.numberOfFloors}
-                  </span>
-                </div>
+
+              {/* Dynamic Organization Qualification Fields */}
+              {qualificationFields && qualificationFields.length > 0 ? (
+                qualificationFields.map((f) => {
+                  const val = currentLead.aiQualification?.[f.key];
+                  if (val === undefined || val === null || val === "") return null;
+                  return (
+                    <div
+                      key={f.key}
+                      className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30"
+                    >
+                      <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
+                        {f.label || f.key}
+                      </span>
+                      <span className="text-sm font-semibold text-brand-primary">
+                        {String(val)}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                /* Fallback for unconfigured schemas */
+                Object.entries(currentLead.aiQualification)
+                  .filter(
+                    ([k, v]) =>
+                      ![
+                        "intent",
+                        "city",
+                        "preferredCallDate",
+                        "preferredCallTime",
+                        "preferredVisitDate",
+                        "issueDescription",
+                        "urgency",
+                        "interestScore",
+                        "_id",
+                        "__v",
+                        "id",
+                      ].includes(k) &&
+                      v !== undefined &&
+                      v !== null &&
+                      v !== "",
+                  )
+                  .map(([key, val]) => (
+                    <div
+                      key={key}
+                      className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30"
+                    >
+                      <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
+                        {key.replace(/([A-Z])/g, " $1")}
+                      </span>
+                      <span className="text-sm font-semibold text-brand-primary">
+                        {String(val)}
+                      </span>
+                    </div>
+                  ))
               )}
-              {currentLead.aiQualification?.capacity && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Capacity / Load
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary">
-                    {currentLead.aiQualification.capacity}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.propertyType && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Building Type
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary capitalize">
-                    {currentLead.aiQualification.propertyType}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.doorType && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Door Type
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary">
-                    {currentLead.aiQualification.doorType}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.machineRoomAvailable && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Machine Room
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary">
-                    {currentLead.aiQualification.machineRoomAvailable}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.constructionStage && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Project Stage
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary capitalize">
-                    {currentLead.aiQualification.constructionStage}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.clientType &&
-                currentLead.aiQualification?.clientType !== "General" && (
-                  <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                    <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                      Client Role
-                    </span>
-                    <span className="text-sm font-semibold text-brand-primary">
-                      {currentLead.aiQualification.clientType}
-                    </span>
-                  </div>
-                )}
+
+              {/* Extra attributes in aiQualification not covered by schema */}
+              {qualificationFields &&
+                qualificationFields.length > 0 &&
+                Object.entries(currentLead.aiQualification)
+                  .filter(
+                    ([k, v]) =>
+                      ![
+                        "intent",
+                        "city",
+                        "preferredCallDate",
+                        "preferredCallTime",
+                        "preferredVisitDate",
+                        "issueDescription",
+                        "urgency",
+                        "interestScore",
+                        "_id",
+                        "__v",
+                        "id",
+                        ...qualificationFields.map((f) => f.key),
+                      ].includes(k) &&
+                      v !== undefined &&
+                      v !== null &&
+                      v !== "",
+                  )
+                  .map(([key, val]) => (
+                    <div
+                      key={key}
+                      className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30"
+                    >
+                      <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
+                        {key.replace(/([A-Z])/g, " $1")}
+                      </span>
+                      <span className="text-sm font-semibold text-brand-primary">
+                        {String(val)}
+                      </span>
+                    </div>
+                  ))}
+
+              {/* Standard Attributes */}
               {currentLead.aiQualification?.preferredCallDate && (
                 <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/30 col-span-2">
                   <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">
                     Requested Callback Time
                   </span>
                   <span className="text-sm font-bold text-emerald-700">
-                    {currentLead.aiQualification.preferredCallDate} {currentLead.aiQualification.preferredCallTime}
+                    {currentLead.aiQualification.preferredCallDate}{" "}
+                    {currentLead.aiQualification.preferredCallTime}
                   </span>
                 </div>
               )}

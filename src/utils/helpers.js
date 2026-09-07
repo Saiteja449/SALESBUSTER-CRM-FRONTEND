@@ -73,8 +73,33 @@ export const serviceColors = {
   "Elevator Modernization": "#6366f1", // Indigo
 };
 
+const DYNAMIC_PALETTE = [
+  "#0c7dfd",
+  "#8b5cf6",
+  "#f59e0b",
+  "#10b981",
+  "#ef4444",
+  "#6366f1",
+  "#ec4899",
+  "#14b8a6",
+  "#f97316",
+  "#06b6d4",
+  "#84cc16",
+  "#a855f7",
+  "#3b82f6",
+  "#e11d48",
+  "#0ea5e9",
+];
+
 export function getServiceColor(serviceName) {
-  return serviceColors[serviceName] || "#64748b";
+  if (!serviceName) return "#64748b";
+  if (serviceColors[serviceName]) return serviceColors[serviceName];
+
+  let hash = 0;
+  for (let i = 0; i < serviceName.length; i++) {
+    hash = serviceName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return DYNAMIC_PALETTE[Math.abs(hash) % DYNAMIC_PALETTE.length];
 }
 
 /**

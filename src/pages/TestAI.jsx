@@ -2,8 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Send, RefreshCw, Bot } from "lucide-react";
 import { Navigate } from "react-router-dom";
+import { useLeads } from "../context/LeadsContext.jsx";
 
 export default function TestAI() {
+  const { qualificationFields: contextQualFields } = useLeads();
+  const [schemaFields, setSchemaFields] = useState([]);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
   const [aiQualification, setAiQualification] = useState(null);
@@ -25,6 +28,9 @@ export default function TestAI() {
       const res = await axios.get(API_URL);
       setMessages(res.data.messages || []);
       setAiQualification(res.data.aiQualification || null);
+      if (res.data.qualificationFields?.length) {
+        setSchemaFields(res.data.qualificationFields);
+      }
       setLeadId(res.data.leadId);
     } catch (error) {
       console.error("Error fetching AI test history:", error);
@@ -63,6 +69,9 @@ export default function TestAI() {
       const aiResponse = { text: res.data.outgoing.text, role: "ai" };
       setMessages((prev) => [...prev, aiResponse]);
       setAiQualification(res.data.aiQualification);
+      if (res.data.qualificationFields?.length) {
+        setSchemaFields(res.data.qualificationFields);
+      }
     } catch (error) {
       console.error("Error sending message to AI:", error);
     } finally {
@@ -175,34 +184,10 @@ export default function TestAI() {
           {aiQualification ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm">
-                <div className="text-brand-primary/70">Lift Type</div>
+                {/* Core Attributes */}
+                <div className="text-brand-primary/70">Service / Product</div>
                 <div className="font-medium text-brand-primary">
-                  {aiQualification.liftType || "-"}
-                </div>
-
-                <div className="text-brand-primary/70">Floors / Stops</div>
-                <div className="font-medium text-brand-primary">
-                  {aiQualification.numberOfFloors || "-"}
-                </div>
-
-                <div className="text-brand-primary/70">Capacity / Load</div>
-                <div className="font-medium text-brand-primary">
-                  {aiQualification.capacity || "-"}
-                </div>
-
-                <div className="text-brand-primary/70">Door Type</div>
-                <div className="font-medium text-brand-primary">
-                  {aiQualification.doorType || "-"}
-                </div>
-
-                <div className="text-brand-primary/70">Machine Room</div>
-                <div className="font-medium text-brand-primary">
-                  {aiQualification.machineRoomAvailable || "-"}
-                </div>
-
-                <div className="text-brand-primary/70">Stage</div>
-                <div className="font-medium text-brand-primary">
-                  {aiQualification.constructionStage || "-"}
+                  {aiQualification.intent || aiQualification.service || "-"}
                 </div>
 
                 <div className="text-brand-primary/70">City / Location</div>
@@ -219,8 +204,88 @@ export default function TestAI() {
 
                 <div className="text-brand-primary/70">Urgency</div>
                 <div className="font-medium text-brand-primary">
-                  {aiQualification.urgency || "-"}
+                  {aiQualification.urgency || "Medium"}
                 </div>
+
+                {/* Organization's Dynamic Fields */}
+                {(schemaFields?.length ? schemaFields : contextQualFields)?.length > 0
+                  ? (schemaFields?.length ? schemaFields : contextQualFields).map((f) => {
+                      const val = aiQualification[f.key];
+                      return (
+                        <React.Fragment key={f.key}>
+                          <div className="text-brand-primary/70">
+                            {f.label || f.key}
+                          </div>
+                          <div className="font-medium text-brand-primary">
+                            {val !== undefined && val !== null && val !== ""
+                              ? String(val)
+                              : "-"}
+                          </div>
+                        </React.Fragment>
+                      );
+                    })
+                  : Object.entries(aiQualification)
+                      .filter(
+                        ([k]) =>
+                          ![
+                            "intent",
+                            "service",
+                            "city",
+                            "preferredCallDate",
+                            "preferredCallTime",
+                            "urgency",
+                            "interestScore",
+                            "_id",
+                            "__v",
+                            "id",
+                          ].includes(k),
+                      )
+                      .map(([key, val]) => (
+                        <React.Fragment key={key}>
+                          <div className="text-brand-primary/70 capitalize">
+                            {key.replace(/([A-Z])/g, " $1")}
+                          </div>
+                          <div className="font-medium text-brand-primary">
+                            {val !== undefined && val !== null && val !== ""
+                              ? String(val)
+                              : "-"}
+                          </div>
+                        </React.Fragment>
+                      ))}
+
+                {/* Extra dynamic attributes not covered in active schema */}
+                {(schemaFields?.length ? schemaFields : contextQualFields)?.length > 0 &&
+                  Object.entries(aiQualification)
+                    .filter(
+                      ([k, v]) =>
+                        ![
+                          "intent",
+                          "service",
+                          "city",
+                          "preferredCallDate",
+                          "preferredCallTime",
+                          "urgency",
+                          "interestScore",
+                          "liftType",
+                          "_id",
+                          "__v",
+                          "id",
+                          ...(schemaFields?.length ? schemaFields : contextQualFields).map((f) => f.key),
+                        ].includes(k) &&
+                        v !== undefined &&
+                        v !== null &&
+                        v !== "",
+                    )
+                    .map(([key, val]) => (
+                      <React.Fragment key={key}>
+                        <div className="text-brand-primary/70 capitalize">
+                          {key.replace(/([A-Z])/g, " $1")}
+                        </div>
+                        <div className="font-medium text-brand-primary">
+                          {String(val)}
+                        </div>
+                      </React.Fragment>
+                    ))}
               </div>
 
               <div className="mt-4 pt-4 border-t border-brand-secondary">
@@ -238,7 +303,7 @@ export default function TestAI() {
                             : "bg-red-500"
                       }`}
                       style={{
-                        width: `${(aiQualification.interestScore || 0) * 10}%`,
+                        width: `${Math.min(100, (aiQualification.interestScore || 0) * 10)}%`,
                       }}
                     />
                   </div>

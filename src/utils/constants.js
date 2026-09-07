@@ -37,6 +37,12 @@ export const API_ENDPOINTS = {
     AI_LIMITS: `${API_BASE_URL}/analytics/ai-limits`,
     AI_LIMITS_REFRESH: `${API_BASE_URL}/analytics/ai-limits/refresh`,
   },
+  ORGANIZATIONS: {
+    MY_ORG: `${API_BASE_URL}/organizations/my-org`,
+    AI_SETTINGS: `${API_BASE_URL}/organizations/my-org/ai-settings`,
+    KNOWLEDGE_UPLOAD: `${API_BASE_URL}/organizations/my-org/knowledge-base/upload`,
+    KNOWLEDGE_DELETE: (docId) => `${API_BASE_URL}/organizations/my-org/knowledge-base/${docId}`,
+  },
 };
 
 export const BACKEND_URL = API_BASE_URL.replace(/\/api$/, "");

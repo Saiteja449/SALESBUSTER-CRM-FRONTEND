@@ -1,15 +1,65 @@
-import React from "react";
-import { useState, createContext, useContext, useEffect } from "react";
+import React, { useState, createContext, useContext, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { services } from "../data.js";
+import { useAuth } from "./AuthContext.jsx";
+import { getServiceColor } from "../utils/helpers.js";
+import { socket } from "../utils/socket.js";
 
 const LeadsContext = createContext(null);
 
+const mapServicesToActive = (rawServices) => {
+  if (!Array.isArray(rawServices) || rawServices.length === 0) return null;
+  return rawServices.map((s, idx) => {
+    const name = typeof s === "string" ? s : s.name;
+    return {
+      id: s._id || `s_${idx}`,
+      name,
+      code: name,
+      active: true,
+      color: getServiceColor(name),
+      description: s.description || "",
+      keywords: s.keywords || [],
+    };
+  });
+};
+
 export function LeadsProvider({ children }) {
+  const { organization } = useAuth();
   const [leads, setLeads] = useState([]);
 
-  const [activeServices, setActiveServices] = useState(services);
+  const [activeServices, setActiveServices] = useState(() => {
+    const fromOrg = mapServicesToActive(organization?.aiSettings?.services);
+    return fromOrg || services;
+  });
+
+  const qualificationFields = useMemo(() => {
+    return organization?.aiSettings?.qualificationFields || [];
+  }, [organization?.aiSettings?.qualificationFields]);
+
+  // Synchronize when organization changes
+  useEffect(() => {
+    if (organization?.aiSettings?.services && organization.aiSettings.services.length > 0) {
+      const dynamic = mapServicesToActive(organization.aiSettings.services);
+      if (dynamic) setActiveServices(dynamic);
+    }
+  }, [organization?.aiSettings?.services]);
+
+  // Listen for real-time socket updates to AI settings
+  useEffect(() => {
+    const handleAiSettingsUpdate = (aiSettings) => {
+      if (aiSettings?.services && aiSettings.services.length > 0) {
+        const dynamic = mapServicesToActive(aiSettings.services);
+        if (dynamic) setActiveServices(dynamic);
+      }
+    };
+
+    socket.on("ai_settings_updated", handleAiSettingsUpdate);
+    return () => {
+      socket.off("ai_settings_updated", handleAiSettingsUpdate);
+    };
+  }, []);
+
   const [followups, setFollowups] = useState([]);
 
   const refreshData = React.useCallback(async () => {
@@ -169,6 +219,8 @@ export function LeadsProvider({ children }) {
         leads,
         setLeads,
         activeServices,
+        setActiveServices,
+        qualificationFields,
         followups,
         addLead,
         updateLead,

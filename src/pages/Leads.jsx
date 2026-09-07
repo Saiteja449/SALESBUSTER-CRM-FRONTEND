@@ -56,7 +56,7 @@ export default function Leads() {
     }
   };
 
-  const { addLead, updateLead, deleteLead, activeServices } = useLeads();
+  const { addLead, updateLead, deleteLead, activeServices, qualificationFields } = useLeads();
   const { allUsers, currentUser } = useAuth();
 
   const paramToTab = {
@@ -103,7 +103,7 @@ export default function Leads() {
     phone: "",
     email: "",
     source: "Manual Entry",
-    service: "General Enquiry",
+    service: activeServices?.[0]?.code || "General Enquiry",
 
     assignedTo: currentUser?.role === "Sales Representative" ? currentUser.name : "Unassigned",
     nextFollowUp: "2026-05-26",
@@ -204,7 +204,10 @@ export default function Leads() {
   const totalPages = isAll ? 1 : Math.ceil(totalLeadsCount / effectiveLimit);
 
   const handleOpenAdd = () => {
-    setFormFields(defaultFormFields);
+    setFormFields({
+      ...defaultFormFields,
+      service: activeServices?.[0]?.code || "General Enquiry",
+    });
     setAddOpen(true);
   };
 
@@ -635,228 +638,7 @@ export default function Leads() {
         </div>
       </div>
 
-      {/* Drawer */}
-      {/* {drawerOpen && selectedLead && (
-        <>
-          <div
-            className="fixed inset-0 bg-brand-light/50 z-40"
-            onClick={() => setDrawerOpen(false)}
-          ></div>
-          <div className="fixed inset-y-0 right-0 w-full sm:w-[420px] bg-brand-light border-l border-brand-secondary z-50 flex flex-col shadow-2xl">
-            <div className="p-4 border-b border-brand-secondary flex justify-between items-center bg-brand-light/50">
-              <div>
-                <h3 className="font-bold text-brand-primary">Client Quick Review</h3>
-                <p className="text-xs text-brand-primary/70">
-                  Lead ID: {selectedLead.id}
-                </p>
-              </div>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="p-2 text-brand-primary/70 hover:text-brand-primary rounded-full hover:bg-brand-secondary/30"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-purple-500 flex items-center justify-center text-brand-light font-bold text-xl">
-                  {selectedLead.name.substring(0, 1).toUpperCase()}
-                </div>
-                <div>
-                  <h4 className="text-lg font-bold text-brand-primary">
-                    {selectedLead.name}
-                  </h4>
-                  <Badge colorClass={getTwStatusColor(selectedLead.status)}>
-                    {selectedLead.status}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="block text-xs text-brand-primary/70 mb-1">
-                    Contact Phone
-                  </span>
-                  <span className="font-semibold text-brand-primary">
-                    {selectedLead.phone}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs text-brand-primary/70 mb-1">
-                    Contact Email
-                  </span>
-                  <span className="font-semibold text-brand-primary truncate block">
-                    {selectedLead.email || "-"}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs text-brand-primary/70 mb-1">
-                    Lead Source
-                  </span>
-                  <span className="font-semibold text-brand-primary">
-                    {selectedLead.source}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs text-brand-primary/70 mb-1">
-                    Service Interest
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{
-                        backgroundColor: getServiceColor(selectedLead.service),
-                      }}
-                    ></div>
-                    <span className="font-bold text-brand-primary">
-                      {selectedLead.service}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="block text-xs text-brand-primary/70 mb-1">
-                    Assigned Manager
-                  </span>
-                  <span className="font-semibold text-brand-primary">
-                    {selectedLead.assignedTo}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs text-brand-primary/70 mb-1">
-                    Enquired On
-                  </span>
-                  <span className="font-semibold text-brand-primary">
-                    {selectedLead.joinedAt
-                      ? formatDate(selectedLead.joinedAt)
-                      : "-"}
-                  </span>
-                </div>
-              </div>
-
-              <hr className="border-brand-secondary" />
-
-              <div>
-                <h5 className="flex items-center gap-2 font-bold text-brand-primary mb-3">
-                  <Info className="w-4 h-4" /> AI Captured Metadata
-                </h5>
-                <div className="bg-brand-light border border-brand-secondary rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      Lift Type
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.liftType ||
-                        selectedLead.service ||
-                        "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      Floors / Stops
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.numberOfFloors || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      Capacity
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.capacity || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      Door Type
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.doorType || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      Machine Room
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.machineRoomAvailable || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      Construction Stage
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.constructionStage || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      City / Location
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.city || "-"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-xs text-brand-primary/70 mb-1">
-                      Callback Requested
-                    </span>
-                    <span className="font-bold text-brand-primary capitalize">
-                      {selectedLead.aiQualification?.preferredCallTime
-                        ? `${selectedLead.aiQualification?.preferredCallDate || "Soon"} (${selectedLead.aiQualification?.preferredCallTime})`
-                        : selectedLead.aiQualification?.preferredCallDate || "-"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <hr className="border-brand-secondary" />
-
-              <div>
-                <h5 className="font-bold text-brand-primary mb-2">
-                  Lead Context & Notes
-                </h5>
-                <p className="bg-orange-500/10 text-orange-500 border border-orange-500/20 rounded-xl p-4 text-sm italic">
-                  {selectedLead.notes ||
-                    "No context notes appended to this file."}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-brand-secondary bg-brand-light/50 flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  setDrawerOpen(false);
-                  navigate(`/lead-details/${selectedLead.id}`);
-                }}
-                className="w-full py-2 bg-purple-500 hover:bg-purple-600 text-brand-light font-bold rounded-lg transition-colors"
-              >
-                Go to Workspace
-              </button>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleOpenEdit(selectedLead)}
-                  className="flex-1 py-2 bg-transparent border border-brand-secondary hover:border-brand-primary/50 text-brand-primary font-bold rounded-lg transition-colors"
-                >
-                  Edit File
-                </button>
-                <button
-                  onClick={() => {
-                    setDeleteId(selectedLead.id);
-                    setDrawerOpen(false);
-                  }}
-                  className="flex-1 py-2 bg-transparent border border-red-500/50 hover:bg-red-500/10 text-red-500 font-bold rounded-lg transition-colors flex justify-center items-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" /> Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )} */}
+      {/* Quick review drawer replaced in favor of direct Lead Details workspace */}
 
       {/* Add / Edit Dialog */}
       {(addOpen || editOpen) && (

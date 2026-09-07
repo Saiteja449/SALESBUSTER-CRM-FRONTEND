@@ -2,12 +2,14 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Menu, Bell, Plus, Search } from "lucide-react";
 import { useNotifications } from "../context/NotificationContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
 
 export default function Header({ handleDrawerToggle, onQuickAddLead }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
+  const { organization } = useAuth();
 
   // Get dynamic title based on path
   const getPageTitle = () => {
@@ -19,9 +21,10 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
     if (path.startsWith("/services")) return "Service Offerings & Workflows";
     if (path.startsWith("/followups")) return "Follow-Up Agenda";
     if (path.startsWith("/performance")) return "Sales Leaderboard";
+    if (path.startsWith("/organization")) return "Organization Profile";
     if (path.startsWith("/notifications")) return "Alerts Panel";
     if (path.startsWith("/settings")) return "CRM Preferences";
-    return "Kranthi Elevators CRM";
+    return "SalesBuster CRM";
   };
 
   return (
@@ -37,9 +40,22 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
           >
             <Menu className="w-6 h-6" />
           </button>
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-text-primary truncate">
-            {getPageTitle()}
-          </h1>
+          <div className="flex items-center gap-3 truncate">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-text-primary truncate">
+              {getPageTitle()}
+            </h1>
+            {organization && (
+              <button
+                type="button"
+                onClick={() => navigate("/organization")}
+                title="View Organization Profile"
+                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 truncate max-w-[220px] transition-colors cursor-pointer"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                <span className="truncate">{organization.name}</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: Quick Action Controls */}

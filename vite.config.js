@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig(() => {
   return {
-    base: "/kranthi-crm/",
+    base: "/salesbuster-crm/",
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

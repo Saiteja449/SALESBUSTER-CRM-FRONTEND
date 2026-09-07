@@ -8,6 +8,10 @@ import {
   Medal,
   Activity,
   Eye,
+  AlertTriangle,
+  Users,
+  ShieldCheck,
+  Calendar,
 } from "lucide-react";
 import { useDashboard } from "../context/DashboardContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -15,7 +19,17 @@ import { useAuth } from "../context/AuthContext.jsx";
 export default function TeamPerformance() {
   const navigate = useNavigate();
   const { performersList } = useDashboard();
-  const { currentUser, addSalesPerson, deleteSalesPerson } = useAuth();
+  const {
+    currentUser,
+    organization,
+    totalSeats,
+    usedSeats,
+    remainingSeats,
+    isSeatLimitReached,
+    isSubscriptionExpired,
+    addSalesPerson,
+    deleteSalesPerson,
+  } = useAuth();
 
   const isManager = currentUser && currentUser.role === "Sales Manager";
 
@@ -26,6 +40,7 @@ export default function TeamPerformance() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [createError, setCreateError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // ── Rep deletion ───────────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -34,6 +49,20 @@ export default function TeamPerformance() {
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setCreateError("");
+
+    if (isSeatLimitReached) {
+      setCreateError(
+        `Seat limit reached (${usedSeats}/${totalSeats} seats allocated). Upgrade plan to add more seats.`
+      );
+      return;
+    }
+
+    if (isSubscriptionExpired) {
+      setCreateError(
+        "Subscription expired. Please contact SalesBuster Admin to renew."
+      );
+      return;
+    }
 
     if (!newName.trim() || !newEmail.trim() || !newPassword) {
       setCreateError("All fields are required.");
@@ -50,32 +79,52 @@ export default function TeamPerformance() {
       return;
     }
 
-    const res = await addSalesPerson(
-      newName.trim(),
-      newEmail.trim(),
-      newPassword,
-    );
-    if (res.success) {
+    try {
+      setSubmitting(true);
+      await addSalesPerson(
+        newName.trim(),
+        newEmail.trim(),
+        newPassword
+      );
       setCreateOpen(false);
       setNewName("");
       setNewEmail("");
       setNewPassword("");
       setConfirmPassword("");
-    } else {
-      setCreateError(res.message || "Failed to create representative.");
+    } catch (err) {
+      setCreateError(err.message || "Failed to create representative.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     setDeleteError("");
-    const res = await deleteSalesPerson(deleteTarget.id);
-    if (res.success) {
+    try {
+      await deleteSalesPerson(deleteTarget.id);
       setDeleteTarget(null);
-    } else {
-      setDeleteError(res.message || "Failed to delete representative.");
+    } catch (err) {
+      setDeleteError(err.message || "Failed to delete representative.");
     }
   };
+
+  const formatExpiry = (dateStr) => {
+    if (!dateStr) return "N/A";
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  // Calculate days until expiration
+  const daysUntilExpiry = organization?.subscriptionEndDate
+    ? Math.ceil(
+        (new Date(organization.subscriptionEndDate) - new Date()) /
+          (1000 * 60 * 60 * 24)
+      )
+    : null;
 
   if (!isManager) {
     return (
@@ -85,9 +134,9 @@ export default function TeamPerformance() {
             Access Restricted
           </h2>
           <p className="text-brand-primary/70 mb-6 leading-relaxed">
-            Only designated <strong>Sales Managers</strong> have clearance to
-            inspect individual conversion indices, adjust team capacities, or
-            manage sales representative accounts.
+            Only designated <strong>Sales Managers / Organization Owners</strong>{" "}
+            have clearance to inspect conversion indices, adjust team capacities, or
+            manage sales representative seats.
           </p>
           <button
             onClick={() => navigate("/dashboard")}
@@ -100,8 +149,54 @@ export default function TeamPerformance() {
     );
   }
 
+  const seatPercentage = Math.min(
+    100,
+    Math.round((usedSeats / Math.max(1, totalSeats)) * 100)
+  );
+
+  const currentPlanRaw = organization?.subscriptionPlan || "monthly";
+  const currentPlanName =
+    currentPlanRaw.charAt(0).toUpperCase() + currentPlanRaw.slice(1);
+
   return (
     <div className="p-4 md:p-6 space-y-6">
+      {/* ── Subscription Expired Alert Banner ─────────────────────────────── */}
+      {isSubscriptionExpired && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 sm:p-5 flex items-start gap-4">
+          <AlertTriangle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-red-600 dark:text-red-400">
+              Subscription Expired
+            </h3>
+            <p className="text-xs text-red-500/90 mt-1">
+              Your organization's {currentPlanRaw.toLowerCase()} plan expired on{" "}
+              <strong>{formatExpiry(organization?.subscriptionEndDate)}</strong>.
+              Adding new sales representatives and leads is currently locked.
+              Please contact your SalesBuster Administrator to renew your subscription.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Subscription Expiring Soon Banner (< 5 days) ──────────────────── */}
+      {!isSubscriptionExpired &&
+        daysUntilExpiry !== null &&
+        daysUntilExpiry <= 5 &&
+        daysUntilExpiry >= 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3">
+            <Calendar className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                Subscription Renews in {daysUntilExpiry} {daysUntilExpiry === 1 ? "day" : "days"}
+              </h3>
+              <p className="text-xs text-amber-600/90 dark:text-amber-400/80 mt-0.5">
+                Your {currentPlanRaw.toLowerCase()} plan will renew on{" "}
+                <strong>{formatExpiry(organization?.subscriptionEndDate)}</strong>.
+              </p>
+            </div>
+          </div>
+        )}
+
       {/* ── Page Header ──────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-sm">
         <div>
@@ -109,8 +204,7 @@ export default function TeamPerformance() {
             Team Performance & Management
           </h1>
           <p className="text-xs text-brand-primary/70 mt-1">
-            Track conversion weights, follow-up index completions, and converted
-            leads per representative.
+            Track conversion weights, follow-up index completions, and manage team seats.
           </p>
         </div>
 
@@ -120,11 +214,106 @@ export default function TeamPerformance() {
               setCreateError("");
               setCreateOpen(true);
             }}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-xl transition-colors text-sm shadow-sm"
+            disabled={isSeatLimitReached || isSubscriptionExpired}
+            title={
+              isSubscriptionExpired
+                ? "Subscription expired. Renewal required."
+                : isSeatLimitReached
+                ? `Seat limit reached (${usedSeats}/${totalSeats}). Contact admin to upgrade.`
+                : "Add a new sales representative"
+            }
+            className={`flex items-center gap-2 font-bold py-2.5 px-5 rounded-xl transition-all text-sm shadow-sm ${
+              isSeatLimitReached || isSubscriptionExpired
+                ? "bg-slate-400 dark:bg-slate-700 text-slate-200 dark:text-slate-400 cursor-not-allowed opacity-60"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+            }`}
           >
             <UserPlus size={18} />
             Add Sales Representative
           </button>
+        </div>
+      </div>
+
+      {/* ── License & Seat Allocation Card ───────────────────────────────── */}
+      <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-brand-secondary/60">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-600 shrink-0">
+              <Users size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                  {organization?.name || "Organization"} Plan
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  <ShieldCheck size={12} />
+                  {currentPlanName} Subscription
+                </span>
+              </div>
+              <h2 className="text-base font-bold text-brand-primary mt-0.5">
+                Sales Representative Seat Allocation
+              </h2>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs">
+            <div>
+              <span className="text-brand-primary/60 block">Subscription Validity:</span>
+              <span className="font-bold text-brand-primary">
+                Renews on {formatExpiry(organization?.subscriptionEndDate)}
+              </span>
+            </div>
+            <div className="border-l border-brand-secondary pl-4">
+              <span className="text-brand-primary/60 block">License Capacity:</span>
+              <span className="font-extrabold text-brand-primary text-sm">
+                {totalSeats} {totalSeats === 1 ? "Seat" : "Seats"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Progress Bar & Seat Statistics */}
+        <div className="pt-4 space-y-2">
+          <div className="flex justify-between items-center text-xs font-semibold">
+            <span className="text-brand-primary">
+              Seats Allocated:{" "}
+              <strong className="text-sm font-extrabold text-purple-600 dark:text-purple-400">
+                {usedSeats}
+              </strong>{" "}
+              / {totalSeats}
+            </span>
+
+            {isSeatLimitReached ? (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-500/10 text-red-500 border border-red-500/20">
+                Seat Limit Reached (0 Available)
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                {remainingSeats} {remainingSeats === 1 ? "Seat" : "Seats"} Available
+              </span>
+            )}
+          </div>
+
+          {/* Animated Bar */}
+          <div className="w-full h-3 bg-brand-secondary/40 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 rounded-full ${
+                seatPercentage >= 100
+                  ? "bg-red-500"
+                  : seatPercentage >= 80
+                  ? "bg-amber-500"
+                  : "bg-purple-600"
+              }`}
+              style={{ width: `${seatPercentage}%` }}
+            />
+          </div>
+
+          <p className="text-[11px] text-brand-primary/60 pt-1">
+            {isSeatLimitReached
+              ? "All licensed sales representative seats are in use. Contact your SalesBuster Account Representative to add more seats."
+              : `You have utilized ${seatPercentage}% of your total seat quota. ${remainingSeats} more sales representatives can be created.`}
+          </p>
         </div>
       </div>
 
@@ -158,8 +347,8 @@ export default function TeamPerformance() {
                   isTop
                     ? "bg-[#f59e0b]"
                     : isSecond
-                      ? "bg-blue-600"
-                      : "bg-slate-700"
+                    ? "bg-blue-600"
+                    : "bg-slate-700"
                 }`}
               >
                 {initials}
@@ -200,7 +389,7 @@ export default function TeamPerformance() {
             {performersList.map((p, index) => {
               const ratingStars = Math.min(
                 5,
-                Math.max(1, Math.round((p.activityScore || 0) / 20)),
+                Math.max(1, Math.round((p.activityScore || 0) / 20))
               );
 
               return (
@@ -316,6 +505,9 @@ export default function TeamPerformance() {
               <h3 className="font-bold text-brand-primary text-lg">
                 Add New Sales Representative
               </h3>
+              <p className="text-xs text-brand-primary/60 mt-0.5">
+                Occupies 1 of {totalSeats} licensed seats ({remainingSeats} remaining).
+              </p>
             </div>
 
             <form
@@ -343,13 +535,13 @@ export default function TeamPerformance() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                  System/Inbox Email Address
+                  Email Address (Login ID)
                 </label>
                 <input
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="e.g. rachel@kranthielevators.com"
+                  placeholder="e.g. rachel@example.com"
                   className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
                   required
                 />
@@ -393,9 +585,10 @@ export default function TeamPerformance() {
               <button
                 type="submit"
                 form="create-form"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm"
+                disabled={submitting}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors shadow-sm"
               >
-                Register Representative
+                {submitting ? "Registering..." : "Register Representative"}
               </button>
             </div>
           </div>
@@ -423,9 +616,8 @@ export default function TeamPerformance() {
                 Are you sure you want to delete{" "}
                 <strong className="text-brand-primary">
                   {deleteTarget?.name}
-                </strong>{" "}
-                from Kranthi Elevators Workspace? This will remove their profile
-                from the dynamic leaderboards and team allocations.
+                </strong>
+                ? Deleting this representative will free up 1 licensed seat in your organization.
               </p>
             </div>
             <div className="p-4 border-t border-brand-secondary bg-brand-light flex justify-end gap-3">
@@ -441,7 +633,7 @@ export default function TeamPerformance() {
                 onClick={handleDeleteConfirm}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm"
               >
-                Confirm Delete
+                Confirm Delete & Free Seat
               </button>
             </div>
           </div>

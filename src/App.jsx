@@ -25,24 +25,26 @@ import SalesPersonReports from "./pages/SalesPersonReports.jsx";
 import WhatsAppChat from "./pages/WhatsAppChat.jsx";
 import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
+import OrganizationProfile from "./pages/OrganizationProfile.jsx";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
+import AccountSuspended from "./components/AccountSuspended.jsx";
 
 function AppLayout() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isOrganizationBlocked } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const { refreshData } = useLeads();
   const { refreshNotifications } = useNotifications();
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isOrganizationBlocked) {
       refreshData();
       refreshNotifications();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, isAuthenticated, refreshData]);
+  }, [location.pathname, isAuthenticated, isOrganizationBlocked, refreshData]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -50,6 +52,10 @@ function AppLayout() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (isOrganizationBlocked) {
+    return <AccountSuspended />;
   }
 
   return (
@@ -80,7 +86,7 @@ export default function App() {
 
   return (
     <RootProvider>
-      <BrowserRouter basename="/kranthi-crm">
+      <BrowserRouter basename="/salesbuster-crm">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<AppLayout />}>
@@ -101,6 +107,7 @@ export default function App() {
             />
             <Route path="/followups" element={<FollowUpReport />} />
             <Route path="/performance" element={<TeamPerformance />} />
+            <Route path="/organization" element={<OrganizationProfile />} />
             <Route path="/salesperson/:name" element={<SalesPersonDetails />} />
             <Route
               path="/salesperson/:name/reports"

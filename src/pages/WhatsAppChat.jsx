@@ -31,9 +31,14 @@ import {
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useLeads } from "../context/LeadsContext.jsx";
 
 export default function WhatsAppChat() {
-  const { currentUser } = useAuth();
+  const { currentUser, organization } = useAuth();
+  const { activeServices, qualificationFields } = useLeads();
+  const orgId = organization?.id || organization?._id || currentUser?.organizationId;
+  const currentOrgSessionId = orgId ? `org_${orgId}` : "device_1";
+
   const navigate = useNavigate();
   const location = useLocation();
   const messagesEndRef = useRef(null);
@@ -56,16 +61,10 @@ export default function WhatsAppChat() {
 
   // AI Lead Qualification Form
   const [qualForm, setQualForm] = useState({
-    liftType: "",
-    numberOfFloors: "",
-    capacity: "",
-    constructionStage: "",
-    doorType: "",
-    machineRoomAvailable: "",
+    intent: "",
     city: "",
     preferredCallDate: "",
     preferredCallTime: "",
-    intent: "",
     urgency: "Medium",
     interestScore: 0,
   });
@@ -87,8 +86,15 @@ export default function WhatsAppChat() {
     fetchSessionStatus();
     fetchConversations();
 
+    if (orgId) {
+      socket.emit("join_organization", orgId);
+    }
+
     // Socket.IO updates
     socket.on("whatsapp_status", (data) => {
+      if (data.organizationId && orgId && String(data.organizationId) !== String(orgId)) {
+        return;
+      }
       setSessions((prev) => {
         const existingIndex = prev.findIndex(s => s.sessionId === data.sessionId);
         if (existingIndex >= 0) {
@@ -107,10 +113,13 @@ export default function WhatsAppChat() {
     });
 
     return () => {
+      if (orgId) {
+        socket.emit("leave_organization", orgId);
+      }
       socket.off("whatsapp_status");
       socket.off("conversation_updated");
     };
-  }, []);
+  }, [orgId]);
 
   // Set up socket subscription for selected chat
   useEffect(() => {
@@ -220,7 +229,7 @@ export default function WhatsAppChat() {
   const handleConnect = async () => {
     setSessionLoading(true);
     try {
-      await axios.post(API_ENDPOINTS.WHATSAPP.CONNECT, { sessionId: "device_1" });
+      await axios.post(API_ENDPOINTS.WHATSAPP.CONNECT, { sessionId: currentOrgSessionId });
       setTimeout(fetchSessionStatus, 2000);
     } catch (err) {
       alert("Failed to send connect command.");
@@ -254,18 +263,13 @@ export default function WhatsAppChat() {
     const lead = conv.leadId;
     if (lead) {
       setQualForm({
-        liftType: lead.aiQualification?.liftType || "",
-        numberOfFloors: lead.aiQualification?.numberOfFloors || "",
-        capacity: lead.aiQualification?.capacity || "",
-        constructionStage: lead.aiQualification?.constructionStage || "",
-        doorType: lead.aiQualification?.doorType || "",
-        machineRoomAvailable: lead.aiQualification?.machineRoomAvailable || "",
-        city: lead.aiQualification?.city || "",
+        ...(lead.aiQualification || {}),
+        city: lead.city || lead.aiQualification?.city || "",
         preferredCallDate: lead.aiQualification?.preferredCallDate || "",
         preferredCallTime: lead.aiQualification?.preferredCallTime || "",
-        intent: lead.aiQualification?.intent || "",
+        intent: lead.aiQualification?.intent || lead.service || "",
         urgency: lead.aiQualification?.urgency || "Medium",
-        interestScore: lead.aiQualification?.interestScore || 0,
+        interestScore: lead.aiQualification?.interestScore ?? 0,
       });
     }
 
@@ -450,6 +454,14 @@ export default function WhatsAppChat() {
     );
   });
 
+  const activeSessions = sessions.filter(
+    (s) =>
+      (s.sessionId === currentOrgSessionId ||
+        (orgId && (s.organizationId === orgId || s.sessionId === `org_${orgId}`)) ||
+        (!orgId && s.sessionId === "device_1")) &&
+      s.status !== "disconnected",
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-70px)] relative overflow-hidden bg-[#130a28] text-white">
       {/* Top Header Connection Status Bar */}
@@ -463,7 +475,7 @@ export default function WhatsAppChat() {
               WhatsApp AI Lead Hub
             </h1>
             <div className="flex flex-col gap-1 mt-1">
-              {sessions.filter(s => s.sessionId === "device_1" && s.status !== "disconnected").map((session) => (
+              {activeSessions.map((session) => (
                 <div key={session.sessionId} className="flex items-center gap-2">
                   <span
                     className={`w-2.5 h-2.5 rounded-full ${
@@ -486,7 +498,7 @@ export default function WhatsAppChat() {
                   )}
                 </div>
               ))}
-              {sessions.filter(s => s.sessionId === "device_1" && s.status !== "disconnected").length === 0 && (
+              {activeSessions.length === 0 && (
                 <span className="text-xs font-semibold text-red-400">
                   No device connected
                 </span>
@@ -498,7 +510,7 @@ export default function WhatsAppChat() {
         {/* Setup actions */}
         <div className="flex items-center gap-4">
           <div className="flex gap-2">
-            {sessions.filter(s => s.sessionId === "device_1" && s.status !== "disconnected").map(session => (
+            {activeSessions.map((session) => (
               <div key={session.sessionId} className="flex items-center gap-2">
                 {session.status === "qr" && session.qrCode && (
                   <div className="relative group">
@@ -531,7 +543,7 @@ export default function WhatsAppChat() {
             ))}
           </div>
 
-          {sessions.filter(s => s.sessionId === "device_1" && s.status !== "disconnected").length === 0 && (
+          {activeSessions.length === 0 && (
             <button
               onClick={handleConnect}
               disabled={sessionLoading}
@@ -891,108 +903,162 @@ export default function WhatsAppChat() {
                 onSubmit={handleUpdateQualification}
                 className="space-y-3.5"
               >
+                {/* Service / Product Line */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                    Lift / Product Type
+                    Service / Product Line
                   </label>
-                  <select
-                    value={qualForm.liftType}
-                    onChange={(e) =>
-                      setQualForm({ ...qualForm, liftType: e.target.value })
-                    }
-                    className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                  >
-                    <option value="">Select Lift Type</option>
-                    <option value="Passenger Lift">Passenger Lift</option>
-                    <option value="MRL Lift">MRL Lift (Machine Room Less)</option>
-                    <option value="Hydraulic Lift">Hydraulic Lift</option>
-                    <option value="Hospital Bed Lift">Hospital Bed Lift</option>
-                    <option value="Elevator Maintenance & AMC">Elevator Maintenance & AMC</option>
-                    <option value="Elevator Modernization">Elevator Modernization</option>
-                    <option value="General Enquiry">General Enquiry</option>
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Floors / Stops
-                    </label>
+                  <div className="space-y-1.5">
+                    {activeServices && activeServices.length > 0 && (
+                      <select
+                        value={qualForm.intent || ""}
+                        onChange={(e) =>
+                          setQualForm({
+                            ...qualForm,
+                            intent: e.target.value,
+                          })
+                        }
+                        className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
+                      >
+                        <option value="">Select Service / Custom...</option>
+                        {activeServices.map((s) => (
+                          <option key={s.code} value={s.name}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <input
                       type="text"
-                      value={qualForm.numberOfFloors}
+                      value={qualForm.intent || ""}
                       onChange={(e) =>
-                        setQualForm({ ...qualForm, numberOfFloors: e.target.value })
+                        setQualForm({
+                          ...qualForm,
+                          intent: e.target.value,
+                        })
                       }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                      placeholder="e.g. G+3, 4 Floors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Capacity
-                    </label>
-                    <input
-                      type="text"
-                      value={qualForm.capacity}
-                      onChange={(e) =>
-                        setQualForm({ ...qualForm, capacity: e.target.value })
-                      }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                      placeholder="e.g. 6 Pass, 408 kg"
+                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
+                      placeholder="Or specify custom service / requirement..."
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Door Type
-                    </label>
-                    <select
-                      value={qualForm.doorType}
-                      onChange={(e) =>
-                        setQualForm({ ...qualForm, doorType: e.target.value })
-                      }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                    >
-                      <option value="">Unspecified</option>
-                      <option value="Automatic">Automatic (Center/Telescopic)</option>
-                      <option value="Manual">Manual (Collapsible/Swing)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Machine Room
-                    </label>
-                    <select
-                      value={qualForm.machineRoomAvailable}
-                      onChange={(e) =>
-                        setQualForm({ ...qualForm, machineRoomAvailable: e.target.value })
-                      }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                    >
-                      <option value="">Unspecified</option>
-                      <option value="Yes">Yes (Available)</option>
-                      <option value="No">No (MRL Needed)</option>
-                    </select>
-                  </div>
-                </div>
+                {/* Configured Qualification Fields from Organization */}
+                {qualificationFields && qualificationFields.length > 0
+                  ? qualificationFields.map((field) => {
+                      const val = qualForm[field.key] ?? "";
+                      return (
+                        <div key={field.key}>
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
+                            {field.label || field.key}
+                            {field.required && (
+                              <span className="text-red-400 ml-0.5">*</span>
+                            )}
+                          </label>
+                          {field.type === "select" &&
+                          field.options &&
+                          field.options.length > 0 ? (
+                            <select
+                              value={val}
+                              onChange={(e) =>
+                                setQualForm({
+                                  ...qualForm,
+                                  [field.key]: e.target.value,
+                                })
+                              }
+                              className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
+                            >
+                              <option value="">Select...</option>
+                              {field.options.map((opt, i) => (
+                                <option key={i} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          ) : field.type === "boolean" ? (
+                            <select
+                              value={
+                                val === true || val === "true" || val === "Yes"
+                                  ? "Yes"
+                                  : val === false ||
+                                      val === "false" ||
+                                      val === "No"
+                                    ? "No"
+                                    : ""
+                              }
+                              onChange={(e) =>
+                                setQualForm({
+                                  ...qualForm,
+                                  [field.key]: e.target.value,
+                                })
+                              }
+                              className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
+                            >
+                              <option value="">Not Specified</option>
+                              <option value="Yes">Yes</option>
+                              <option value="No">No</option>
+                            </select>
+                          ) : (
+                            <input
+                              type={field.type === "number" ? "number" : "text"}
+                              value={val}
+                              onChange={(e) =>
+                                setQualForm({
+                                  ...qualForm,
+                                  [field.key]: e.target.value,
+                                })
+                              }
+                              className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
+                              placeholder={
+                                field.description || `Enter ${field.label}...`
+                              }
+                            />
+                          )}
+                        </div>
+                      );
+                    })
+                  : null}
 
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                    Construction Stage
-                  </label>
-                  <input
-                    type="text"
-                    value={qualForm.constructionStage}
-                    onChange={(e) =>
-                      setQualForm({ ...qualForm, constructionStage: e.target.value })
-                    }
-                    className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                    placeholder="e.g. Planning, Shaft Ready, Modernization"
-                  />
-                </div>
+                {/* Additional captured attributes in lead.aiQualification not covered by schema */}
+                {Object.entries(qualForm)
+                  .filter(([k]) => {
+                    const excluded = [
+                      "city",
+                      "preferredCallDate",
+                      "preferredCallTime",
+                      "preferredVisitDate",
+                      "urgency",
+                      "interestScore",
+                      "intent",
+                      "liftType",
+                      "_id",
+                      "__v",
+                      "id",
+                      ...(qualificationFields || []).map((f) => f.key),
+                    ];
+                    return !excluded.includes(k);
+                  })
+                  .map(([key, value]) => {
+                    const label = key
+                      .replace(/([A-Z])/g, " $1")
+                      .replace(/^./, (str) => str.toUpperCase());
+                    return (
+                      <div key={key}>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
+                          {label}
+                        </label>
+                        <input
+                          type="text"
+                          value={value ?? ""}
+                          onChange={(e) =>
+                            setQualForm({ ...qualForm, [key]: e.target.value })
+                          }
+                          className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
+                          placeholder={`Enter ${label}...`}
+                        />
+                      </div>
+                    );
+                  })}
 
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
