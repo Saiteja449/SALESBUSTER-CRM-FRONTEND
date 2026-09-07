@@ -229,7 +229,12 @@ const TONE_PRESETS = [
 
 export default function OrganizationProfile() {
   const navigate = useNavigate();
-  const { currentUser, organization: cachedOrg, setOrganization } = useAuth();
+  const {
+    currentUser,
+    organization: cachedOrg,
+    setOrganization,
+    fetchOrganization,
+  } = useAuth();
 
   // Primary Navigation: "wizard" | "billing"
   const [activeTab, setActiveTab] = useState("wizard");
@@ -241,6 +246,8 @@ export default function OrganizationProfile() {
 
   // AI Configuration State
   const [aiSettings, setAiSettings] = useState({
+    isAiConfigured: false,
+    aiSetupCompletedAt: null,
     companyName: "",
     businessDescription: "",
     agentPersona: "warm, friendly, and consultative sales representative",
@@ -333,6 +340,8 @@ export default function OrganizationProfile() {
   const syncAiSettingsState = (data, orgName) => {
     setAiSettings((prev) => ({
       ...prev,
+      isAiConfigured: Boolean(data.isAiConfigured ?? prev.isAiConfigured),
+      aiSetupCompletedAt: data.aiSetupCompletedAt || prev.aiSetupCompletedAt,
       companyName: data.companyName || prev.companyName || orgName || "",
       businessDescription: data.businessDescription || prev.businessDescription || "",
       agentPersona: data.agentPersona || prev.agentPersona,
@@ -364,21 +373,60 @@ export default function OrganizationProfile() {
 
     try {
       const token = localStorage.getItem("kranthi_token");
-      await axios.put(API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS, payload, {
+      const res = await axios.put(API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setSaveToast("Configuration saved successfully!");
+      if (res.data.success) {
+        if (payload.isAiConfigured) {
+          setAiSettings((prev) => ({ ...prev, isAiConfigured: true }));
+        }
+        if (fetchOrganization) fetchOrganization();
+        setSaveToast(
+          payload.isAiConfigured
+            ? "🎉 AI Setup completed and activated!"
+            : "Configuration saved successfully!"
+        );
+      }
     } catch (err) {
-      setSaveToast("Changes saved locally to your workspace!");
+      const errMsg =
+        err.response?.data?.message || "Changes saved locally to your workspace!";
+      setSaveToast(errMsg);
     } finally {
       setAiSaving(false);
-      setTimeout(() => setSaveToast(""), 3000);
+      setTimeout(() => setSaveToast(""), 3500);
 
       if (nextStep && nextStep <= STEPS.length) {
         setCurrentStep(nextStep);
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     }
+  };
+
+  // Final step activation handler
+  const handleFinishSetup = async () => {
+    if (!aiSettings.companyName || !aiSettings.companyName.trim()) {
+      setSaveToast("Please provide your Company Name in Step 1.");
+      setCurrentStep(1);
+      return;
+    }
+    if (!aiSettings.services || aiSettings.services.length === 0) {
+      setSaveToast("Please add at least 1 service in Step 2 Catalog.");
+      setCurrentStep(2);
+      return;
+    }
+    if (!aiSettings.qualificationFields || aiSettings.qualificationFields.length === 0) {
+      setSaveToast("Please add at least 1 qualification question in Step 3.");
+      setCurrentStep(3);
+      return;
+    }
+
+    const payload = {
+      ...aiSettings,
+      isAiConfigured: true,
+    };
+
+    await handleSaveStep(payload);
+    if (fetchOrganization) await fetchOrganization();
   };
 
   // Load an industry template
@@ -1376,6 +1424,89 @@ export default function OrganizationProfile() {
             {/* ── STEP 5: REVIEW, PROMPT INSPECTOR & PLAYGROUND ───────────── */}
             {currentStep === 5 && (
               <div className="space-y-6 animate-fadeIn">
+                {/* Pre-flight Requirement Verification Card */}
+                <div className="p-5 rounded-2xl border border-border-main bg-bg-secondary/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={18} className="text-emerald-500" />
+                      <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                        Pre-Activation Checklist
+                      </h4>
+                    </div>
+                    <span
+                      className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                        aiSettings.services.length > 0 &&
+                        aiSettings.qualificationFields.length > 0 &&
+                        aiSettings.companyName.trim()
+                          ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                          : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                      }`}
+                    >
+                      {aiSettings.services.length > 0 &&
+                      aiSettings.qualificationFields.length > 0 &&
+                      aiSettings.companyName.trim()
+                        ? "Ready to Activate"
+                        : "Requirements Missing"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                    <div
+                      onClick={() => !aiSettings.companyName.trim() && setCurrentStep(1)}
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                        aiSettings.companyName.trim()
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
+                      }`}
+                    >
+                      <span className="font-bold text-text-primary">Company Identity</span>
+                      {aiSettings.companyName.trim() ? (
+                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                      ) : (
+                        <span className="text-[10px] font-bold text-red-400">Step 1 Required</span>
+                      )}
+                    </div>
+
+                    <div
+                      onClick={() => aiSettings.services.length === 0 && setCurrentStep(2)}
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                        aiSettings.services.length > 0
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
+                      }`}
+                    >
+                      <span className="font-bold text-text-primary">
+                        Services Catalog ({aiSettings.services.length})
+                      </span>
+                      {aiSettings.services.length > 0 ? (
+                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                      ) : (
+                        <span className="text-[10px] font-bold text-red-400">Min 1 Required</span>
+                      )}
+                    </div>
+
+                    <div
+                      onClick={() =>
+                        aiSettings.qualificationFields.length === 0 && setCurrentStep(3)
+                      }
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                        aiSettings.qualificationFields.length > 0
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
+                      }`}
+                    >
+                      <span className="font-bold text-text-primary">
+                        Questions Schema ({aiSettings.qualificationFields.length})
+                      </span>
+                      {aiSettings.qualificationFields.length > 0 ? (
+                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                      ) : (
+                        <span className="text-[10px] font-bold text-red-400">Min 1 Required</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Scorecard */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main text-center">
@@ -1509,12 +1640,12 @@ export default function OrganizationProfile() {
                   </button>
                 ) : (
                   <button
-                    onClick={() => handleSaveStep()}
+                    onClick={handleFinishSetup}
                     disabled={aiSaving}
                     className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm cursor-pointer"
                   >
                     <CheckCheck size={16} />
-                    <span>Finish Setup</span>
+                    <span>{aiSaving ? "Activating..." : "Finish & Activate AI"}</span>
                   </button>
                 )}
               </div>

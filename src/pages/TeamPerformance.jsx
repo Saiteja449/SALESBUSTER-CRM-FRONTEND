@@ -22,6 +22,8 @@ export default function TeamPerformance() {
   const {
     currentUser,
     organization,
+    allUsers = [],
+    salesRepCount = 0,
     totalSeats,
     usedSeats,
     remainingSeats,
@@ -101,6 +103,17 @@ export default function TeamPerformance() {
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     setDeleteError("");
+
+    const currentSalesCount =
+      salesRepCount ||
+      (allUsers || []).filter((u) => u.role === "Sales Representative").length;
+    if (currentSalesCount <= 1) {
+      setDeleteError(
+        "An organization must have at least 1 sales representative. You cannot delete the only representative."
+      );
+      return;
+    }
+
     try {
       await deleteSalesPerson(deleteTarget.id);
       setDeleteTarget(null);
@@ -468,18 +481,33 @@ export default function TeamPerformance() {
                       </button>
                       <button
                         onClick={() => {
+                          const currentSalesCount =
+                            salesRepCount ||
+                            (allUsers || []).filter(
+                              (u) => u.role === "Sales Representative"
+                            ).length;
+                          if (currentSalesCount <= 1) {
+                            setDeleteError(
+                              "An organization must have at least 1 sales representative. You cannot delete the only representative."
+                            );
+                            setDeleteTarget(p);
+                            return;
+                          }
                           setDeleteError("");
                           setDeleteTarget(p);
                         }}
                         disabled={
                           p.name?.toLowerCase() ===
                             currentUser?.name?.toLowerCase() ||
-                          p.id === currentUser?.id
+                          p.id === currentUser?.id ||
+                          (salesRepCount || (allUsers || []).filter((u) => u.role === "Sales Representative").length) <= 1
                         }
                         title={
                           p.name?.toLowerCase() ===
                           currentUser?.name?.toLowerCase()
                             ? "Cannot delete self"
+                            : (salesRepCount || (allUsers || []).filter((u) => u.role === "Sales Representative").length) <= 1
+                            ? "An organization must maintain at least 1 sales representative"
                             : "Delete representative"
                         }
                         className="text-brand-primary/60 hover:text-red-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"

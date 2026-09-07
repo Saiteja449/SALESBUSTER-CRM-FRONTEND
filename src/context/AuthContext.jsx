@@ -323,6 +323,16 @@ export function AuthProvider({ children }) {
 
   // Helper getters
   const usedSeats = allUsers.filter(u => u.role === "Sales Representative").length;
+  const salesRepCount = usedSeats;
+  const hasSalesPerson = salesRepCount >= 1;
+
+  const isAiConfigured = Boolean(
+    organization?.isAiConfigured ??
+    organization?.aiSettings?.isAiConfigured ??
+    false
+  );
+  const isOrgSetupComplete = hasSalesPerson && isAiConfigured;
+
   const totalSeats = organization?.seats || organization?.totalSeats || Math.max(1, usedSeats);
   const remainingSeats = Math.max(0, totalSeats - usedSeats);
   const isSeatLimitReached = usedSeats >= totalSeats;
@@ -349,6 +359,10 @@ export function AuthProvider({ children }) {
         setOrganization,
         totalSeats,
         usedSeats,
+        salesRepCount,
+        hasSalesPerson,
+        isAiConfigured,
+        isOrgSetupComplete,
         remainingSeats,
         isSeatLimitReached,
         isSubscriptionExpired,

@@ -19,6 +19,12 @@ import {
   Mail,
   Clock,
   Sparkles,
+  UserPlus,
+  X,
+  ShieldAlert,
+  CheckCheck,
+  Lock,
+  Settings,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -62,10 +68,68 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const stats = useDashboard();
   const { leads } = useLeads();
-  const { currentUser } = useAuth();
+  const {
+    currentUser,
+    organization,
+    isAiConfigured,
+    hasSalesPerson,
+    salesRepCount,
+    isOrgSetupComplete,
+    addSalesPerson,
+  } = useAuth();
 
   const [aiLimits, setAiLimits] = useState(null);
   const [aiLimitsLoading, setAiLimitsLoading] = useState(true);
+
+  // Quick Add Sales Person Modal State
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [addUserLoading, setAddUserLoading] = useState(false);
+  const [addUserError, setAddUserError] = useState("");
+  const [addUserSuccess, setAddUserSuccess] = useState("");
+
+  const handleQuickAddUser = async (e) => {
+    e?.preventDefault();
+    setAddUserError("");
+    setAddUserSuccess("");
+
+    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.password) {
+      setAddUserError("Please fill in name, email, and password.");
+      return;
+    }
+    if (newUser.password.length < 6) {
+      setAddUserError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newUser.password !== newUser.confirmPassword) {
+      setAddUserError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setAddUserLoading(true);
+      await addSalesPerson(
+        newUser.name.trim(),
+        newUser.email.trim(),
+        newUser.password
+      );
+      setAddUserSuccess("Sales representative added successfully!");
+      setNewUser({ name: "", email: "", password: "", confirmPassword: "" });
+      setTimeout(() => {
+        setShowAddUserModal(false);
+        setAddUserSuccess("");
+      }, 1200);
+    } catch (err) {
+      setAddUserError(err.message || "Failed to add sales representative.");
+    } finally {
+      setAddUserLoading(false);
+    }
+  };
 
   // Master Automation Controls
   const [globalSettings, setGlobalSettings] = useState({
@@ -187,17 +251,144 @@ export default function Dashboard() {
             Executive Dashboard
           </h1>
           <p className="text-sm text-brand-primary/70">
-            Real-time analytical performance summary for Kranthi Elevators sales
-            representatives.
+            Real-time analytical performance summary for {organization?.name || "Kranthi Elevators"}.
           </p>
         </div>
         <button
           onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-brand-primary text-sm font-bold rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-brand-primary text-sm font-bold rounded-lg transition-colors cursor-pointer"
         >
           <Download className="w-4 h-4" /> Export Data
         </button>
       </div>
+
+      {/* ── Organization Setup & Onboarding Validation Card ────────────────── */}
+      {!isOrgSetupComplete ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent p-5 md:p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-4 border-b border-amber-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-brand-primary flex items-center gap-2">
+                  {!hasSalesPerson && !isAiConfigured
+                    ? "Action Required: Complete Organization Setup"
+                    : !isAiConfigured
+                    ? "Action Required: Configure AI Setup"
+                    : "Action Required: Add Sales Representative"}
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    {!hasSalesPerson && !isAiConfigured ? "2 Actions Remaining" : "1 Action Remaining"}
+                  </span>
+                </h3>
+                <p className="text-xs text-brand-primary/70 mt-0.5">
+                  {!hasSalesPerson && !isAiConfigured
+                    ? "Your organization must configure AI and add at least 1 sales representative to unlock automatic routing and operations."
+                    : !isAiConfigured
+                    ? "Define your company persona, services catalog, and lead qualification schema so our AI can automatically handle customer inquiries."
+                    : "Your organization currently has 0 sales representatives. Add at least 1 representative so incoming leads can be assigned and managed."}
+                </p>
+              </div>
+            </div>
+
+            {/* Progress bar pill */}
+            <div className="w-full md:w-48 shrink-0">
+              <div className="flex justify-between text-[10px] font-bold text-brand-primary/70 mb-1">
+                <span>Setup Progress</span>
+                <span>{((hasSalesPerson ? 1 : 0) + (isAiConfigured ? 1 : 0)) * 50}%</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-bg-main border border-brand-secondary overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-500 rounded-full"
+                  style={{
+                    width: `${((hasSalesPerson ? 1 : 0) + (isAiConfigured ? 1 : 0)) * 50}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className={`grid gap-4 pt-4 ${!hasSalesPerson && !isAiConfigured ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}>
+            {/* Requirement 1: AI Setup - Only shown if NOT configured */}
+            {!isAiConfigured && (
+              <div className="p-4 rounded-xl border border-amber-500/40 bg-bg-main/90 shadow-sm transition-all">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-brand-primary">
+                          You haven't configured AI
+                        </h4>
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                          Not Configured
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
+                        Define your company persona, services catalog, and lead qualification schema so our AI can automatically handle customer inquiries and qualify leads.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-brand-secondary/60 flex items-center justify-between">
+                  <span className="text-[11px] text-brand-primary/60">
+                    Setup required before auto-replies
+                  </span>
+                  <button
+                    onClick={() => navigate("/organization")}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-pilot-blue hover:bg-pilot-blue-hover text-white shadow-sm shadow-pilot-blue/20"
+                  >
+                    <span>Configure AI Setup</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Requirement 2: Sales Representative - Only shown if 0 sales reps added */}
+            {!hasSalesPerson && (
+              <div className="p-4 rounded-xl border border-amber-500/40 bg-bg-main/90 shadow-sm transition-all">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-brand-primary">
+                          Add at least 1 sales person
+                        </h4>
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                          0 Added
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
+                        Your organization currently has 0 sales representatives. Add a representative so incoming leads can be assigned and managed.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-brand-secondary/60 flex items-center justify-between">
+                  <span className="text-[11px] text-brand-primary/60">
+                    Required for lead distribution
+                  </span>
+                  <button
+                    onClick={() => setShowAddUserModal(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Add Sales Person</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {/* AI & Automation Master Control Card */}
       <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 shadow-sm">
@@ -701,6 +892,136 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* ── Quick Add Sales Representative Modal ─────────────────────────────── */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-bg-card border border-border-main rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+            <div className="flex justify-between items-center pb-4 border-b border-border-main">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-text-primary">
+                    Add Sales Representative
+                  </h3>
+                  <p className="text-xs text-text-secondary">
+                    Create a sales team member to assign incoming leads
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddUserModal(false);
+                  setAddUserError("");
+                  setAddUserSuccess("");
+                }}
+                className="p-1 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {addUserError && (
+              <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs font-semibold text-red-500 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{addUserError}</span>
+              </div>
+            )}
+
+            {addUserSuccess && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-500 flex items-center gap-2">
+                <CheckCheck className="w-4 h-4 shrink-0" />
+                <span>{addUserSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleQuickAddUser} className="mt-4 space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-text-primary block mb-1">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ramesh Kumar"
+                  value={newUser.name}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, name: e.target.value })
+                  }
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-text-primary block mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  placeholder="ramesh@company.com"
+                  value={newUser.email}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, email: e.target.value })
+                  }
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-text-primary block mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Minimum 6 characters"
+                  value={newUser.password}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, password: e.target.value })
+                  }
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-text-primary block mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={newUser.confirmPassword}
+                  onChange={(e) =>
+                    setNewUser({ ...newUser, confirmPassword: e.target.value })
+                  }
+                  required
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
+                />
+              </div>
+
+              <div className="pt-3 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addUserLoading}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm transition-all disabled:opacity-60 cursor-pointer"
+                >
+                  {addUserLoading ? "Creating..." : "Add Representative"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
