@@ -1,0 +1,129 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import "tailwindcss";
+
+:root {
+  --bg-main: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-secondary: #f1f5f9;
+  --text-primary: #0c1f37;
+  --text-secondary: #5a6e85;
+  --border: #e2e8f0;
+
+  --color-pilot-blue: #0c7cfd;
+  --color-pilot-blue-hover: #0b6fe5;
+  --color-pilot-green: #11a139;
+  --color-pilot-green-hover: #0e8830;
+  --color-pilot-navy: #0c1f37;
+
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.dark {
+  --bg-main: #071222;
+  --bg-card: #0c1f37;
+  --bg-secondary: #132742;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border: #1a3356;
+}
+
+@theme {
+  /* Font Family override (Inter is loaded from Google Fonts above, weights 300, 400, 500, 600, 700) */
+  --font-sans: "Inter", "Roboto", sans-serif;
+
+  /* Theme variables mapping */
+  --color-bg-main: var(--bg-main);
+  --color-bg-card: var(--bg-card);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-border-main: var(--border);
+
+  /* Official Kranthi Elevators Logo Colors */
+  --color-pilot-blue: #0c7cfd;
+  --color-pilot-blue-hover: #0b6fe5;
+  --color-pilot-green: #11a139;
+  --color-pilot-green-hover: #0e8830;
+  --color-pilot-navy: #0c1f37;
+
+  /* Legacy brand colors dynamically mapped to active theme */
+  --color-brand-primary: var(--text-primary);
+  --color-brand-secondary: var(--border);
+  --color-brand-light: var(--bg-card);
+
+  /* Accents */
+  --color-primary-indigo: #0c7cfd;
+  --color-accent-purple: #3b82f6;
+  --color-accent-blue: #0c7cfd;
+  --color-success: #11a139;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-cyan: #0ea5e9;
+
+  /* Remap teal and purple palettes to Pilot Blue so all existing components conform to new logo identity */
+  --color-teal-50: #f0f7ff;
+  --color-teal-100: #e0effe;
+  --color-teal-200: #bae0fd;
+  --color-teal-300: #7cc5fb;
+  --color-teal-400: #38a5f8;
+  --color-teal-500: #0c7dfd;
+  --color-teal-600: #0b6fe5;
+  --color-teal-700: #0957b7;
+  --color-teal-800: #0c4a96;
+  --color-teal-900: #103f78;
+
+  --color-purple-50: #f0f7ff;
+  --color-purple-100: #e0effe;
+  --color-purple-200: #bae0fd;
+  --color-purple-300: #7cc5fb;
+  --color-purple-400: #38a5f8;
+  --color-purple-500: #0c7dfd;
+  --color-purple-600: #0b6fe5;
+  --color-purple-700: #0957b7;
+  --color-purple-800: #0c4a96;
+  --color-purple-900: #103f78;
+  --color-purple-950: #0c1f37;
+
+  /* Official Pilot Green Palette */
+  --color-green-500: #11a139;
+  --color-green-600: #0e8830;
+  --color-emerald-500: #11a139;
+  --color-emerald-600: #0e8830;
+}
+
+/* Global root HTML transition */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-secondary) 80%, transparent);
+}
