@@ -49,6 +49,10 @@ import {
   Eye,
   EyeOff,
   Key,
+  FileJson,
+  Code,
+  Braces,
+  Lightbulb,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { API_ENDPOINTS } from "../utils/constants.js";
@@ -107,7 +111,6 @@ const DEFAULT_SERVICE_TEMPLATE = {
   ],
 };
 
-// Standard default qualification fields for every organization (fully customizable)
 const DEFAULT_QUALIFICATION_FIELDS = [
   {
     key: "cityAndArea",
@@ -154,33 +157,526 @@ const DEFAULT_QUALIFICATION_FIELDS = [
   },
 ];
 
+const AI_EXTRACTION_SYSTEM_PROMPT = `You are a CRM AI Configuration Specialist. Your job is to analyze the uploaded business document(s) and extract ALL the information needed to configure an AI-powered WhatsApp sales assistant for this company.
 
+The CRM system (SalesBuster CRM) has the following configurable AI fields that MUST be populated from the document. Extract and generate each section precisely.
 
-// Tone presets for Step 1
-const TONE_PRESETS = [
+═══════════════════════════════════════════════
+OUTPUT FORMAT — Generate ALL of the following:
+═══════════════════════════════════════════════
+
+### 1. COMPANY NAME (companyName)
+- Extract the official brand/company name from the document.
+- This is what the AI agent will call itself when speaking to customers.
+- Output: A single clean brand name string.
+
+### 2. BUSINESS DESCRIPTION (businessDescription)
+- Write a 2-4 sentence description of what this company does, its value proposition, and target market.
+- This is used as the AI's core knowledge about the company.
+- Should sound professional and compelling — the AI will reference this when explaining the company to customers.
+- Output: A paragraph (2-4 sentences max).
+
+### 3. AGENT PERSONA (agentPersona)
+- Based on the business type, recommend an appropriate persona for the AI sales agent.
+- Examples: "warm, friendly, and consultative sales representative", "professional and knowledgeable property advisor", "enthusiastic and helpful product specialist"
+- Match the tone to the business domain (luxury = sophisticated, tech = knowledgeable, real estate = advisory, etc.)
+- Output: A single descriptive phrase.
+
+### 4. SERVICES CATALOG (services)
+- Extract EVERY product, service, offering, or package mentioned in the document.
+- For EACH service, provide:
+  - name: Short, clear service/product name
+  - description: 1-2 sentence description of what it includes
+  - keywords: Array of 4-8 related keywords/synonyms that a customer might use to ask about this service (in lowercase)
+  - category: Group services into logical categories (e.g., "Residential", "Commercial", "Consultation", "Products", "Packages")
+- IMPORTANT: Always include a "General Enquiry" service as the first item with generic keywords.
+- Output: JSON array format.
+
+Example:
+[
   {
-    id: "consultative",
-    title: "Warm & Consultative",
-    desc: "Friendly, polite, empathetic. Listens closely, guides naturally, and builds high trust.",
-    persona: "warm, friendly, and consultative sales representative",
-    icon: Smile,
+    "name": "General Enquiry",
+    "description": "General inquiry or consultation regarding products, services, and customer requirements.",
+    "keywords": ["enquiry", "inquiry", "information", "help", "details", "consultation", "general"],
+    "category": "General"
   },
   {
-    id: "technical",
-    title: "Technical Specialist",
-    desc: "Authoritative, precise, engineering-driven. Focuses on technical accuracy and specifications.",
-    persona:
-      "knowledgeable, precise technical sales specialist and product engineer",
-    icon: Target,
+    "name": "Premium Interior Design",
+    "description": "End-to-end luxury interior design services including 3D visualization, material selection, and execution.",
+    "keywords": ["interior", "design", "interiors", "home design", "decoration", "furnishing", "3d design"],
+    "category": "Design Services"
+  }
+]
+
+### 5. LEAD QUALIFICATION FIELDS (qualificationFields)
+- Based on the business type, generate the specific questions/data points the AI should gather from customers during conversation.
+- For EACH field, provide:
+  - key: camelCase identifier (e.g., "cityAndArea", "budgetRange", "projectType")
+  - label: Human-readable label (e.g., "City & Area", "Budget Range")
+  - type: One of: "string", "number", "boolean", "select"
+  - description: What the AI should understand about this field and how to extract it from conversation
+  - options: (Only for "select" type) Array of allowed option values
+  - required: true/false — whether this is mandatory to collect
+
+MANDATORY fields that MUST always be included:
+- cityAndArea (string) — Customer's location
+- primaryIntent (string) — What the customer is looking for
+- urgencyLevel (select) — Options: ["Immediate", "Within 1 Month", "1-3 Months", "Planning / Just Exploring"]
+- interestScore (number) — 1-10 buying readiness score
+- callbackDateTime (string) — Preferred callback date/time
+
+THEN add 3-8 BUSINESS-SPECIFIC fields based on the document. Examples:
+- Real Estate: propertyType, bhkPreference, budgetRange, possessionTimeline, loanRequired
+- Interior Design: projectType, roomCount, designStyle, materialPreference
+- Education: courseInterest, currentQualification, startDate, scholarshipNeeded
+- SaaS/Tech: teamSize, currentTool, integrationNeeds, planPreference
+- Healthcare: appointmentType, insuranceProvider, preferredDoctor, symptoms
+- E-commerce: productCategory, orderSize, deliveryPreference
+
+Output: JSON array format.
+
+Example:
+[
+  {
+    "key": "cityAndArea",
+    "label": "City & Area",
+    "type": "string",
+    "description": "Customer's city, area, or preferred project/service location.",
+    "required": false
   },
   {
-    id: "executive",
-    title: "Executive & Fast-Paced",
-    desc: "Concise, professional, action-oriented. Fast qualification and quick callback scheduling.",
-    persona: "sharp, professional, and courteous executive sales advisor",
-    icon: Briefcase,
+    "key": "budgetRange",
+    "label": "Budget Range",
+    "type": "select",
+    "description": "Customer's approximate budget or spending range for the service.",
+    "options": ["Under ₹5 Lakh", "₹5-15 Lakh", "₹15-30 Lakh", "₹30-50 Lakh", "₹50 Lakh+"],
+    "required": false
   },
-];
+  {
+    "key": "urgencyLevel",
+    "label": "Urgency Level",
+    "type": "select",
+    "description": "How soon the customer needs the service or wants to start.",
+    "options": ["Immediate", "Within 1 Month", "1-3 Months", "Planning / Just Exploring"],
+    "required": false
+  },
+  {
+    "key": "interestScore",
+    "label": "Interest Score (1-10)",
+    "type": "number",
+    "description": "Assessed customer interest or buying readiness score from 1 to 10.",
+    "required": false
+  },
+  {
+    "key": "callbackDateTime",
+    "label": "Callback Date/Time",
+    "type": "string",
+    "description": "Best callback date and time requested by customer for consultation.",
+    "required": false
+  }
+]
+
+### 6. CUSTOM INSTRUCTIONS (customInstructions)
+- Generate 5-8 behavioral rules for the AI agent, customized to this specific business.
+- Rules MUST always include:
+  1. HUMAN TONE: Communicate like a real human. Be warm, polite, conversational. NEVER mention being AI/bot.
+  2. PACING: Ask at most 1-2 questions per message to gather data naturally.
+  3. PRICING RULE: How to handle pricing (quote exact if available, or schedule callback).
+  4. HUMAN HANDOFF: Transfer to human if requested, set disableAI=true.
+  5. WHATSAPP FORMATTING: Keep messages short (50-60 words max), clean bullet points, bold key terms (*term*), and emojis.
+- Then add 2-3 BUSINESS-SPECIFIC rules. Examples:
+  - "SITE VISIT: If customer shows strong interest (interest score 7+), proactively offer to schedule a site visit."
+  - "PORTFOLIO: When discussing design styles, share relevant project examples from our portfolio."
+  - "AVAILABILITY: Always check product availability before confirming delivery dates."
+- Output: Numbered list as a single string.
+
+### 7. LEAD STATUS CONDITIONS (Bonus — for reference)
+- Based on the business, suggest what conditions should map to each lead status:
+  - New: Just started conversation
+  - Follow Up: Showed interest, needs nurturing
+  - Not Interested: Explicitly declined
+  - Not Responding: No reply after X messages
+  - Price Issue: Interested but budget concerns
+  - Converted: Booked/purchased/signed up
+
+═══════════════════════════════════════════════
+RULES FOR EXTRACTION:
+═══════════════════════════════════════════════
+
+1. Extract REAL data from the document — do NOT make up services or products that aren't mentioned.
+2. If the document mentions pricing tiers, packages, or plans — create separate services for each.
+3. Keywords should include common misspellings and regional language terms if applicable.
+4. Qualification fields should reflect the actual decision-making criteria for this business domain.
+5. If the document is sparse, add a note about what additional information would help (e.g., "Need pricing document for accurate price rules").
+6. All output must be in the EXACT JSON format shown above so it can be directly pasted into the CRM configuration.
+7. Use Indian Rupee (₹) for currency if the business is India-based, otherwise use appropriate currency.
+
+═══════════════════════════════════════════════
+FINAL OUTPUT STRUCTURE:
+═══════════════════════════════════════════════
+
+Present your response in this exact structure:
+
+---
+## ✅ Company Name
+[extracted name]
+
+## ✅ Business Description
+[2-4 sentence description]
+
+## ✅ Agent Persona
+[persona phrase]
+
+## ✅ Services Catalog
+\`\`\`json
+[...services array...]
+\`\`\`
+
+## ✅ Qualification Fields
+\`\`\`json
+[...fields array...]
+\`\`\`
+
+## ✅ Custom Instructions
+[numbered rules as string]
+
+## ✅ Lead Status Mapping
+[status conditions table]
+
+## ⚠️ Missing Information (if any)
+[list of things not found in the document that would improve configuration]
+---
+
+Now analyze the uploaded document and generate the complete AI configuration.`;
+
+const parseServicesOnlyJson = (rawText) => {
+  if (!rawText || !rawText.trim()) {
+    return { result: null, error: "" };
+  }
+  const trimmed = rawText.trim();
+  let parsed = null;
+
+  // Extract markdown code block if present
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+  const match = trimmed.match(codeBlockRegex);
+  const targetStr = match ? match[1].trim() : trimmed;
+
+  try {
+    parsed = JSON.parse(targetStr);
+  } catch (errDirect) {
+    const firstBracket = targetStr.indexOf("[");
+    const lastBracket = targetStr.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        parsed = JSON.parse(targetStr.substring(firstBracket, lastBracket + 1));
+      } catch (errSub) {
+        return {
+          result: null,
+          error: `Invalid JSON syntax: ${errDirect.message}`,
+        };
+      }
+    } else {
+      const firstBrace = targetStr.indexOf("{");
+      const lastBrace = targetStr.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          parsed = JSON.parse(targetStr.substring(firstBrace, lastBrace + 1));
+        } catch (errSub) {
+          return {
+            result: null,
+            error: `Invalid JSON syntax: ${errDirect.message}`,
+          };
+        }
+      } else {
+        return {
+          result: null,
+          error: `Could not parse JSON. Check commas, brackets and quotes: ${errDirect.message}`,
+        };
+      }
+    }
+  }
+
+  let list = [];
+  if (Array.isArray(parsed)) {
+    list = parsed;
+  } else if (parsed && typeof parsed === "object") {
+    if (Array.isArray(parsed.services)) list = parsed.services;
+    else if (Array.isArray(parsed.Services)) list = parsed.Services;
+    else if (Array.isArray(parsed.catalog)) list = parsed.catalog;
+    else if (Array.isArray(parsed.offerings)) list = parsed.offerings;
+  }
+
+  const cleanServices = list
+    .filter((s) => s && (typeof s === "string" || s.name))
+    .map((s) => {
+      if (typeof s === "string") {
+        return {
+          name: s.trim(),
+          description: "",
+          keywords: [s.trim().toLowerCase()],
+          category: "General",
+        };
+      }
+      let keywords = [];
+      if (Array.isArray(s.keywords)) {
+        keywords = s.keywords.map((k) => String(k).trim()).filter(Boolean);
+      } else if (typeof s.keywords === "string") {
+        keywords = s.keywords
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean);
+      }
+      return {
+        name: String(s.name || "").trim(),
+        description: String(s.description || "").trim(),
+        keywords,
+        category: String(s.category || "General").trim(),
+      };
+    })
+    .filter((s) => Boolean(s.name));
+
+  if (cleanServices.length === 0) {
+    return {
+      result: null,
+      error:
+        "JSON is valid, but no services with a valid 'name' property were found.",
+    };
+  }
+
+  return { result: cleanServices, error: "" };
+};
+
+const parseQualificationOnlyJson = (rawText) => {
+  if (!rawText || !rawText.trim()) {
+    return { result: null, error: "" };
+  }
+  const trimmed = rawText.trim();
+  let parsed = null;
+
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+  const match = trimmed.match(codeBlockRegex);
+  const targetStr = match ? match[1].trim() : trimmed;
+
+  try {
+    parsed = JSON.parse(targetStr);
+  } catch (errDirect) {
+    const firstBracket = targetStr.indexOf("[");
+    const lastBracket = targetStr.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      try {
+        parsed = JSON.parse(targetStr.substring(firstBracket, lastBracket + 1));
+      } catch (errSub) {
+        return {
+          result: null,
+          error: `Invalid JSON syntax: ${errDirect.message}`,
+        };
+      }
+    } else {
+      const firstBrace = targetStr.indexOf("{");
+      const lastBrace = targetStr.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          parsed = JSON.parse(targetStr.substring(firstBrace, lastBrace + 1));
+        } catch (errSub) {
+          return {
+            result: null,
+            error: `Invalid JSON syntax: ${errDirect.message}`,
+          };
+        }
+      } else {
+        return {
+          result: null,
+          error: `Could not parse JSON. Check commas, brackets and quotes: ${errDirect.message}`,
+        };
+      }
+    }
+  }
+
+  let list = [];
+  if (Array.isArray(parsed)) {
+    list = parsed;
+  } else if (parsed && typeof parsed === "object") {
+    if (Array.isArray(parsed.qualificationFields))
+      list = parsed.qualificationFields;
+    else if (Array.isArray(parsed.qualification)) list = parsed.qualification;
+    else if (Array.isArray(parsed.fields)) list = parsed.fields;
+    else if (Array.isArray(parsed.questions)) list = parsed.questions;
+  }
+
+  const cleanFields = list
+    .filter((f) => f && (f.key || f.label))
+    .map((f) => {
+      const rawLabel = String(f.label || f.key || "").trim();
+      let rawKey = String(f.key || rawLabel)
+        .trim()
+        .replace(/[^a-zA-Z0-9_]/g, "_")
+        .replace(/^[0-9]/, "_$&");
+      if (!rawKey)
+        rawKey = "field_" + Math.random().toString(36).substring(2, 7);
+
+      let rawType = String(f.type || "string")
+        .toLowerCase()
+        .trim();
+      if (!["string", "number", "boolean", "select"].includes(rawType)) {
+        if (
+          rawType.includes("select") ||
+          rawType.includes("choice") ||
+          rawType.includes("dropdown") ||
+          rawType.includes("enum")
+        ) {
+          rawType = "select";
+        } else if (
+          rawType.includes("num") ||
+          rawType.includes("int") ||
+          rawType.includes("score")
+        ) {
+          rawType = "number";
+        } else if (rawType.includes("bool") || rawType.includes("check")) {
+          rawType = "boolean";
+        } else {
+          rawType = "string";
+        }
+      }
+
+      let options = [];
+      if (Array.isArray(f.options)) {
+        options = f.options.map((o) => String(o).trim()).filter(Boolean);
+      } else if (typeof f.options === "string") {
+        options = f.options
+          .split(",")
+          .map((o) => o.trim())
+          .filter(Boolean);
+      }
+
+      return {
+        key: rawKey,
+        label: rawLabel,
+        type: rawType,
+        description: String(f.description || "").trim(),
+        options,
+        required: Boolean(f.required),
+      };
+    });
+
+  if (cleanFields.length === 0) {
+    return {
+      result: null,
+      error:
+        "JSON is valid, but no qualification criteria with a 'label' or 'key' were found.",
+    };
+  }
+
+  return { result: cleanFields, error: "" };
+};
+
+const parseFullConfigJson = (rawText) => {
+  if (!rawText || !rawText.trim()) {
+    return { result: null, error: "" };
+  }
+  const trimmed = rawText.trim();
+  let parsedObjects = [];
+
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  const matches = [...trimmed.matchAll(codeBlockRegex)];
+
+  if (matches.length > 0) {
+    for (const m of matches) {
+      try {
+        parsedObjects.push(JSON.parse(m[1].trim()));
+      } catch (e) {}
+    }
+  }
+
+  if (parsedObjects.length === 0) {
+    try {
+      parsedObjects.push(JSON.parse(trimmed));
+    } catch (errDirect) {
+      const firstBrace = trimmed.indexOf("{");
+      const lastBrace = trimmed.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try {
+          parsedObjects.push(
+            JSON.parse(trimmed.substring(firstBrace, lastBrace + 1)),
+          );
+        } catch (e) {
+          return {
+            result: null,
+            error: `Invalid JSON syntax: ${errDirect.message}`,
+          };
+        }
+      } else {
+        return {
+          result: null,
+          error: `Could not parse JSON: ${errDirect.message}`,
+        };
+      }
+    }
+  }
+
+  let services = [];
+  let qualificationFields = [];
+  let companyName = "";
+  let businessDescription = "";
+  let agentPersona = "";
+  let customInstructions = "";
+
+  for (const obj of parsedObjects) {
+    if (obj && typeof obj === "object") {
+      if (Array.isArray(obj.services)) services.push(...obj.services);
+      if (Array.isArray(obj.qualificationFields))
+        qualificationFields.push(...obj.qualificationFields);
+      if (typeof obj.companyName === "string" && obj.companyName.trim())
+        companyName = obj.companyName.trim();
+      if (
+        typeof obj.businessDescription === "string" &&
+        obj.businessDescription.trim()
+      )
+        businessDescription = obj.businessDescription.trim();
+      if (typeof obj.agentPersona === "string" && obj.agentPersona.trim())
+        agentPersona = obj.agentPersona.trim();
+      if (
+        typeof obj.customInstructions === "string" &&
+        obj.customInstructions.trim()
+      )
+        customInstructions = obj.customInstructions.trim();
+      else if (Array.isArray(obj.customInstructions))
+        customInstructions = obj.customInstructions.join("\n");
+    }
+  }
+
+  const cleanServices =
+    parseServicesOnlyJson(JSON.stringify(services)).result || [];
+  const cleanFields =
+    parseQualificationOnlyJson(JSON.stringify(qualificationFields)).result ||
+    [];
+
+  const hasAny =
+    cleanServices.length > 0 ||
+    cleanFields.length > 0 ||
+    Boolean(companyName) ||
+    Boolean(businessDescription) ||
+    Boolean(agentPersona) ||
+    Boolean(customInstructions);
+
+  if (!hasAny) {
+    return {
+      result: null,
+      error: "No matching AI configuration fields found in the provided JSON.",
+    };
+  }
+
+  return {
+    result: {
+      services: cleanServices,
+      qualificationFields: cleanFields,
+      companyName,
+      businessDescription,
+      agentPersona,
+      customInstructions,
+    },
+    error: "",
+  };
+};
 
 export default function OrganizationProfile() {
   const navigate = useNavigate();
@@ -215,6 +711,14 @@ export default function OrganizationProfile() {
       qualificationFields: DEFAULT_QUALIFICATION_FIELDS,
       qdrantCollection: "",
       knowledgeDocs: [],
+      dailyAiUsage: {
+        date: new Date().toISOString().slice(0, 10),
+        chatApiCalls: 0,
+        audioApiCalls: 0,
+        totalApiCalls: 0,
+        dailyQuotaLimit: 1500,
+        lastResetAt: new Date().toISOString(),
+      },
     };
   });
 
@@ -224,6 +728,11 @@ export default function OrganizationProfile() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
   const [keyTestResult, setKeyTestResult] = useState(null);
+  const [refreshingUsage, setRefreshingUsage] = useState(false);
+  const [resetCountdown, setResetCountdown] = useState("");
+  const [showEditLimitModal, setShowEditLimitModal] = useState(false);
+  const [customDailyLimit, setCustomDailyLimit] = useState(1500);
+  const [savingLimit, setSavingLimit] = useState(false);
 
   // Modals
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
@@ -244,9 +753,43 @@ export default function OrganizationProfile() {
     required: false,
   });
 
+  // Dedicated Import Modals State
+  const [showServicesImportModal, setShowServicesImportModal] = useState(false);
+  const [servicesImportText, setServicesImportText] = useState("");
+  const [servicesImportMergeStrategy, setServicesImportMergeStrategy] =
+    useState("replace");
+  const [servicesParsedResult, setServicesParsedResult] = useState(null);
+  const [servicesParseError, setServicesParseError] = useState("");
+  const [copiedServicesJson, setCopiedServicesJson] = useState(false);
+
+  const [showQualificationImportModal, setShowQualificationImportModal] =
+    useState(false);
+  const [qualificationImportText, setQualificationImportText] = useState("");
+  const [
+    qualificationImportMergeStrategy,
+    setQualificationImportMergeStrategy,
+  ] = useState("replace");
+  const [qualificationParsedResult, setQualificationParsedResult] =
+    useState(null);
+  const [qualificationParseError, setQualificationParseError] = useState("");
+  const [copiedQualificationJson, setCopiedQualificationJson] = useState(false);
+
+  // AI Extraction & Guidance Modal State
+  const [showAiGuidanceModal, setShowAiGuidanceModal] = useState(false);
+  const [guidanceTab, setGuidanceTab] = useState("prompt"); // "prompt" | "steps" | "fullImport"
+  const [copiedExtractionPrompt, setCopiedExtractionPrompt] = useState(false);
+  const [copiedQuickPrompt, setCopiedQuickPrompt] = useState(false);
+
+  const [fullConfigImportText, setFullConfigImportText] = useState("");
+  const [fullConfigParsedResult, setFullConfigParsedResult] = useState(null);
+  const [fullConfigParseError, setFullConfigParseError] = useState("");
+  const [fullConfigMergeStrategy, setFullConfigMergeStrategy] =
+    useState("replace");
+
   // Knowledge base upload
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [showPromptInspector, setShowPromptInspector] = useState(false);
+  const [activationResultModal, setActivationResultModal] = useState(null);
 
   const isManager =
     currentUser?.role === "Sales Manager" ||
@@ -335,17 +878,17 @@ export default function OrganizationProfile() {
         Array.isArray(data?.services) && data.services.length > 0
           ? data.services
           : Array.isArray(prev.services) && prev.services.length > 0
-          ? prev.services
-          : [DEFAULT_SERVICE_TEMPLATE];
+            ? prev.services
+            : [DEFAULT_SERVICE_TEMPLATE];
 
       const cleanFields =
         Array.isArray(data?.qualificationFields) &&
         data.qualificationFields.length > 0
           ? data.qualificationFields
           : Array.isArray(prev.qualificationFields) &&
-            prev.qualificationFields.length > 0
-          ? prev.qualificationFields
-          : DEFAULT_QUALIFICATION_FIELDS;
+              prev.qualificationFields.length > 0
+            ? prev.qualificationFields
+            : DEFAULT_QUALIFICATION_FIELDS;
 
       const autoBrandName =
         (data?.companyName && data.companyName.trim()) ||
@@ -368,16 +911,111 @@ export default function OrganizationProfile() {
         businessDescription:
           data?.businessDescription || prev.businessDescription || "",
         agentPersona: data?.agentPersona || prev.agentPersona,
-        customInstructions:
-          data?.customInstructions || prev.customInstructions,
+        customInstructions: data?.customInstructions || prev.customInstructions,
         services: cleanServices,
         qualificationFields: cleanFields,
         qdrantCollection: data?.qdrantCollection || prev.qdrantCollection,
         knowledgeDocs: Array.isArray(data?.knowledgeDocs)
           ? data.knowledgeDocs
           : prev.knowledgeDocs,
+        dailyAiUsage: data?.dailyAiUsage ||
+          prev.dailyAiUsage || {
+            date: new Date().toISOString().slice(0, 10),
+            chatApiCalls: 0,
+            audioApiCalls: 0,
+            totalApiCalls: 0,
+            dailyQuotaLimit: 1500,
+            lastResetAt: new Date().toISOString(),
+          },
       };
     });
+  };
+
+  // Live countdown to midnight UTC for daily API quota renewal
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date();
+      const tomorrow = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate() + 1,
+          0,
+          0,
+          0,
+        ),
+      );
+      const diffMs = Math.max(0, tomorrow - now);
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      setResetCountdown(`${hours}h ${mins}m`);
+    };
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleRefreshAiUsage = async () => {
+    setRefreshingUsage(true);
+    await fetchAISettings();
+    setTimeout(() => setRefreshingUsage(false), 500);
+  };
+
+  const handleUpdateDailyLimit = async (newLimit) => {
+    const targetLimit = parseInt(
+      newLimit !== undefined ? newLimit : customDailyLimit,
+      10,
+    );
+    if (!targetLimit || targetLimit <= 0) {
+      alert("Please enter a valid daily API calls limit (greater than 0).");
+      return;
+    }
+    setSavingLimit(true);
+    try {
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
+      const res = await axios.put(
+        API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS,
+        { dailyQuotaLimit: targetLimit },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (res.data?.success) {
+        setAiSettings((prev) => ({
+          ...prev,
+          dailyAiUsage: {
+            ...(prev.dailyAiUsage || {}),
+            dailyQuotaLimit: targetLimit,
+          },
+        }));
+        const orgId = orgData?._id || cachedOrg?._id || "default";
+        const localCached = localStorage.getItem(`sb_ai_settings_${orgId}`);
+        if (localCached) {
+          try {
+            const parsedCache = JSON.parse(localCached);
+            parsedCache.dailyAiUsage = {
+              ...(parsedCache.dailyAiUsage || {}),
+              dailyQuotaLimit: targetLimit,
+            };
+            localStorage.setItem(
+              `sb_ai_settings_${orgId}`,
+              JSON.stringify(parsedCache),
+            );
+          } catch (e) {}
+        }
+        setSaveToast(
+          `Daily AI API limit successfully updated to ${targetLimit.toLocaleString()} calls/day.`,
+        );
+        setShowEditLimitModal(false);
+      }
+    } catch (err) {
+      alert(
+        err.response?.data?.message || "Failed to update daily AI API limit.",
+      );
+    } finally {
+      setSavingLimit(false);
+    }
   };
 
   // Automatically fill brand name from organization when available
@@ -491,37 +1129,113 @@ export default function OrganizationProfile() {
 
   // Final step activation handler
   const handleFinishSetup = async () => {
+    const missing = [];
     if (!aiSettings.geminiApiKey || !aiSettings.geminiApiKey.trim()) {
-      setSaveToast("Please configure your Google Gemini API Key in Step 1.");
-      setCurrentStep(1);
-      return;
+      missing.push({
+        step: 1,
+        field: "Google Gemini API Key",
+        detail: "Configure and test your Gemini API key in Step 1.",
+      });
     }
     if (!aiSettings.companyName || !aiSettings.companyName.trim()) {
-      setSaveToast("Please provide your Company Name in Step 1.");
-      setCurrentStep(1);
-      return;
+      missing.push({
+        step: 1,
+        field: "Company / Brand Name",
+        detail: "Provide your brand name in Step 1.",
+      });
     }
     if (!aiSettings.services || aiSettings.services.length === 0) {
-      setSaveToast("Please add at least 1 service in Step 2 Catalog.");
-      setCurrentStep(2);
-      return;
+      missing.push({
+        step: 2,
+        field: "Catalog Offerings",
+        detail: "Add at least 1 product or service offering in Step 2.",
+      });
     }
     if (
       !aiSettings.qualificationFields ||
       aiSettings.qualificationFields.length === 0
     ) {
-      setSaveToast("Please add at least 1 qualification question in Step 3.");
-      setCurrentStep(3);
+      missing.push({
+        step: 3,
+        field: "Lead Qualification Criteria",
+        detail: "Add at least 1 qualification question in Step 3.",
+      });
+    }
+
+    if (missing.length > 0) {
+      setActivationResultModal({
+        success: false,
+        title: "Activation Incomplete",
+        message:
+          "Your AI assistant cannot be activated yet because some required setup steps are missing.",
+        errors: missing,
+      });
       return;
     }
 
+    setAiSaving(true);
+    const orgId = orgData?._id || cachedOrg?._id || "default";
     const payload = {
       ...aiSettings,
       isAiConfigured: true,
     };
 
-    await handleSaveStep(payload);
-    if (fetchOrganization) await fetchOrganization();
+    localStorage.setItem(`sb_ai_settings_${orgId}`, JSON.stringify(payload));
+
+    try {
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
+      const res = await axios.put(
+        API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS,
+        payload,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      if (res.data.success) {
+        setAiSettings((prev) => ({ ...prev, isAiConfigured: true }));
+        if (fetchOrganization) await fetchOrganization();
+        setActivationResultModal({
+          success: true,
+          title: "AI Sales Pilot Activated Successfully!",
+          message: `Your AI assistant for "${aiSettings.companyName}" is now active and ready to handle customer inquiries on WhatsApp.`,
+          details: {
+            brandName: aiSettings.companyName,
+            servicesCount: aiSettings.services.length,
+            questionsCount: aiSettings.qualificationFields.length,
+          },
+        });
+      } else {
+        setActivationResultModal({
+          success: false,
+          title: "Activation Failed",
+          message:
+            res.data.message ||
+            "Failed to save AI configuration to your organization.",
+          errors: [
+            {
+              field: "Server Error",
+              detail: res.data.message || "An unexpected error occurred.",
+            },
+          ],
+        });
+      }
+    } catch (err) {
+      const errMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Could not connect to the server to activate your AI configuration.";
+      setActivationResultModal({
+        success: false,
+        title: "Activation Failed",
+        message: errMsg,
+        errors: [{ field: "Server Error", detail: errMsg }],
+      });
+    } finally {
+      setAiSaving(false);
+    }
   };
 
   // Service Management
@@ -626,10 +1340,245 @@ export default function OrganizationProfile() {
     handleSaveStep({ ...aiSettings, qualificationFields: updated });
   };
 
+  // Services Dedicated JSON Handlers
+  const openServicesImportModal = () => {
+    setServicesImportText("");
+    setServicesParsedResult(null);
+    setServicesParseError("");
+    setServicesImportMergeStrategy("replace");
+    setShowServicesImportModal(true);
+  };
+
+  const handleServicesTextChange = (text) => {
+    setServicesImportText(text);
+    if (!text.trim()) {
+      setServicesParsedResult(null);
+      setServicesParseError("");
+      return;
+    }
+    const { result, error } = parseServicesOnlyJson(text);
+    setServicesParsedResult(result);
+    setServicesParseError(error);
+  };
+
+  const handleApplyServicesImport = async () => {
+    if (!servicesParsedResult || servicesParsedResult.length === 0) return;
+
+    let updatedServices = [...aiSettings.services];
+    if (servicesImportMergeStrategy === "replace") {
+      updatedServices = servicesParsedResult;
+    } else {
+      const existingNames = new Set(
+        updatedServices.map((s) => s.name.toLowerCase().trim()),
+      );
+      for (const s of servicesParsedResult) {
+        if (!existingNames.has(s.name.toLowerCase().trim())) {
+          updatedServices.push(s);
+          existingNames.add(s.name.toLowerCase().trim());
+        }
+      }
+    }
+
+    const updatedSettings = {
+      ...aiSettings,
+      services: updatedServices,
+    };
+
+    setAiSettings(updatedSettings);
+    await handleSaveStep(updatedSettings);
+
+    setShowServicesImportModal(false);
+    setServicesImportText("");
+    setServicesParsedResult(null);
+
+    setSaveToast(
+      `🎉 Successfully imported and saved ${servicesParsedResult.length} services!`,
+    );
+  };
+
+  const handleCopyServicesJson = () => {
+    navigator.clipboard.writeText(
+      JSON.stringify(aiSettings.services || [], null, 2),
+    );
+    setCopiedServicesJson(true);
+    setTimeout(() => setCopiedServicesJson(false), 2000);
+  };
+
+  // Qualification Criteria Dedicated JSON Handlers
+  const openQualificationImportModal = () => {
+    setQualificationImportText("");
+    setQualificationParsedResult(null);
+    setQualificationParseError("");
+    setQualificationImportMergeStrategy("replace");
+    setShowQualificationImportModal(true);
+  };
+
+  const handleQualificationTextChange = (text) => {
+    setQualificationImportText(text);
+    if (!text.trim()) {
+      setQualificationParsedResult(null);
+      setQualificationParseError("");
+      return;
+    }
+    const { result, error } = parseQualificationOnlyJson(text);
+    setQualificationParsedResult(result);
+    setQualificationParseError(error);
+  };
+
+  const handleApplyQualificationImport = async () => {
+    if (!qualificationParsedResult || qualificationParsedResult.length === 0)
+      return;
+
+    let updatedFields = [...aiSettings.qualificationFields];
+    if (qualificationImportMergeStrategy === "replace") {
+      updatedFields = qualificationParsedResult;
+    } else {
+      const existingKeys = new Set(
+        updatedFields.map((f) => f.key.toLowerCase().trim()),
+      );
+      for (const f of qualificationParsedResult) {
+        if (!existingKeys.has(f.key.toLowerCase().trim())) {
+          updatedFields.push(f);
+          existingKeys.add(f.key.toLowerCase().trim());
+        }
+      }
+    }
+
+    const updatedSettings = {
+      ...aiSettings,
+      qualificationFields: updatedFields,
+    };
+
+    setAiSettings(updatedSettings);
+    await handleSaveStep(updatedSettings);
+
+    setShowQualificationImportModal(false);
+    setQualificationImportText("");
+    setQualificationParsedResult(null);
+
+    setSaveToast(
+      `🎉 Successfully imported and saved ${qualificationParsedResult.length} qualification questions!`,
+    );
+  };
+
+  const handleCopyQualificationJson = () => {
+    navigator.clipboard.writeText(
+      JSON.stringify(aiSettings.qualificationFields || [], null, 2),
+    );
+    setCopiedQualificationJson(true);
+    setTimeout(() => setCopiedQualificationJson(false), 2000);
+  };
+
+  // Guidance Prompt Copy Handlers
+  const handleCopyExtractionPrompt = () => {
+    navigator.clipboard.writeText(AI_EXTRACTION_SYSTEM_PROMPT);
+    setCopiedExtractionPrompt(true);
+    setTimeout(() => setCopiedExtractionPrompt(false), 2500);
+  };
+
+  const handleCopyQuickPrompt = () => {
+    navigator.clipboard.writeText(AI_EXTRACTION_SYSTEM_PROMPT);
+    setCopiedQuickPrompt(true);
+    setTimeout(() => setCopiedQuickPrompt(false), 2500);
+  };
+
+  // Full Config Importer inside Guidance Modal
+  const handleFullConfigTextChange = (text) => {
+    setFullConfigImportText(text);
+    if (!text.trim()) {
+      setFullConfigParsedResult(null);
+      setFullConfigParseError("");
+      return;
+    }
+    const { result, error } = parseFullConfigJson(text);
+    setFullConfigParsedResult(result);
+    setFullConfigParseError(error);
+  };
+
+  const handleApplyFullConfigImport = async () => {
+    if (!fullConfigParsedResult) return;
+
+    const {
+      services: importedServices,
+      qualificationFields: importedFields,
+      companyName,
+      businessDescription,
+      agentPersona,
+      customInstructions,
+    } = fullConfigParsedResult;
+
+    let updatedServices = [...aiSettings.services];
+    let updatedFields = [...aiSettings.qualificationFields];
+
+    if (importedServices && importedServices.length > 0) {
+      if (fullConfigMergeStrategy === "replace") {
+        updatedServices = importedServices;
+      } else {
+        const existingNames = new Set(
+          updatedServices.map((s) => s.name.toLowerCase().trim()),
+        );
+        for (const s of importedServices) {
+          if (!existingNames.has(s.name.toLowerCase().trim())) {
+            updatedServices.push(s);
+            existingNames.add(s.name.toLowerCase().trim());
+          }
+        }
+      }
+    }
+
+    if (importedFields && importedFields.length > 0) {
+      if (fullConfigMergeStrategy === "replace") {
+        updatedFields = importedFields;
+      } else {
+        const existingKeys = new Set(
+          updatedFields.map((f) => f.key.toLowerCase().trim()),
+        );
+        for (const f of importedFields) {
+          if (!existingKeys.has(f.key.toLowerCase().trim())) {
+            updatedFields.push(f);
+            existingKeys.add(f.key.toLowerCase().trim());
+          }
+        }
+      }
+    }
+
+    const updatedSettings = {
+      ...aiSettings,
+      services: updatedServices,
+      qualificationFields: updatedFields,
+    };
+
+    if (companyName) updatedSettings.companyName = companyName;
+    if (businessDescription)
+      updatedSettings.businessDescription = businessDescription;
+    if (agentPersona) updatedSettings.agentPersona = agentPersona;
+    if (customInstructions)
+      updatedSettings.customInstructions = customInstructions;
+
+    setAiSettings(updatedSettings);
+    await handleSaveStep(updatedSettings);
+
+    setShowAiGuidanceModal(false);
+    setFullConfigImportText("");
+    setFullConfigParsedResult(null);
+
+    setSaveToast(
+      `🎉 Full AI configuration applied successfully (${importedServices.length} services, ${importedFields.length} criteria)!`,
+    );
+  };
+
   // Knowledge base file upload
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!aiSettings.geminiApiKey?.trim()) {
+      alert(
+        "Please configure and save your Google Gemini API Key in Step 1 first. Gemini embeddings are required to index documents into Qdrant.",
+      );
+      e.target.value = "";
+      return;
+    }
 
     const formData = new FormData();
     formData.append("file", file);
@@ -651,23 +1600,19 @@ export default function OrganizationProfile() {
       );
 
       if (res.data.success) {
-        fetchAISettings();
-        setSaveToast(`Document "${file.name}" indexed into Qdrant!`);
+        await fetchAISettings();
+        const chunkCount = res.data.data?.chunkCount || "vector";
+        setSaveToast(
+          `🎉 Document "${file.name}" indexed successfully into Qdrant (${chunkCount} chunks)!`,
+        );
       }
     } catch (err) {
-      const fallbackDoc = {
-        docId: "doc_" + Date.now(),
-        fileName: file.name,
-        originalName: file.name,
-        fileSize: file.size,
-        chunkCount: Math.ceil(file.size / 1500) || 12,
-        uploadedAt: new Date(),
-        status: "indexed",
-      };
-      const updatedDocs = [...aiSettings.knowledgeDocs, fallbackDoc];
-      setAiSettings({ ...aiSettings, knowledgeDocs: updatedDocs });
-      handleSaveStep({ ...aiSettings, knowledgeDocs: updatedDocs });
-      setSaveToast(`Document cached locally: ${file.name}`);
+      console.error("Knowledge upload failed:", err);
+      const errMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Document indexing into Qdrant failed.";
+      alert(`Upload Failed: ${errMsg}`);
     } finally {
       setUploadingDoc(false);
       e.target.value = "";
@@ -757,10 +1702,273 @@ export default function OrganizationProfile() {
         )
       : null);
 
+  const renderDailyAiUsageCard = (compact = false) => {
+    const dailyUsage = aiSettings.dailyAiUsage || {
+      date: new Date().toISOString().slice(0, 10),
+      chatApiCalls: 0,
+      audioApiCalls: 0,
+      totalApiCalls: 0,
+      dailyQuotaLimit: 1500,
+    };
+    const chatCalls = Number(dailyUsage.chatApiCalls) || 0;
+    const audioCalls = Number(dailyUsage.audioApiCalls) || 0;
+    const totalCalls =
+      dailyUsage.totalApiCalls !== undefined
+        ? Number(dailyUsage.totalApiCalls)
+        : chatCalls + audioCalls;
+    const quotaLimit = Number(dailyUsage.dailyQuotaLimit) || 1500;
+    const usagePercent = Math.min(
+      100,
+      Math.round((totalCalls / quotaLimit) * 100),
+    );
+
+    return (
+      <div className="p-6 rounded-3xl bg-gradient-to-br from-bg-card via-bg-secondary/30 to-bg-card border border-border-main space-y-5 shadow-2xs animate-fadeIn">
+        {/* Card Header & Daily Refresh Countdown */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
+              <Zap size={18} className="text-pilot-blue" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                  Daily AI API Usage & Quota Monitor
+                </h3>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Refreshes Daily
+                </span>
+              </div>
+              <p className="text-[11px] text-text-secondary mt-0.5">
+                Real-time count of API calls utilized today for WhatsApp chats
+                and voice call intelligence.
+              </p>
+            </div>
+          </div>
+
+          {/* Reset Countdown, Set Limit & Refresh Buttons */}
+          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end flex-wrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-secondary border border-border-main text-[11px] font-medium text-text-secondary">
+              <Calendar size={12} className="text-pilot-blue" />
+              <span>
+                Resets in:{" "}
+                <strong className="text-text-primary font-bold">
+                  {resetCountdown || "calculating..."}
+                </strong>
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCustomDailyLimit(quotaLimit);
+                setShowEditLimitModal(true);
+              }}
+              title="Configure your daily API quota limit"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pilot-blue text-white hover:bg-pilot-blue-hover text-[11px] font-bold transition-all cursor-pointer shadow-xs"
+            >
+              <Sliders size={12} />
+              <span>Set Limit</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRefreshAiUsage}
+              disabled={refreshingUsage}
+              title="Sync latest API usage counters"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-secondary hover:bg-bg-card border border-border-main text-[11px] font-bold text-text-primary hover:border-pilot-blue/40 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+            >
+              <RefreshCw
+                size={12}
+                className={`text-pilot-blue ${
+                  refreshingUsage ? "animate-spin" : ""
+                }`}
+              />
+              <span>{refreshingUsage ? "Syncing..." : "Sync"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Overall Quota Progress Meter */}
+        <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-text-primary">
+                Today's Gemini Calls:
+              </span>
+              <span className="font-mono text-pilot-blue font-bold">
+                {totalCalls.toLocaleString()}{" "}
+                <span className="text-text-secondary font-normal">
+                  / {quotaLimit.toLocaleString()} calls
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomDailyLimit(quotaLimit);
+                  setShowEditLimitModal(true);
+                }}
+                className="text-[10px] font-bold text-pilot-blue hover:underline flex items-center gap-1 ml-1 cursor-pointer bg-pilot-blue/10 px-2 py-0.5 rounded-md border border-pilot-blue/20"
+                title="Update daily quota limit"
+              >
+                <Edit2 size={10} />
+                <span>Edit Limit</span>
+              </button>
+            </div>
+            <span
+              className={`text-[11px] font-bold ${
+                usagePercent >= 90
+                  ? "text-red-500"
+                  : usagePercent >= 70
+                    ? "text-amber-500"
+                    : "text-emerald-500"
+              }`}
+            >
+              {usagePercent}% Used
+            </span>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full h-2.5 bg-bg-card border border-border-main rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                usagePercent >= 90
+                  ? "bg-red-500"
+                  : usagePercent >= 70
+                    ? "bg-amber-500"
+                    : "bg-gradient-to-r from-pilot-blue via-indigo-500 to-emerald-500"
+              }`}
+              style={{
+                width: `${Math.max(totalCalls > 0 ? 3 : 0, usagePercent)}%`,
+              }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] text-text-secondary pt-0.5">
+            <span>0 calls</span>
+            <div className="flex items-center gap-1">
+              <span>Configured Daily Limit:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomDailyLimit(quotaLimit);
+                  setShowEditLimitModal(true);
+                }}
+                className="font-bold text-pilot-blue hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                title="Click to update daily quota limit"
+              >
+                <span>{quotaLimit.toLocaleString()} requests/day</span>
+                <Edit2 size={10} className="text-pilot-blue" />
+              </button>
+            </div>
+            <span>{quotaLimit.toLocaleString()} calls max</span>
+          </div>
+        </div>
+
+        {/* 2-Column Breakdown Cards for Specific Purposes: CHATS vs AUDIO CALLS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Purpose 1: WhatsApp AI Chats */}
+          <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-pilot-blue/30 transition-all space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
+                  <Bot size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-text-primary">
+                    WhatsApp AI Chats
+                  </h4>
+                  <span className="text-[10px] text-text-secondary">
+                    Text replies & lead qualification
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20">
+                Chats Purpose
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-2xl font-black text-text-primary tracking-tight font-mono">
+                {chatCalls.toLocaleString()}
+              </span>
+              <span className="text-xs text-text-secondary font-medium">
+                calls used today
+              </span>
+            </div>
+
+            <div className="pt-2 border-t border-border-main/60 flex items-center justify-between text-[10px] text-text-secondary">
+              <span>Auto-replies, FAQs & dynamic lead queries</span>
+              <span className="font-mono text-pilot-blue font-semibold shrink-0">
+                1 call / message
+              </span>
+            </div>
+          </div>
+
+          {/* Purpose 2: Audio & Voice Calls */}
+          <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-violet-500/30 transition-all space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
+                  <Phone size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-text-primary">
+                    Audio & Voice Calls
+                  </h4>
+                  <span className="text-[10px] text-text-secondary">
+                    Call recording transcription & analysis
+                  </span>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-500 border border-violet-500/20">
+                Audio Purpose
+              </span>
+            </div>
+
+            <div className="flex items-baseline gap-2 pt-1">
+              <span className="text-2xl font-black text-text-primary tracking-tight font-mono">
+                {audioCalls.toLocaleString()}
+              </span>
+              <span className="text-xs text-text-secondary font-medium">
+                calls used today
+              </span>
+            </div>
+
+            <div className="pt-2 border-t border-border-main/60 flex items-center justify-between text-[10px] text-text-secondary">
+              <span>Sales recordings, transcription & sentiment</span>
+              <span className="font-mono text-violet-500 font-semibold shrink-0">
+                1 call / audio
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Guarantee Info */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl bg-bg-secondary/30 border border-border-main text-[11px] text-text-secondary">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+            <span>
+              <strong>Everyday Refresh:</strong> Usage counters automatically
+              reset to 0 every day at 00:00 UTC.
+            </span>
+          </div>
+          <span className="font-mono text-[10px] text-text-secondary">
+            Today:{" "}
+            <strong className="text-text-primary">
+              {dailyUsage.date || new Date().toISOString().slice(0, 10)}
+            </strong>
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   const activeStepObj = STEPS.find((s) => s.id === currentStep) || STEPS[0];
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
       {/* ── Top Header with Brand Details & Clean Tab Switcher ───────────── */}
       <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -848,6 +2056,75 @@ export default function OrganizationProfile() {
       {/* ═════════════════════════════════════════════════════════════════════ */}
       {activeTab === "wizard" && (
         <div className="space-y-6">
+          {/* ── AI DOCUMENT EXTRACTION & SETUP HERO GUIDE ────────────────────── */}
+          <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-pilot-blue/15 via-indigo-600/10 to-bg-card border border-pilot-blue/30 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-pilot-blue/10 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 relative z-10">
+              <div className="space-y-1.5 max-w-2xl">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pilot-blue text-white shadow-xs">
+                    <Sparkles size={11} className="animate-pulse" />
+                    AI Auto-Configuration Available
+                  </span>
+                  <span className="text-[11px] font-bold text-text-secondary">
+                    Extract from business documents in 60s
+                  </span>
+                </div>
+
+                <h3 className="text-base sm:text-lg font-black text-text-primary tracking-tight">
+                  Have a Company Brochure, Website, or Product Catalog?
+                </h3>
+
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  Use our specialized extraction system prompt with ChatGPT,
+                  Claude, or Gemini. Upload your business document, and it will
+                  generate your exact <strong>Catalog Services</strong> and{" "}
+                  <strong>Qualification Schema</strong> ready to paste into this
+                  dashboard.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuidanceTab("prompt");
+                    setShowAiGuidanceModal(true);
+                  }}
+                  className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-md shadow-pilot-blue/20 cursor-pointer group"
+                >
+                  <Sparkles
+                    size={15}
+                    className="group-hover:rotate-12 transition-transform"
+                  />
+                  <span>Document Extraction Guide</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyQuickPrompt}
+                  className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-bg-card border border-border-main hover:border-pilot-blue/40 text-text-primary text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                  title="Copy the extraction prompt to clipboard directly"
+                >
+                  {copiedQuickPrompt ? (
+                    <>
+                      <Check size={14} className="text-emerald-500" />
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        Prompt Copied!
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} className="text-pilot-blue" />
+                      <span>Copy System Prompt</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Stepper Progress Bar */}
           <div className="bg-bg-card border border-border-main rounded-3xl p-4 sm:p-6 shadow-xs">
             <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2 scrollbar-none">
@@ -919,6 +2196,21 @@ export default function OrganizationProfile() {
                   {activeStepObj.description}
                 </p>
               </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGuidanceTab("prompt");
+                    setShowAiGuidanceModal(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-pilot-blue/15 to-indigo-600/15 border border-pilot-blue/30 text-pilot-blue text-xs font-bold hover:bg-pilot-blue/25 transition-all shadow-xs shrink-0 cursor-pointer"
+                  title="View document extraction guide & copy prompt for ChatGPT/Claude"
+                >
+                  <Sparkles size={14} className="text-pilot-blue" />
+                  <span>Document Extraction Guide</span>
+                </button>
+              </div>
             </div>
 
             {/* ── STEP 1: IDENTITY & PERSONA ──────────────────────────────── */}
@@ -941,7 +2233,8 @@ export default function OrganizationProfile() {
                           </span>
                         </div>
                         <p className="text-[11px] text-text-secondary mt-0.5">
-                          Each organization must provide their own Gemini API key for automated sales chat and RAG embeddings.
+                          Each organization must provide their own Gemini API
+                          key for automated sales chat and RAG embeddings.
                         </p>
                       </div>
                     </div>
@@ -981,18 +2274,27 @@ export default function OrganizationProfile() {
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary p-1 cursor-pointer"
                           title={showApiKey ? "Hide Key" : "Show Key"}
                         >
-                          {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                          {showApiKey ? (
+                            <EyeOff size={15} />
+                          ) : (
+                            <Eye size={15} />
+                          )}
                         </button>
                       </div>
 
                       <button
                         type="button"
                         onClick={handleTestApiKey}
-                        disabled={testingKey || !aiSettings.geminiApiKey?.trim()}
+                        disabled={
+                          testingKey || !aiSettings.geminiApiKey?.trim()
+                        }
                         className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-bg-card hover:bg-bg-secondary border border-border-main text-xs font-bold text-text-primary hover:border-pilot-blue/50 transition-all disabled:opacity-50 cursor-pointer shrink-0 shadow-2xs"
                       >
                         {testingKey ? (
-                          <RefreshCw size={14} className="animate-spin text-pilot-blue" />
+                          <RefreshCw
+                            size={14}
+                            className="animate-spin text-pilot-blue"
+                          />
                         ) : (
                           <Sparkles size={14} className="text-pilot-blue" />
                         )}
@@ -1030,7 +2332,10 @@ export default function OrganizationProfile() {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1 text-[11px] text-text-secondary">
                       <div className="flex items-center gap-1.5">
                         <Lock size={12} className="text-emerald-500" />
-                        <span>Encrypted with AES-256-GCM. Never shared with other organizations.</span>
+                        <span>
+                          Encrypted with AES-256-GCM. Never shared with other
+                          organizations.
+                        </span>
                       </div>
 
                       <a
@@ -1045,59 +2350,6 @@ export default function OrganizationProfile() {
                     </div>
                   </div>
                 </div>
-
-                {/* Persona Cards */}
-                <div>
-                  <label className="block text-xs font-black text-text-primary mb-2.5 uppercase tracking-wider">
-                    Select Sales Voice & Persona
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                    {TONE_PRESETS.map((t) => {
-                      const Icon = t.icon;
-                      const isSelected = aiSettings.agentPersona.includes(
-                        t.title.toLowerCase().split(" ")[0],
-                      );
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() =>
-                            setAiSettings({
-                              ...aiSettings,
-                              agentPersona: t.persona,
-                            })
-                          }
-                          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? "bg-pilot-blue/10 border-pilot-blue text-pilot-blue shadow-xs ring-1 ring-pilot-blue"
-                              : "bg-bg-secondary/40 border-border-main text-text-secondary hover:border-pilot-blue/40 hover:bg-bg-secondary/70"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className={`p-1.5 rounded-lg ${isSelected ? "bg-pilot-blue text-white" : "bg-bg-secondary text-text-primary"}`}
-                              >
-                                <Icon size={16} />
-                              </div>
-                              <span className="text-xs font-bold text-text-primary">
-                                {t.title}
-                              </span>
-                            </div>
-                            {isSelected && (
-                              <Check size={14} className="text-pilot-blue" />
-                            )}
-                          </div>
-                          <p className="text-[11px] leading-relaxed text-text-secondary mt-1">
-                            {t.desc}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Name & Role Inputs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
@@ -1122,7 +2374,8 @@ export default function OrganizationProfile() {
                     />
                     <span className="text-[10px] text-text-secondary mt-1.5 block">
                       The official brand name the AI assistant introduces on
-                      WhatsApp. Automatically pre-filled from your organization profile.
+                      WhatsApp. Automatically pre-filled from your organization
+                      profile.
                     </span>
                   </div>
 
@@ -1199,6 +2452,37 @@ export default function OrganizationProfile() {
             {/* ── STEP 2: PRODUCTS & SERVICES ─────────────────────────────── */}
             {currentStep === 2 && (
               <div className="space-y-6 animate-fadeIn">
+                {/* Step 2 Pro Guidance Callout */}
+                <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-xl bg-pilot-blue/10 text-pilot-blue shrink-0 mt-0.5">
+                      <Lightbulb size={16} />
+                    </div>
+                    <div className="space-y-0.5 text-xs">
+                      <div className="font-bold text-text-primary">
+                        Catalog & Offering Matching
+                      </div>
+                      <p className="text-text-secondary leading-relaxed">
+                        When a customer reaches out via WhatsApp, the AI maps
+                        their request to these services and keywords, and tags
+                        the lead in your CRM.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGuidanceTab("prompt");
+                      setShowAiGuidanceModal(true);
+                    }}
+                    className="text-xs font-bold text-pilot-blue hover:underline shrink-0 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Extract from Brochure</span>
+                    <ArrowRight size={12} />
+                  </button>
+                </div>
+
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
                     <h3 className="text-sm font-black text-text-primary">
@@ -1210,13 +2494,25 @@ export default function OrganizationProfile() {
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => setShowAddServiceModal(true)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-all shadow-xs shrink-0 cursor-pointer"
-                  >
-                    <Plus size={15} />
-                    <span>Add New Service</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={openServicesImportModal}
+                      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-text-primary text-xs font-bold hover:bg-bg-secondary/70 hover:border-pilot-blue/40 transition-all shadow-xs shrink-0 cursor-pointer"
+                      title="Import products & services list from JSON structure"
+                    >
+                      <FileJson size={15} className="text-pilot-blue" />
+                      <span>Import Services (JSON)</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowAddServiceModal(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-all shadow-xs shrink-0 cursor-pointer"
+                    >
+                      <Plus size={15} />
+                      <span>Add New Service</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Services Grid */}
@@ -1229,14 +2525,24 @@ export default function OrganizationProfile() {
                       No Catalog Services Configured Yet
                     </h4>
                     <p className="text-xs text-text-secondary max-w-md mx-auto">
-                      Add your products or services so the AI knows what you sell and can guide your customers effectively.
+                      Add your products or services so the AI knows what you
+                      sell and can guide your customers effectively.
                     </p>
-                    <button
-                      onClick={() => setShowAddServiceModal(true)}
-                      className="px-4 py-2 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-colors"
-                    >
-                      Add First Service
-                    </button>
+                    <div className="flex items-center justify-center gap-2.5 pt-1">
+                      <button
+                        onClick={openServicesImportModal}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-bg-card border border-border-main text-text-primary text-xs font-bold hover:bg-bg-secondary transition-colors cursor-pointer"
+                      >
+                        <FileJson size={14} className="text-pilot-blue" />
+                        <span>Import Services JSON</span>
+                      </button>
+                      <button
+                        onClick={() => setShowAddServiceModal(true)}
+                        className="px-4 py-2 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-colors cursor-pointer"
+                      >
+                        Add First Service
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1388,6 +2694,38 @@ export default function OrganizationProfile() {
             {/* ── STEP 3: LEAD QUALIFICATION SCHEMA ───────────────────────── */}
             {currentStep === 3 && (
               <div className="space-y-6 animate-fadeIn">
+                {/* Step 3 Pro Guidance Callout */}
+                <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-xl bg-pilot-blue/10 text-pilot-blue shrink-0 mt-0.5">
+                      <Lightbulb size={16} />
+                    </div>
+                    <div className="space-y-0.5 text-xs">
+                      <div className="font-bold text-text-primary">
+                        How Dynamic Qualification Works
+                      </div>
+                      <p className="text-text-secondary leading-relaxed">
+                        The AI agent asks these qualification questions
+                        organically over the WhatsApp conversation, avoiding
+                        rigid interrogation and maximizing customer response
+                        rates.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGuidanceTab("prompt");
+                      setShowAiGuidanceModal(true);
+                    }}
+                    className="text-xs font-bold text-pilot-blue hover:underline shrink-0 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Generate Industry Questions</span>
+                    <ArrowRight size={12} />
+                  </button>
+                </div>
+
                 {/* Lead Qualification Criteria Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
@@ -1396,28 +2734,42 @@ export default function OrganizationProfile() {
                       {aiSettings.qualificationFields.length})
                     </h3>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      Standard criteria your AI extracts to qualify leads. Customize, edit, delete, or add questions to suit your business.
+                      Standard criteria your AI extracts to qualify leads.
+                      Customize, edit, delete, or add questions to suit your
+                      business.
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      setEditingFieldIndex(null);
-                      setNewField({
-                        key: "",
-                        label: "",
-                        type: "string",
-                        description: "",
-                        options: "",
-                        required: false,
-                      });
-                      setShowAddFieldModal(true);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-all shadow-xs shrink-0 cursor-pointer"
-                  >
-                    <Plus size={15} />
-                    <span>Add Custom Question</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={openQualificationImportModal}
+                      className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-text-primary text-xs font-bold hover:bg-bg-secondary/70 hover:border-pilot-blue/40 transition-all shadow-xs shrink-0 cursor-pointer"
+                      title="Import qualification schema criteria from JSON structure"
+                    >
+                      <FileJson size={15} className="text-pilot-blue" />
+                      <span>Import Criteria (JSON)</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setEditingFieldIndex(null);
+                        setNewField({
+                          key: "",
+                          label: "",
+                          type: "string",
+                          description: "",
+                          options: "",
+                          required: false,
+                        });
+                        setShowAddFieldModal(true);
+                      }}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-all shadow-xs shrink-0 cursor-pointer"
+                    >
+                      <Plus size={15} />
+                      <span>Add Custom Question</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Custom Fields List */}
@@ -1430,14 +2782,24 @@ export default function OrganizationProfile() {
                       No Custom Questions Configured
                     </h4>
                     <p className="text-xs text-text-secondary max-w-md mx-auto">
-                      Add business-specific criteria (e.g. budget, timeframe, product specifications) to capture key lead requirements.
+                      Add business-specific criteria (e.g. budget, timeframe,
+                      product specifications) to capture key lead requirements.
                     </p>
-                    <button
-                      onClick={() => setShowAddFieldModal(true)}
-                      className="px-4 py-2 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-colors"
-                    >
-                      Add First Field
-                    </button>
+                    <div className="flex items-center justify-center gap-2.5 pt-1">
+                      <button
+                        onClick={openQualificationImportModal}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-bg-card border border-border-main text-text-primary text-xs font-bold hover:bg-bg-secondary transition-colors cursor-pointer"
+                      >
+                        <FileJson size={14} className="text-pilot-blue" />
+                        <span>Import Criteria JSON</span>
+                      </button>
+                      <button
+                        onClick={() => setShowAddFieldModal(true)}
+                        className="px-4 py-2 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-colors cursor-pointer"
+                      >
+                        Add First Field
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2087,15 +3449,1049 @@ export default function OrganizationProfile() {
               </div>
             </div>
           </div>
+
+          {/* ── 1. DEDICATED SERVICES CATALOG JSON IMPORT MODAL ────────── */}
+          {showServicesImportModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+              <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-xl w-full max-h-[90vh] flex flex-col justify-between shadow-2xl space-y-4">
+                {/* Modal Header */}
+                <div className="flex justify-between items-start pb-3 border-b border-border-main shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
+                      <Layers size={20} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-black text-text-primary">
+                          Import Services Catalog (JSON)
+                        </h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20">
+                          Step 2 Catalog
+                        </span>
+                      </div>
+                      <p className="text-xs text-text-secondary mt-0.5">
+                        Paste an array of products or services. The AI matches
+                        customer inquiries to these offerings.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowServicesImportModal(false);
+                      setServicesImportText("");
+                      setServicesParsedResult(null);
+                      setServicesParseError("");
+                    }}
+                    className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-secondary rounded-xl transition-colors cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyServicesJson}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-bg-secondary border border-border-main text-text-secondary hover:text-text-primary text-[11px] font-semibold transition-colors cursor-pointer"
+                        title="Copy currently configured services as JSON"
+                      >
+                        {copiedServicesJson ? (
+                          <Check size={12} className="text-emerald-500" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                        <span>
+                          {copiedServicesJson ? "Copied!" : "Copy Current"}
+                        </span>
+                      </button>
+
+                      {servicesImportText && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setServicesImportText("");
+                            setServicesParsedResult(null);
+                            setServicesParseError("");
+                          }}
+                          className="text-[11px] text-text-secondary hover:text-red-500 font-semibold cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Textarea */}
+                  <div>
+                    <textarea
+                      rows={8}
+                      value={servicesImportText}
+                      onChange={(e) => handleServicesTextChange(e.target.value)}
+                      placeholder={`[\n  {\n    "name": "General Enquiry",\n    "description": "General consultation and customer requirements assessment.",\n    "keywords": ["enquiry", "information", "help", "consultation"],\n    "category": "General"\n  },\n  {\n    "name": "Residential Consultation",\n    "description": "Tailored on-site assessment for residential projects.",\n    "keywords": ["home", "villa", "apartment"],\n    "category": "Residential"\n  }\n]`}
+                      className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs font-mono rounded-2xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Strategy selection */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-2xl bg-bg-secondary/30 border border-border-main">
+                    <div>
+                      <span className="text-xs font-bold text-text-primary block">
+                        Import Strategy
+                      </span>
+                      <span className="text-[11px] text-text-secondary">
+                        Choose whether to overwrite current catalog or append
+                        new services.
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setServicesImportMergeStrategy("replace")
+                        }
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          servicesImportMergeStrategy === "replace"
+                            ? "bg-pilot-blue text-white shadow-2xs"
+                            : "bg-bg-card border border-border-main text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Replace Existing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setServicesImportMergeStrategy("merge")}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          servicesImportMergeStrategy === "merge"
+                            ? "bg-pilot-blue text-white shadow-2xs"
+                            : "bg-bg-card border border-border-main text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Append / Merge
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Error display */}
+                  {servicesParseError && (
+                    <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs flex items-start gap-2.5 animate-fadeIn">
+                      <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <div className="font-bold">Invalid Services JSON</div>
+                        <div className="font-mono text-[11px] opacity-90">
+                          {servicesParseError}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview of detected services */}
+                  {servicesParsedResult && servicesParsedResult.length > 0 && (
+                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2.5 animate-fadeIn">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                          <CheckCircle2 size={16} />
+                          <span>
+                            Detected {servicesParsedResult.length} Services
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md">
+                          Ready to Apply
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                        {servicesParsedResult.map((s, idx) => (
+                          <span
+                            key={idx}
+                            className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-bg-card border border-border-main text-text-primary flex items-center gap-1.5"
+                          >
+                            <span className="font-bold text-pilot-blue">
+                              {s.name}
+                            </span>
+                            {s.keywords?.length > 0 && (
+                              <span className="text-text-secondary text-[9px]">
+                                ({s.keywords.length} tags)
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex justify-between items-center pt-3 border-t border-border-main shrink-0">
+                  <span className="text-[11px] text-text-secondary">
+                    {servicesImportMergeStrategy === "replace"
+                      ? "Overwrites catalog with imported services"
+                      : "Appends new services without duplicates"}
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowServicesImportModal(false);
+                        setServicesImportText("");
+                        setServicesParsedResult(null);
+                        setServicesParseError("");
+                      }}
+                      className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary hover:text-text-primary transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleApplyServicesImport}
+                      disabled={
+                        !servicesParsedResult ||
+                        servicesParsedResult.length === 0 ||
+                        aiSaving
+                      }
+                      className="flex items-center gap-2 px-5 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      <Check size={15} />
+                      <span>
+                        {servicesParsedResult?.length
+                          ? `Import ${servicesParsedResult.length} Services`
+                          : "Import Services"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 2. DEDICATED QUALIFICATION CRITERIA JSON IMPORT MODAL ──────── */}
+          {showQualificationImportModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+              <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-xl w-full max-h-[90vh] flex flex-col justify-between shadow-2xl space-y-4">
+                {/* Modal Header */}
+                <div className="flex justify-between items-start pb-3 border-b border-border-main shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shrink-0">
+                      <ListFilter size={20} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-black text-text-primary">
+                          Import Qualification Schema (JSON)
+                        </h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+                          Step 3 Schema
+                        </span>
+                      </div>
+                      <p className="text-xs text-text-secondary mt-0.5">
+                        Paste qualification criteria questions. The AI
+                        representative gathers these answers during
+                        conversation.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowQualificationImportModal(false);
+                      setQualificationImportText("");
+                      setQualificationParsedResult(null);
+                      setQualificationParseError("");
+                    }}
+                    className="p-1.5 text-text-secondary hover:text-text-primary hover:bg-bg-secondary rounded-xl transition-colors cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                  {/* Quick helpers bar */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-text-secondary">
+                        Helper:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleQualificationTextChange(
+                            SAMPLE_QUALIFICATION_JSON,
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-bg-secondary border border-border-main hover:border-pilot-blue/40 text-text-primary text-[11px] font-semibold transition-colors cursor-pointer"
+                      >
+                        Insert Sample Criteria
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyQualificationJson}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-bg-secondary border border-border-main text-text-secondary hover:text-text-primary text-[11px] font-semibold transition-colors cursor-pointer"
+                        title="Copy currently configured criteria as JSON"
+                      >
+                        {copiedQualificationJson ? (
+                          <Check size={12} className="text-emerald-500" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                        <span>
+                          {copiedQualificationJson ? "Copied!" : "Copy Current"}
+                        </span>
+                      </button>
+
+                      {qualificationImportText && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQualificationImportText("");
+                            setQualificationParsedResult(null);
+                            setQualificationParseError("");
+                          }}
+                          className="text-[11px] text-text-secondary hover:text-red-500 font-semibold cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Textarea */}
+                  <div>
+                    <textarea
+                      rows={8}
+                      value={qualificationImportText}
+                      onChange={(e) =>
+                        handleQualificationTextChange(e.target.value)
+                      }
+                      placeholder={`[\n  {\n    "key": "cityAndArea",\n    "label": "City & Area",\n    "type": "string",\n    "description": "Customer location"\n  },\n  {\n    "key": "budgetRange",\n    "label": "Budget Range",\n    "type": "select",\n    "options": ["Under ₹5 Lakh", "₹5-15 Lakh", "₹15-30 Lakh+"],\n    "description": "Customer budget"\n  }\n]`}
+                      className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs font-mono rounded-2xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Strategy selection */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 rounded-2xl bg-bg-secondary/30 border border-border-main">
+                    <div>
+                      <span className="text-xs font-bold text-text-primary block">
+                        Import Strategy
+                      </span>
+                      <span className="text-[11px] text-text-secondary">
+                        Choose whether to overwrite questions or append without
+                        duplicate keys.
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQualificationImportMergeStrategy("replace")
+                        }
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          qualificationImportMergeStrategy === "replace"
+                            ? "bg-pilot-blue text-white shadow-2xs"
+                            : "bg-bg-card border border-border-main text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Replace Existing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQualificationImportMergeStrategy("merge")
+                        }
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          qualificationImportMergeStrategy === "merge"
+                            ? "bg-pilot-blue text-white shadow-2xs"
+                            : "bg-bg-card border border-border-main text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        Append / Merge
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Error display */}
+                  {qualificationParseError && (
+                    <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs flex items-start gap-2.5 animate-fadeIn">
+                      <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <div className="font-bold">Invalid Criteria JSON</div>
+                        <div className="font-mono text-[11px] opacity-90">
+                          {qualificationParseError}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview */}
+                  {qualificationParsedResult &&
+                    qualificationParsedResult.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2.5 animate-fadeIn">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                            <CheckCircle2 size={16} />
+                            <span>
+                              Detected {qualificationParsedResult.length}{" "}
+                              Criteria Fields
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md">
+                            Ready
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                          {qualificationParsedResult.map((f, idx) => (
+                            <span
+                              key={idx}
+                              className="text-[10px] font-semibold px-2.5 py-1 rounded-lg bg-bg-card border border-border-main text-text-primary flex items-center gap-1.5"
+                            >
+                              <span className="font-bold">{f.label}</span>
+                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-md bg-pilot-blue/10 text-pilot-blue uppercase">
+                                {f.type}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex justify-between items-center pt-3 border-t border-border-main shrink-0">
+                  <span className="text-[11px] text-text-secondary">
+                    {qualificationImportMergeStrategy === "replace"
+                      ? "Overwrites criteria with imported questions"
+                      : "Appends new questions without duplicates"}
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowQualificationImportModal(false);
+                        setQualificationImportText("");
+                        setQualificationParsedResult(null);
+                        setQualificationParseError("");
+                      }}
+                      className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary hover:text-text-primary transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleApplyQualificationImport}
+                      disabled={
+                        !qualificationParsedResult ||
+                        qualificationParsedResult.length === 0 ||
+                        aiSaving
+                      }
+                      className="flex items-center gap-2 px-5 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      <Check size={15} />
+                      <span>
+                        {qualificationParsedResult?.length
+                          ? `Import ${qualificationParsedResult.length} Criteria`
+                          : "Import Criteria"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showAiGuidanceModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-white dark:bg-bg-card border border-border-main/80 rounded-[28px] max-w-[900px] w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transition-all">
+                {/* ── MODAL HEADER ──────────────────────────────────────────────── */}
+                <div className="flex items-center justify-between p-5 sm:p-6 border-b border-border-main/70 shrink-0 bg-white dark:bg-bg-card">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500/10 to-indigo-500/15 border border-pilot-blue/20 text-pilot-blue flex items-center justify-center shadow-xs shrink-0">
+                      <Sparkles size={22} className="text-pilot-blue" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base sm:text-lg font-black text-text-primary tracking-tight truncate">
+                          AI Document Extraction Guide
+                        </h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20 uppercase tracking-wide shrink-0">
+                          SYSTEM PROMPT
+                        </span>
+                      </div>
+                      <p className="text-xs text-text-secondary mt-0.5 line-clamp-1 sm:line-clamp-none">
+                        Upload your business PDF, brochure, or catalog to
+                        ChatGPT, Claude, or Gemini and generate the exact CRM
+                        configuration.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAiGuidanceModal(false)}
+                    aria-label="Close modal"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center border border-border-main/80 text-text-secondary hover:text-text-primary hover:bg-slate-100 dark:hover:bg-bg-secondary transition-all cursor-pointer shrink-0 ml-2"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* ── SEGMENTED NAVIGATION TABS ─────────────────────────────────── */}
+                <div className="px-5 sm:px-6 pt-4 pb-1 bg-white dark:bg-bg-card shrink-0">
+                  <div className="flex items-center p-1 bg-slate-100 dark:bg-bg-secondary/80 border border-border-main/70 rounded-2xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setGuidanceTab("prompt")}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        guidanceTab === "prompt"
+                          ? "bg-pilot-blue text-white shadow-xs"
+                          : "text-text-secondary hover:text-text-primary hover:bg-white/60 dark:hover:bg-bg-card/60"
+                      }`}
+                    >
+                      <FileText size={15} />
+                      <span className="hidden sm:inline">01.</span>
+                      <span>Extraction Prompt</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setGuidanceTab("steps")}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        guidanceTab === "steps"
+                          ? "bg-pilot-blue text-white shadow-xs"
+                          : "text-text-secondary hover:text-text-primary hover:bg-white/60 dark:hover:bg-bg-card/60"
+                      }`}
+                    >
+                      <Lightbulb size={15} />
+                      <span className="hidden sm:inline">02.</span>
+                      <span>How It Works</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── MODAL INDEPENDENT SCROLLABLE BODY ─────────────────────────── */}
+                <div className="flex-1 overflow-y-auto min-h-0 p-5 sm:p-6 space-y-6">
+                  {guidanceTab === "prompt" && (
+                    <div className="space-y-4 animate-fadeIn">
+                      <div className="p-4 sm:p-5 rounded-2xl bg-blue-50/70 dark:bg-pilot-blue/10 border border-blue-200/80 dark:border-pilot-blue/25 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-pilot-blue/15 text-pilot-blue flex items-center justify-center shrink-0 mt-0.5">
+                            <Sparkles size={16} />
+                          </div>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-xs font-black text-text-primary tracking-tight">
+                                Ready-to-Use Extraction Prompt
+                              </h4>
+                              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-white dark:bg-bg-card border border-blue-200 dark:border-pilot-blue/30 text-pilot-blue">
+                                9,067 chars
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-text-secondary leading-relaxed">
+                              Compatible with ChatGPT, Claude, and Google
+                              Gemini.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleCopyExtractionPrompt}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer w-full sm:w-auto"
+                        >
+                          {copiedExtractionPrompt ? (
+                            <>
+                              <Check size={14} />
+                              <span>Copied to Clipboard!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={14} />
+                              <span>Copy Full Prompt</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Code-Editor Style Prompt Container */}
+                      <div className="rounded-2xl bg-[#0a0f1d] border border-slate-800/90 overflow-hidden shadow-sm flex flex-col">
+                        {/* Window Header Bar */}
+                        <div className="flex items-center justify-between px-4 py-3 bg-slate-900/90 border-b border-slate-800 text-[11px] font-mono select-none">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 mr-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
+                              <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
+                            </div>
+                            <span className="font-bold text-slate-300 tracking-wider text-[10px]">
+                              SYSTEM PROMPT
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700/60">
+                            READ ONLY
+                          </span>
+                        </div>
+
+                        {/* Code Pre Block */}
+                        <pre className="p-4 sm:p-5 text-slate-300 text-[11px] sm:text-xs font-mono whitespace-pre-wrap leading-relaxed  overflow-y-auto select-all">
+                          {AI_EXTRACTION_SYSTEM_PROMPT}
+                        </pre>
+
+                        {/* Editor Sub-Footer */}
+                        <div className="px-4 py-2.5 bg-slate-900/60 border-t border-slate-800/70 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="flex items-center gap-1.5">
+                            <Info size={13} className="text-pilot-blue" />
+                            <span>
+                              Copy this prompt and attach your business
+                              document.
+                            </span>
+                          </span>
+                          <span className="hidden sm:inline text-[10px] font-mono text-slate-500">
+                            markdown / json schema
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Step Action Helper Card */}
+                      <div
+                        className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 ${
+                          copiedExtractionPrompt
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                            : "bg-slate-50 dark:bg-bg-secondary/40 border-border-main/80 text-text-secondary"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                              copiedExtractionPrompt
+                                ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+                                : "bg-pilot-blue/10 text-pilot-blue"
+                            }`}
+                          >
+                            {copiedExtractionPrompt ? (
+                              <CheckCircle2 size={16} />
+                            ) : (
+                              <Copy size={15} />
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-text-primary">
+                              {copiedExtractionPrompt
+                                ? "System Prompt Copied!"
+                                : "Step 1: Copy this prompt, then proceed to next step"}
+                            </div>
+                            <p className="text-[11px] opacity-85 mt-0.5">
+                              {copiedExtractionPrompt
+                                ? "Now click 'Next Step' at the bottom to see how to upload your document to ChatGPT, Claude, or Gemini."
+                                : "Click 'Copy Full Prompt' above. Once copied, click 'Next Step' at the bottom to continue."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                          {!copiedExtractionPrompt && (
+                            <button
+                              type="button"
+                              onClick={handleCopyExtractionPrompt}
+                              className="px-3.5 py-2 rounded-xl bg-bg-card border border-border-main hover:border-pilot-blue/40 text-text-primary text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                            >
+                              Copy Prompt
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setGuidanceTab("steps")}
+                            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          >
+                            <span>Next Step</span>
+                            <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ═══ TAB 2: HOW IT WORKS ═════════════════════════════════════ */}
+                  {guidanceTab === "steps" && (
+                    <div className="space-y-6 animate-fadeIn">
+                      {/* Step Section Header */}
+                      <div>
+                        <h4 className="text-sm font-black text-text-primary tracking-tight">
+                          How the AI extraction workflow works
+                        </h4>
+                        <p className="text-xs text-text-secondary mt-0.5">
+                          Generate structured CRM configuration from your
+                          business documents in three simple steps.
+                        </p>
+                      </div>
+
+                      {/* 3 Step Connected Cards */}
+                      <div className="relative">
+                        {/* Subtle connecting track on desktop */}
+                        <div className="hidden md:block absolute top-10 left-12 right-12 h-[2px] bg-border-main/70 pointer-events-none z-0" />
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 relative z-10">
+                          {/* Step 1 */}
+                          <div className="p-5 rounded-2xl bg-white dark:bg-bg-secondary/40 border border-border-main/80 hover:border-pilot-blue/40 transition-all flex flex-col justify-between h-full shadow-2xs group">
+                            <div className="space-y-3">
+                              <div className="w-10 h-10 rounded-xl bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20 flex items-center justify-center font-black text-xs shrink-0 group-hover:bg-pilot-blue group-hover:text-white transition-all shadow-xs">
+                                01
+                              </div>
+                              <div className="space-y-1">
+                                <h5 className="text-xs font-black text-text-primary tracking-tight">
+                                  Copy the extraction prompt
+                                </h5>
+                                <p className="text-[11px] text-text-secondary leading-relaxed">
+                                  Copy the ready-to-use system prompt and open
+                                  ChatGPT, Claude, or Gemini.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="pt-3 border-t border-border-main/50 mt-3 text-[10px] font-bold text-pilot-blue flex items-center gap-1">
+                              <Copy size={12} />
+                              <span>One-click copy</span>
+                            </div>
+                          </div>
+
+                          {/* Step 2 */}
+                          <div className="p-5 rounded-2xl bg-white dark:bg-bg-secondary/40 border border-border-main/80 hover:border-pilot-blue/40 transition-all flex flex-col justify-between h-full shadow-2xs group">
+                            <div className="space-y-3">
+                              <div className="w-10 h-10 rounded-xl bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20 flex items-center justify-center font-black text-xs shrink-0 group-hover:bg-pilot-blue group-hover:text-white transition-all shadow-xs">
+                                02
+                              </div>
+                              <div className="space-y-1">
+                                <h5 className="text-xs font-black text-text-primary tracking-tight">
+                                  Upload your business document
+                                </h5>
+                                <p className="text-[11px] text-text-secondary leading-relaxed">
+                                  Attach your company brochure, PDF, product
+                                  catalog, pricing document, or website content.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="pt-3 border-t border-border-main/50 mt-3 text-[10px] font-bold text-pilot-blue flex items-center gap-1">
+                              <FileText size={12} />
+                              <span>PDF / Word / TXT</span>
+                            </div>
+                          </div>
+
+                          {/* Step 3 */}
+                          <div className="p-5 rounded-2xl bg-white dark:bg-bg-secondary/40 border border-border-main/80 hover:border-pilot-blue/40 transition-all flex flex-col justify-between h-full shadow-2xs group">
+                            <div className="space-y-3">
+                              <div className="w-10 h-10 rounded-xl bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20 flex items-center justify-center font-black text-xs shrink-0 group-hover:bg-pilot-blue group-hover:text-white transition-all shadow-xs">
+                                03
+                              </div>
+                              <div className="space-y-1">
+                                <h5 className="text-xs font-black text-text-primary tracking-tight">
+                                  Import the generated configuration
+                                </h5>
+                                <p className="text-[11px] text-text-secondary leading-relaxed">
+                                  Paste the AI-generated JSON into the CRM and
+                                  automatically configure your services and
+                                  qualification questions.
+                                </p>
+                              </div>
+                            </div>
+                            <div className="pt-3 border-t border-border-main/50 mt-3 text-[10px] font-bold text-pilot-blue flex items-center gap-1">
+                              <CheckCircle2 size={12} />
+                              <span>Automatic parsing</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Best Practices Section */}
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-bg-secondary/30 border border-border-main/80 space-y-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                            <Lightbulb size={16} />
+                          </div>
+                          <h5 className="text-xs font-black text-text-primary tracking-tight">
+                            Best Practices
+                          </h5>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                          <div className="p-3.5 rounded-xl bg-white dark:bg-bg-card border border-border-main/60 space-y-1">
+                            <span className="font-bold text-text-primary block text-[11px]">
+                              1. Multiple Offerings
+                            </span>
+                            <p className="text-[11px] text-text-secondary leading-relaxed">
+                              If your brochure contains multiple packages or
+                              tiers, the AI can create separate service cards
+                              with keyword tags.
+                            </p>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-white dark:bg-bg-card border border-border-main/60 space-y-1">
+                            <span className="font-bold text-text-primary block text-[11px]">
+                              2. Industry-Specific Questions
+                            </span>
+                            <p className="text-[11px] text-text-secondary leading-relaxed">
+                              The prompt generates relevant lead qualification
+                              questions based on the business type.
+                            </p>
+                          </div>
+
+                          <div className="p-3.5 rounded-xl bg-white dark:bg-bg-card border border-border-main/60 space-y-1">
+                            <span className="font-bold text-text-primary block text-[11px]">
+                              3. Direct Import
+                            </span>
+                            <p className="text-[11px] text-text-secondary leading-relaxed">
+                              Paste the services JSON in Step 2 and lead
+                              questions in Step 3 of the setup wizard.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Step 2 Finish / Ready Action Card */}
+                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <CheckCircle2 size={16} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-text-primary">
+                              Ready to configure your AI assistant?
+                            </div>
+                            <p className="text-[11px] text-text-secondary mt-0.5">
+                              Close this guide and use "Import Services (JSON)"
+                              in Step 2 or "Import Criteria (JSON)" in Step 3.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowAiGuidanceModal(false)}
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 w-full sm:w-auto justify-center"
+                        >
+                          <span>Got It, Start Setup</span>
+                          <Check size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── 4. AI ACTIVATION RESULT POPUP MODAL (SUCCESS / FAILED) ── */}
+          {activationResultModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn">
+              <div className="bg-white dark:bg-bg-card border border-border-main rounded-[28px] max-w-md w-full p-6 sm:p-7 shadow-2xl space-y-5 text-center relative animate-scaleUp">
+                {/* Close 'X' button */}
+                <button
+                  type="button"
+                  onClick={() => setActivationResultModal(null)}
+                  className="absolute top-5 right-5 p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-slate-100 dark:hover:bg-bg-secondary transition-colors cursor-pointer"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+
+                {activationResultModal.success ? (
+                  <>
+                    {/* Success Icon */}
+                    <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+                      <CheckCircle2
+                        size={36}
+                        className="text-emerald-500 animate-pulse"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Live & Activated
+                      </span>
+                      <h3 className="text-lg font-black text-text-primary tracking-tight">
+                        {activationResultModal.title ||
+                          "AI Sales Pilot Activated!"}
+                      </h3>
+                      <p className="text-xs text-text-secondary leading-relaxed max-w-xs mx-auto">
+                        {activationResultModal.message}
+                      </p>
+                    </div>
+
+                    {/* Quick Config Summary */}
+                    {activationResultModal.details && (
+                      <div className="p-4 rounded-2xl bg-slate-50 dark:bg-bg-secondary/40 border border-border-main/70 text-left space-y-2.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-text-secondary">
+                            Brand Name:
+                          </span>
+                          <span className="font-bold text-text-primary">
+                            {activationResultModal.details.brandName ||
+                              "Active"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-text-secondary">
+                            Catalog Offerings:
+                          </span>
+                          <span className="font-bold text-pilot-blue">
+                            {activationResultModal.details.servicesCount} items
+                            active
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-text-secondary">
+                            Lead Criteria:
+                          </span>
+                          <span className="font-bold text-pilot-blue">
+                            {activationResultModal.details.questionsCount}{" "}
+                            questions active
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-text-secondary">
+                            Gemini Engine:
+                          </span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                            <Check size={13} />
+                            <span>Connected</span>
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setActivationResultModal(null)}
+                        className="w-full sm:flex-1 py-2.5 px-4 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-slate-100 dark:hover:bg-bg-secondary transition-all cursor-pointer"
+                      >
+                        Keep Editing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActivationResultModal(null);
+                          navigate("/dashboard");
+                        }}
+                        className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm shadow-emerald-600/20 cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <span>Go to Dashboard</span>
+                        <ArrowRight size={14} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Failure / Incomplete Icon */}
+                    <div className="w-16 h-16 mx-auto rounded-3xl bg-rose-500/15 border border-rose-500/30 text-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/10">
+                      <AlertTriangle size={36} className="text-rose-500" />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                        Action Required
+                      </span>
+                      <h3 className="text-lg font-black text-text-primary tracking-tight">
+                        {activationResultModal.title || "Activation Incomplete"}
+                      </h3>
+                      <p className="text-xs text-text-secondary leading-relaxed max-w-xs mx-auto">
+                        {activationResultModal.message}
+                      </p>
+                    </div>
+
+                    {/* Missing Steps / Errors List */}
+                    {activationResultModal.errors &&
+                      activationResultModal.errors.length > 0 && (
+                        <div className="p-4 rounded-2xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 text-left space-y-2.5 text-xs">
+                          <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">
+                            Missing Requirements:
+                          </span>
+                          {activationResultModal.errors.map((err, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-start justify-between gap-2 text-text-primary"
+                            >
+                              <div className="flex items-start gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                                <div>
+                                  <span className="font-bold text-rose-600 dark:text-rose-400 block">
+                                    {err.field}
+                                  </span>
+                                  <span className="text-[11px] text-text-secondary">
+                                    {err.detail}
+                                  </span>
+                                </div>
+                              </div>
+                              {err.step && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCurrentStep(err.step);
+                                    setActivationResultModal(null);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 dark:text-rose-400 font-bold text-[10px] transition-colors shrink-0 cursor-pointer"
+                                >
+                                  Fix in Step {err.step}
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setActivationResultModal(null)}
+                        className="flex-1 py-2.5 px-4 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-slate-100 dark:hover:bg-bg-secondary transition-all cursor-pointer"
+                      >
+                        Dismiss
+                      </button>
+                      {activationResultModal.errors?.some((e) => e.step) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const firstMissingStep =
+                              activationResultModal.errors.find(
+                                (e) => e.step,
+                              )?.step;
+                            if (firstMissingStep)
+                              setCurrentStep(firstMissingStep);
+                            setActivationResultModal(null);
+                          }}
+                          className="flex-1 py-2.5 px-4 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <span>
+                            Go to Step{" "}
+                            {
+                              activationResultModal.errors.find((e) => e.step)
+                                ?.step
+                            }
+                          </span>
+                          <ArrowRight size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
-
-      {/* ═════════════════════════════════════════════════════════════════════ */}
-      {/* TAB 2: ORGANIZATION SUBSCRIPTION & SEAT MANAGEMENT                  */}
-      {/* ═════════════════════════════════════════════════════════════════════ */}
       {activeTab === "billing" && (
         <div className="space-y-6 animate-fadeIn">
-          {/* Organization Overview Card */}
           <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-8 shadow-xs">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex items-center gap-4">
@@ -2111,12 +4507,6 @@ export default function OrganizationProfile() {
                       {org.status ? org.status.toUpperCase() : "ACTIVE"}
                     </span>
                   </div>
-                  <p className="text-xs text-text-secondary mt-1 font-mono">
-                    Tenant Database:{" "}
-                    <span className="font-bold text-text-primary">
-                      {org.tenantDbName || "Single-Tenant Core"}
-                    </span>
-                  </p>
                 </div>
               </div>
 
@@ -2165,7 +4555,6 @@ export default function OrganizationProfile() {
             </div>
           </div>
 
-          {/* Seat Utilization & Commercial Model */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-border-main">
@@ -2263,57 +4652,137 @@ export default function OrganizationProfile() {
             </div>
           </div>
 
-          {/* Multi-Tenant Partitioning Info */}
-          <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-9 h-9 rounded-xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center">
-                <ShieldCheck size={18} />
+          {renderDailyAiUsageCard(false)}
+        </div>
+      )}
+
+      {showEditLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-bg-card border border-border-main rounded-3xl max-w-md w-full shadow-2xl overflow-hidden animate-scaleUp">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-border-main">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
+                  <Sliders size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-text-primary">
+                    Update Daily AI API Limit
+                  </h3>
+                  <p className="text-[11px] text-text-secondary">
+                    Configure maximum daily requests capacity
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowEditLimitModal(false)}
+                className="p-1.5 rounded-xl hover:bg-bg-secondary text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              <div className="p-3.5 rounded-2xl bg-bg-secondary/50 border border-border-main text-xs space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-text-secondary">Consumed Today:</span>
+                  <span className="font-mono font-bold text-pilot-blue">
+                    {(
+                      Number(aiSettings.dailyAiUsage?.totalApiCalls) || 0
+                    ).toLocaleString()}{" "}
+                    calls
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1 border-t border-border-main/50">
+                  <span>
+                    WhatsApp Chats:{" "}
+                    <strong className="text-text-primary font-bold">
+                      {Number(aiSettings.dailyAiUsage?.chatApiCalls || 0)}
+                    </strong>
+                  </span>
+                  <span>
+                    Audio Calls:{" "}
+                    <strong className="text-text-primary font-bold">
+                      {Number(aiSettings.dailyAiUsage?.audioApiCalls || 0)}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+
               <div>
-                <h3 className="text-xs font-bold text-text-primary">
-                  Enterprise Data Isolation
-                </h3>
-                <p className="text-[11px] text-text-secondary">
-                  Your leads, conversations, audio recordings, and vectors are
-                  strictly partitioned.
-                </p>
+                <label className="block text-xs font-black text-text-primary uppercase tracking-wider mb-2">
+                  Daily Quota Limit (Requests / Day)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="10"
+                    max="1000000"
+                    step="50"
+                    value={customDailyLimit}
+                    onChange={(e) => setCustomDailyLimit(e.target.value)}
+                    placeholder="e.g. 1500"
+                    className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-base font-bold font-mono rounded-2xl px-4 py-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-text-secondary">
+                    calls / day
+                  </span>
+                </div>
+                <span className="text-[11px] text-text-secondary mt-1.5 block">
+                  Counters automatically refresh back to 0 every day at 00:00
+                  UTC.
+                </span>
+              </div>
+
+              {/* Preset quick buttons */}
+              <div>
+                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block mb-2">
+                  Quick Select Presets
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {[500, 1000, 1500, 3000, 5000, 10000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCustomDailyLimit(preset)}
+                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold font-mono transition-all cursor-pointer ${
+                        Number(customDailyLimit) === preset
+                          ? "bg-pilot-blue text-white border-pilot-blue shadow-xs"
+                          : "bg-bg-secondary/50 border-border-main text-text-primary hover:bg-bg-secondary hover:border-pilot-blue/40"
+                      }`}
+                    >
+                      {preset.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs pt-2">
-              <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                <div className="text-[10px] text-text-secondary font-bold uppercase">
-                  Database Tenant
-                </div>
-                <div className="font-mono font-bold text-pilot-blue mt-0.5 truncate">
-                  {org.tenantDbName || "Single-Tenant Core"}
-                </div>
-              </div>
-              <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                <div className="text-[10px] text-text-secondary font-bold uppercase">
-                  Knowledge Partition
-                </div>
-                <div className="font-mono font-bold text-text-primary mt-0.5 truncate">
-                  {aiSettings.qdrantCollection ||
-                    `org_${org._id || "tenant"}_kb`}
-                </div>
-              </div>
-              <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                <div className="text-[10px] text-text-secondary font-bold uppercase">
-                  Gemini API Key
-                </div>
-                <div className="font-mono font-bold text-emerald-500 mt-0.5 truncate">
-                  {aiSettings.geminiApiKey ? "Configured (AES-256)" : "Not Configured"}
-                </div>
-              </div>
-              <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                <div className="text-[10px] text-text-secondary font-bold uppercase">
-                  Socket Channel
-                </div>
-                <div className="font-mono font-bold text-emerald-600 mt-0.5 truncate">
-                  org_{org._id || "active"}
-                </div>
-              </div>
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-2.5 p-5 border-t border-border-main bg-bg-secondary/20">
+              <button
+                type="button"
+                onClick={() => setShowEditLimitModal(false)}
+                disabled={savingLimit}
+                className="px-4 py-2.5 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary hover:text-text-primary transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateDailyLimit()}
+                disabled={savingLimit}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-md shadow-pilot-blue/20 cursor-pointer disabled:opacity-50"
+              >
+                {savingLimit ? (
+                  <RefreshCw size={14} className="animate-spin text-white" />
+                ) : (
+                  <Check size={14} />
+                )}
+                <span>{savingLimit ? "Saving..." : "Save Daily Limit"}</span>
+              </button>
             </div>
           </div>
         </div>
