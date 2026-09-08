@@ -40,6 +40,7 @@ export const API_ENDPOINTS = {
   ORGANIZATIONS: {
     MY_ORG: `${API_BASE_URL}/organizations/my-org`,
     AI_SETTINGS: `${API_BASE_URL}/organizations/my-org/ai-settings`,
+    VALIDATE_GEMINI_KEY: `${API_BASE_URL}/organizations/my-org/validate-gemini-key`,
     KNOWLEDGE_UPLOAD: `${API_BASE_URL}/organizations/my-org/knowledge-base/upload`,
     KNOWLEDGE_DELETE: (docId) => `${API_BASE_URL}/organizations/my-org/knowledge-base/${docId}`,
   },

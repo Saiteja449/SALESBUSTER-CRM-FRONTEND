@@ -46,6 +46,9 @@ import {
   Lock,
   ExternalLink,
   Edit2,
+  Eye,
+  EyeOff,
+  Key,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { API_ENDPOINTS } from "../utils/constants.js";
@@ -54,9 +57,9 @@ import { API_ENDPOINTS } from "../utils/constants.js";
 const STEPS = [
   {
     id: 1,
-    title: "AI Identity & Tone",
-    shortTitle: "Identity",
-    subtitle: "Brand persona, voice, and rules",
+    title: "AI Engine & Identity",
+    shortTitle: "Engine & Tone",
+    subtitle: "Gemini API key, brand persona & rules",
     icon: Bot,
   },
   {
@@ -201,6 +204,7 @@ export default function OrganizationProfile() {
     const initialBrandName =
       cachedOrg?.name || currentUser?.organizationName || "";
     return {
+      geminiApiKey: "",
       isAiConfigured: false,
       aiSetupCompletedAt: null,
       companyName: initialBrandName,
@@ -217,6 +221,9 @@ export default function OrganizationProfile() {
   const [aiSaving, setAiSaving] = useState(false);
   const [saveToast, setSaveToast] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [testingKey, setTestingKey] = useState(false);
+  const [keyTestResult, setKeyTestResult] = useState(null);
 
   // Modals
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
@@ -351,6 +358,10 @@ export default function OrganizationProfile() {
 
       return {
         ...prev,
+        geminiApiKey:
+          data?.geminiApiKey !== undefined
+            ? data.geminiApiKey
+            : prev.geminiApiKey || "",
         isAiConfigured: Boolean(data?.isAiConfigured ?? prev.isAiConfigured),
         aiSetupCompletedAt: data?.aiSetupCompletedAt || prev.aiSetupCompletedAt,
         companyName: autoBrandName,
@@ -436,8 +447,55 @@ export default function OrganizationProfile() {
     }
   };
 
+  // Test Gemini API Key handler
+  const handleTestApiKey = async () => {
+    if (!aiSettings.geminiApiKey || !aiSettings.geminiApiKey.trim()) {
+      setKeyTestResult({
+        success: false,
+        message: "Please enter your Google Gemini API key first.",
+      });
+      return;
+    }
+
+    setTestingKey(true);
+    setKeyTestResult(null);
+
+    try {
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
+      const res = await axios.post(
+        API_ENDPOINTS.ORGANIZATIONS.VALIDATE_GEMINI_KEY,
+        { apiKey: aiSettings.geminiApiKey.trim() },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (res.data.success) {
+        setKeyTestResult({
+          success: true,
+          message: "API Key verified successfully with Google Gemini!",
+        });
+      }
+    } catch (err) {
+      const errMsg =
+        err.response?.data?.message ||
+        "Failed to validate API Key. Please verify that it is active in Google AI Studio.";
+      setKeyTestResult({
+        success: false,
+        message: errMsg,
+      });
+    } finally {
+      setTestingKey(false);
+    }
+  };
+
   // Final step activation handler
   const handleFinishSetup = async () => {
+    if (!aiSettings.geminiApiKey || !aiSettings.geminiApiKey.trim()) {
+      setSaveToast("Please configure your Google Gemini API Key in Step 1.");
+      setCurrentStep(1);
+      return;
+    }
     if (!aiSettings.companyName || !aiSettings.companyName.trim()) {
       setSaveToast("Please provide your Company Name in Step 1.");
       setCurrentStep(1);
@@ -866,6 +924,128 @@ export default function OrganizationProfile() {
             {/* ── STEP 1: IDENTITY & PERSONA ──────────────────────────────── */}
             {currentStep === 1 && (
               <div className="space-y-6 animate-fadeIn">
+                {/* ── GOOGLE GEMINI API KEY CONFIGURATION ───────────────── */}
+                <div className="p-6 rounded-3xl bg-gradient-to-br from-bg-secondary/70 via-bg-secondary/40 to-bg-card border border-border-main space-y-4 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
+                        <Key size={18} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                            Google Gemini API Key
+                          </h3>
+                          <span className="text-[10px] font-black text-red-500 uppercase">
+                            * Mandatory
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-secondary mt-0.5">
+                          Each organization must provide their own Gemini API key for automated sales chat and RAG embeddings.
+                        </p>
+                      </div>
+                    </div>
+
+                    {aiSettings.geminiApiKey?.trim() ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                        <CheckCircle2 size={13} />
+                        <span>Configured & Encrypted</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                        <AlertTriangle size={13} />
+                        <span>API Key Required</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <div className="relative flex-1">
+                        <input
+                          type={showApiKey ? "text" : "password"}
+                          value={aiSettings.geminiApiKey || ""}
+                          onChange={(e) => {
+                            setAiSettings({
+                              ...aiSettings,
+                              geminiApiKey: e.target.value,
+                            });
+                            setKeyTestResult(null);
+                          }}
+                          placeholder="AIzaSy..."
+                          className="w-full bg-bg-card border border-border-main text-text-primary text-xs font-mono rounded-xl pl-3.5 pr-10 py-3 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary p-1 cursor-pointer"
+                          title={showApiKey ? "Hide Key" : "Show Key"}
+                        >
+                          {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleTestApiKey}
+                        disabled={testingKey || !aiSettings.geminiApiKey?.trim()}
+                        className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-bg-card hover:bg-bg-secondary border border-border-main text-xs font-bold text-text-primary hover:border-pilot-blue/50 transition-all disabled:opacity-50 cursor-pointer shrink-0 shadow-2xs"
+                      >
+                        {testingKey ? (
+                          <RefreshCw size={14} className="animate-spin text-pilot-blue" />
+                        ) : (
+                          <Sparkles size={14} className="text-pilot-blue" />
+                        )}
+                        <span>{testingKey ? "Verifying..." : "Test Key"}</span>
+                      </button>
+                    </div>
+
+                    {/* Test result message */}
+                    {keyTestResult && (
+                      <div
+                        className={`p-3 rounded-xl text-xs font-bold flex items-center justify-between gap-2 animate-fadeIn ${
+                          keyTestResult.success
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                            : "bg-red-500/10 text-red-500 border border-red-500/20"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {keyTestResult.success ? (
+                            <CheckCircle2 size={15} className="shrink-0" />
+                          ) : (
+                            <AlertTriangle size={15} className="shrink-0" />
+                          )}
+                          <span>{keyTestResult.message}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setKeyTestResult(null)}
+                          className="p-1 hover:opacity-75"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1 text-[11px] text-text-secondary">
+                      <div className="flex items-center gap-1.5">
+                        <Lock size={12} className="text-emerald-500" />
+                        <span>Encrypted with AES-256-GCM. Never shared with other organizations.</span>
+                      </div>
+
+                      <a
+                        href="https://aistudio.google.com/app/apikey"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-pilot-blue hover:underline font-bold"
+                      >
+                        <span>Get API Key from Google AI Studio</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Persona Cards */}
                 <div>
                   <label className="block text-xs font-black text-text-primary mb-2.5 uppercase tracking-wider">
@@ -1627,6 +1807,7 @@ export default function OrganizationProfile() {
                     </div>
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                        aiSettings.geminiApiKey?.trim() &&
                         aiSettings.services.length > 0 &&
                         aiSettings.qualificationFields.length > 0 &&
                         aiSettings.companyName.trim()
@@ -1634,7 +1815,8 @@ export default function OrganizationProfile() {
                           : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
                       }`}
                     >
-                      {aiSettings.services.length > 0 &&
+                      {aiSettings.geminiApiKey?.trim() &&
+                      aiSettings.services.length > 0 &&
                       aiSettings.qualificationFields.length > 0 &&
                       aiSettings.companyName.trim()
                         ? "Ready to Activate"
@@ -1642,7 +1824,32 @@ export default function OrganizationProfile() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1">
+                    <div
+                      onClick={() =>
+                        !aiSettings.geminiApiKey?.trim() && setCurrentStep(1)
+                      }
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                        aiSettings.geminiApiKey?.trim()
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
+                      }`}
+                    >
+                      <span className="font-bold text-text-primary">
+                        Gemini API Key
+                      </span>
+                      {aiSettings.geminiApiKey?.trim() ? (
+                        <CheckCircle2
+                          size={15}
+                          className="text-emerald-500 shrink-0"
+                        />
+                      ) : (
+                        <span className="text-[10px] font-bold text-red-400">
+                          Step 1 Required
+                        </span>
+                      )}
+                    </div>
+
                     <div
                       onClick={() =>
                         !aiSettings.companyName.trim() && setCurrentStep(1)
@@ -2073,7 +2280,7 @@ export default function OrganizationProfile() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs pt-2">
               <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
                 <div className="text-[10px] text-text-secondary font-bold uppercase">
                   Database Tenant
@@ -2089,6 +2296,14 @@ export default function OrganizationProfile() {
                 <div className="font-mono font-bold text-text-primary mt-0.5 truncate">
                   {aiSettings.qdrantCollection ||
                     `org_${org._id || "tenant"}_kb`}
+                </div>
+              </div>
+              <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
+                <div className="text-[10px] text-text-secondary font-bold uppercase">
+                  Gemini API Key
+                </div>
+                <div className="font-mono font-bold text-emerald-500 mt-0.5 truncate">
+                  {aiSettings.geminiApiKey ? "Configured (AES-256)" : "Not Configured"}
                 </div>
               </div>
               <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
