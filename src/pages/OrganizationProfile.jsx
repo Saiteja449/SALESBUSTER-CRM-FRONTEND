@@ -45,6 +45,7 @@ import {
   X,
   Lock,
   ExternalLink,
+  Edit2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { API_ENDPOINTS } from "../utils/constants.js";
@@ -88,119 +89,69 @@ const STEPS = [
   },
 ];
 
-// Curated industry presets
-const INDUSTRY_TEMPLATES = [
+// Default single enquiry service for all new/unconfigured organizations
+const DEFAULT_SERVICE_TEMPLATE = {
+  name: "General Enquiry",
+  description:
+    "General inquiry or consultation regarding products, services, and customer requirements.",
+  keywords: [
+    "enquiry",
+    "inquiry",
+    "information",
+    "help",
+    "details",
+    "consultation",
+  ],
+};
+
+// Standard default qualification fields for every organization (fully customizable)
+const DEFAULT_QUALIFICATION_FIELDS = [
   {
-    key: "realEstate",
-    title: "Real Estate & Builders",
-    shortName: "Real Estate",
-    emoji: "🏢",
-    subtitle: "Apartments, villas, plots & gated communities",
-    companyName: "Skyline Properties",
-    persona: "warm, consultative real estate advisor",
-    description:
-      "We build premium residential apartments, luxury gated community villas, and commercial spaces with world-class amenities.",
-    services: [
-      {
-        name: "2 & 3 BHK Luxury Apartments",
-        description: "High-rise apartments with clubhouse, pool, and landscaped gardens.",
-        keywords: ["2bhk", "3bhk", "apartment", "flat", "gated community"],
-      },
-      {
-        name: "Independent Villas",
-        description: "Exclusive 4 & 5 BHK luxury villas with private gardens and club access.",
-        keywords: ["villa", "independent house", "duplex", "luxury villa"],
-      },
-      {
-        name: "Commercial Office Spaces",
-        description: "Grade-A IT office units and prime retail storefronts.",
-        keywords: ["commercial", "office", "retail", "shop", "investment"],
-      },
-    ],
-    fields: [
-      { key: "propertyType", label: "Property Type", type: "select", options: ["Apartment", "Villa", "Commercial Plot"], description: "Category of property" },
-      { key: "bhk", label: "BHK Configuration", type: "select", options: ["2 BHK", "3 BHK", "4 BHK", "Villa"], description: "Number of bedrooms desired" },
-      { key: "budget", label: "Budget Range", type: "string", description: "Target price or budget limit" },
-      { key: "possessionDate", label: "Possession Timeline", type: "string", description: "Ready to Move, Under Construction, or timeframe" },
-      { key: "preferredLocation", label: "Preferred Location", type: "string", description: "Preferred city, area, or neighborhood" },
-    ],
+    key: "cityAndArea",
+    label: "City & Area",
+    type: "string",
+    description: "Customer's city, area, or preferred project location.",
+    options: [],
+    required: false,
   },
   {
-    key: "elevators",
-    title: "Elevators & Lifts",
-    shortName: "Elevators",
-    emoji: "🛗",
-    subtitle: "Passenger, MRL, hydraulic, and AMC services",
-    companyName: "SalesBuster AI",
-    persona: "friendly, knowledgeable technical sales consultant at SalesBuster AI",
+    key: "primaryIntent",
+    label: "Primary Intent",
+    type: "string",
     description:
-      "Precision-engineered elevator solutions across residential, commercial, industrial, and hospital segments in and around Hyderabad.",
-    services: [
-      {
-        name: "Passenger Lift",
-        description: "Smooth, silent, energy-efficient vertical transportation for apartments, offices, and hotels.",
-        keywords: ["passenger", "apartment lift", "residential", "office"],
-      },
-      {
-        name: "MRL Lift",
-        description: "Machine Room Less space-saving design with all components in the shaft.",
-        keywords: ["mrl", "machine room less", "no machine room", "space saving"],
-      },
-      {
-        name: "Hydraulic Lift",
-        description: "Smooth, heavy load lifting for villas, warehouses, and low-rise buildings.",
-        keywords: ["hydraulic", "villa lift", "home lift", "warehouse"],
-      },
-      {
-        name: "Hospital Bed Lift",
-        description: "Specially designed for healthcare facilities to transport stretchers smoothly.",
-        keywords: ["hospital", "bed lift", "stretcher", "medical", "clinic"],
-      },
-      {
-        name: "Elevator Maintenance & AMC",
-        description: "Lifecycle preventative maintenance, genuine spares, and 24/7 breakdown technical support.",
-        keywords: ["amc", "maintenance", "service", "breakdown", "repair"],
-      },
-    ],
-    fields: [
-      { key: "liftType", label: "Lift Type", type: "string", description: "Passenger, MRL, Hydraulic, Hospital, AMC" },
-      { key: "propertyType", label: "Building Type", type: "string", description: "Apartment, Villa, Commercial, Hospital" },
-      { key: "numberOfFloors", label: "Number of Floors", type: "string", description: "Stops/Floors (e.g. G+2, 4 Floors)" },
-      { key: "capacity", label: "Capacity / Load", type: "string", description: "Capacity (e.g. 6 Persons, 1000 kg)" },
-      { key: "doorType", label: "Door Type", type: "select", options: ["Automatic", "Manual"], description: "Door preference" },
-      { key: "machineRoomAvailable", label: "Machine Room", type: "select", options: ["Yes", "No", "Unknown"], description: "Machine room provision" },
-      { key: "preferredVisitDate", label: "Visit Date", type: "string", description: "Preferred date for shaft inspection" },
-    ],
+      "Customer's primary objective, service requirement, or product needed.",
+    options: [],
+    required: false,
   },
   {
-    key: "solar",
-    title: "Rooftop Solar & Clean Energy",
-    shortName: "Solar Energy",
-    emoji: "☀️",
-    subtitle: "Residential on-grid, commercial & subsidy",
-    companyName: "SunPower Solutions",
-    persona: "certified clean energy consultant",
+    key: "urgencyLevel",
+    label: "Urgency Level",
+    type: "select",
+    options: ["Immediate", "Within 1 Month", "Planning / Just Exploring"],
+    description: "Customer's purchasing urgency or required timeframe.",
+    required: false,
+  },
+  {
+    key: "interestScore",
+    label: "Interest Score (1-10)",
+    type: "number",
     description:
-      "Turnkey rooftop solar installations with government subsidies, tier-1 panels, net-metering, and battery backup solutions.",
-    services: [
-      {
-        name: "Residential Rooftop Solar (3kW - 10kW)",
-        description: "On-grid solar installation with government subsidy and net metering.",
-        keywords: ["residential solar", "rooftop", "subsidy", "home solar"],
-      },
-      {
-        name: "Commercial Solar Plants (25kW+)",
-        description: "High-yield commercial solar systems with accelerated depreciation tax benefits.",
-        keywords: ["commercial solar", "factory solar", "industrial solar"],
-      },
-    ],
-    fields: [
-      { key: "monthlyBill", label: "Avg Monthly Bill", type: "string", description: "Average monthly electricity bill" },
-      { key: "roofType", label: "Roof Type", type: "select", options: ["RCC Flat Roof", "Metal Sheet", "Tiled Roof"], description: "Roof structure" },
-      { key: "sanctionedLoad", label: "Sanctioned Load", type: "string", description: "Sanctioned electricity connection load in kW" },
-    ],
+      "Assessed customer interest or buying readiness score from 1 to 10.",
+    options: [],
+    required: false,
+  },
+  {
+    key: "callbackDateTime",
+    label: "Callback Date/Time",
+    type: "string",
+    description:
+      "Best callback date and time requested by customer for consultation.",
+    options: [],
+    required: false,
   },
 ];
+
+
 
 // Tone presets for Step 1
 const TONE_PRESETS = [
@@ -215,7 +166,8 @@ const TONE_PRESETS = [
     id: "technical",
     title: "Technical Specialist",
     desc: "Authoritative, precise, engineering-driven. Focuses on technical accuracy and specifications.",
-    persona: "knowledgeable, precise technical sales specialist and product engineer",
+    persona:
+      "knowledgeable, precise technical sales specialist and product engineer",
     icon: Target,
   },
   {
@@ -244,18 +196,22 @@ export default function OrganizationProfile() {
   const [orgData, setOrgData] = useState(cachedOrg || null);
   const [loading, setLoading] = useState(false);
 
-  // AI Configuration State
-  const [aiSettings, setAiSettings] = useState({
-    isAiConfigured: false,
-    aiSetupCompletedAt: null,
-    companyName: "",
-    businessDescription: "",
-    agentPersona: "warm, friendly, and consultative sales representative",
-    customInstructions: `1. STRICT PRICING: Never guess or quote fixed prices without technical requirements assessment. State that pricing depends on specifications and schedule a callback.\n2. PACING: Ask at most 1-2 questions per message to avoid overwhelming the customer.\n3. HUMAN HANDOFF: If the user asks for a real human, politely acknowledge and transfer them immediately.\n4. FORMATTING: Keep messages under 50-60 words with clean WhatsApp bold (*word*) and friendly emojis.`,
-    services: [],
-    qualificationFields: [],
-    qdrantCollection: "",
-    knowledgeDocs: [],
+  // AI Configuration State - Brand Name auto-initialized from organization
+  const [aiSettings, setAiSettings] = useState(() => {
+    const initialBrandName =
+      cachedOrg?.name || currentUser?.organizationName || "";
+    return {
+      isAiConfigured: false,
+      aiSetupCompletedAt: null,
+      companyName: initialBrandName,
+      businessDescription: "",
+      agentPersona: "warm, friendly, and consultative sales representative",
+      customInstructions: `1. STRICT PRICING: Never guess or quote fixed prices without technical requirements assessment. State that pricing depends on specifications and schedule a callback.\n2. PACING: Ask at most 1-2 questions per message to avoid overwhelming the customer.\n3. HUMAN HANDOFF: If the user asks for a real human, politely acknowledge and transfer them immediately.\n4. FORMATTING: Keep messages under 50-60 words with clean WhatsApp bold (*word*) and friendly emojis.`,
+      services: [DEFAULT_SERVICE_TEMPLATE],
+      qualificationFields: DEFAULT_QUALIFICATION_FIELDS,
+      qdrantCollection: "",
+      knowledgeDocs: [],
+    };
   });
 
   const [aiSaving, setAiSaving] = useState(false);
@@ -264,9 +220,14 @@ export default function OrganizationProfile() {
 
   // Modals
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
-  const [newService, setNewService] = useState({ name: "", description: "", keywords: "" });
+  const [newService, setNewService] = useState({
+    name: "",
+    description: "",
+    keywords: "",
+  });
 
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
+  const [editingFieldIndex, setEditingFieldIndex] = useState(null);
   const [newField, setNewField] = useState({
     key: "",
     label: "",
@@ -289,7 +250,9 @@ export default function OrganizationProfile() {
   const fetchOrganizationProfile = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
       const res = await axios.get(API_ENDPOINTS.ORGANIZATIONS.MY_ORG, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -297,8 +260,23 @@ export default function OrganizationProfile() {
       if (res.data.success && res.data.data) {
         setOrgData(res.data.data);
         if (setOrganization) setOrganization(res.data.data);
-        localStorage.setItem("salesbuster_session_org", JSON.stringify(res.data.data));
-        localStorage.setItem("kranthi_session_org", JSON.stringify(res.data.data));
+        localStorage.setItem(
+          "salesbuster_session_org",
+          JSON.stringify(res.data.data),
+        );
+        localStorage.setItem(
+          "kranthi_session_org",
+          JSON.stringify(res.data.data),
+        );
+
+        if (res.data.data.name) {
+          setAiSettings((prev) => ({
+            ...prev,
+            companyName: prev.companyName?.trim()
+              ? prev.companyName
+              : res.data.data.name,
+          }));
+        }
 
         if (res.data.data.aiSettings) {
           syncAiSettingsState(res.data.data.aiSettings, res.data.data.name);
@@ -324,14 +302,19 @@ export default function OrganizationProfile() {
     }
 
     try {
-      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
       const res = await axios.get(API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (res.data.success && res.data.data) {
         syncAiSettingsState(res.data.data, orgData?.name || cachedOrg?.name);
-        localStorage.setItem(`sb_ai_settings_${orgId}`, JSON.stringify(res.data.data));
+        localStorage.setItem(
+          `sb_ai_settings_${orgId}`,
+          JSON.stringify(res.data.data),
+        );
       }
     } catch (err) {
       // Backend route might still be deploying, local state remains fully functional
@@ -339,23 +322,66 @@ export default function OrganizationProfile() {
   };
 
   const syncAiSettingsState = (data, orgName) => {
-    setAiSettings((prev) => ({
-      ...prev,
-      isAiConfigured: Boolean(data.isAiConfigured ?? prev.isAiConfigured),
-      aiSetupCompletedAt: data.aiSetupCompletedAt || prev.aiSetupCompletedAt,
-      companyName: data.companyName || prev.companyName || orgName || "",
-      businessDescription: data.businessDescription || prev.businessDescription || "",
-      agentPersona: data.agentPersona || prev.agentPersona,
-      customInstructions: data.customInstructions || prev.customInstructions,
-      services: Array.isArray(data.services) && data.services.length > 0 ? data.services : prev.services,
-      qualificationFields:
-        Array.isArray(data.qualificationFields) && data.qualificationFields.length > 0
+    setAiSettings((prev) => {
+      // Filter out legacy elevator/preset services, keep clean services or default to General Enquiry
+      const cleanServices =
+        Array.isArray(data?.services) && data.services.length > 0
+          ? data.services
+          : Array.isArray(prev.services) && prev.services.length > 0
+          ? prev.services
+          : [DEFAULT_SERVICE_TEMPLATE];
+
+      const cleanFields =
+        Array.isArray(data?.qualificationFields) &&
+        data.qualificationFields.length > 0
           ? data.qualificationFields
-          : prev.qualificationFields,
-      qdrantCollection: data.qdrantCollection || prev.qdrantCollection,
-      knowledgeDocs: Array.isArray(data.knowledgeDocs) ? data.knowledgeDocs : prev.knowledgeDocs,
-    }));
+          : Array.isArray(prev.qualificationFields) &&
+            prev.qualificationFields.length > 0
+          ? prev.qualificationFields
+          : DEFAULT_QUALIFICATION_FIELDS;
+
+      const autoBrandName =
+        (data?.companyName && data.companyName.trim()) ||
+        (prev.companyName && prev.companyName.trim()) ||
+        orgName ||
+        orgData?.name ||
+        cachedOrg?.name ||
+        currentUser?.organizationName ||
+        "";
+
+      return {
+        ...prev,
+        isAiConfigured: Boolean(data?.isAiConfigured ?? prev.isAiConfigured),
+        aiSetupCompletedAt: data?.aiSetupCompletedAt || prev.aiSetupCompletedAt,
+        companyName: autoBrandName,
+        businessDescription:
+          data?.businessDescription || prev.businessDescription || "",
+        agentPersona: data?.agentPersona || prev.agentPersona,
+        customInstructions:
+          data?.customInstructions || prev.customInstructions,
+        services: cleanServices,
+        qualificationFields: cleanFields,
+        qdrantCollection: data?.qdrantCollection || prev.qdrantCollection,
+        knowledgeDocs: Array.isArray(data?.knowledgeDocs)
+          ? data.knowledgeDocs
+          : prev.knowledgeDocs,
+      };
+    });
   };
+
+  // Automatically fill brand name from organization when available
+  useEffect(() => {
+    const orgBrand =
+      orgData?.name || cachedOrg?.name || currentUser?.organizationName || "";
+    if (orgBrand) {
+      setAiSettings((prev) => {
+        if (!prev.companyName || !prev.companyName.trim()) {
+          return { ...prev, companyName: orgBrand };
+        }
+        return prev;
+      });
+    }
+  }, [orgData?.name, cachedOrg?.name, currentUser?.organizationName]);
 
   useEffect(() => {
     fetchOrganizationProfile();
@@ -373,10 +399,16 @@ export default function OrganizationProfile() {
     localStorage.setItem(`sb_ai_settings_${orgId}`, JSON.stringify(payload));
 
     try {
-      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
-      const res = await axios.put(API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
+      const res = await axios.put(
+        API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS,
+        payload,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       if (res.data.success) {
         if (payload.isAiConfigured) {
           setAiSettings((prev) => ({ ...prev, isAiConfigured: true }));
@@ -385,12 +417,13 @@ export default function OrganizationProfile() {
         setSaveToast(
           payload.isAiConfigured
             ? "🎉 AI Setup completed and activated!"
-            : "Configuration saved successfully!"
+            : "Configuration saved successfully!",
         );
       }
     } catch (err) {
       const errMsg =
-        err.response?.data?.message || "Changes saved locally to your workspace!";
+        err.response?.data?.message ||
+        "Changes saved locally to your workspace!";
       setSaveToast(errMsg);
     } finally {
       setAiSaving(false);
@@ -415,7 +448,10 @@ export default function OrganizationProfile() {
       setCurrentStep(2);
       return;
     }
-    if (!aiSettings.qualificationFields || aiSettings.qualificationFields.length === 0) {
+    if (
+      !aiSettings.qualificationFields ||
+      aiSettings.qualificationFields.length === 0
+    ) {
       setSaveToast("Please add at least 1 qualification question in Step 3.");
       setCurrentStep(3);
       return;
@@ -428,21 +464,6 @@ export default function OrganizationProfile() {
 
     await handleSaveStep(payload);
     if (fetchOrganization) await fetchOrganization();
-  };
-
-  // Load an industry template
-  const handleApplyTemplate = (template) => {
-    const updated = {
-      ...aiSettings,
-      companyName: aiSettings.companyName || template.companyName,
-      agentPersona: template.persona,
-      businessDescription: template.description,
-      services: template.services,
-      qualificationFields: template.fields,
-    };
-
-    setAiSettings(updated);
-    handleSaveStep(updated);
   };
 
   // Service Management
@@ -475,6 +496,23 @@ export default function OrganizationProfile() {
   };
 
   // Field Management
+  const handleEditField = (index) => {
+    const f = aiSettings.qualificationFields[index];
+    if (!f) return;
+    setEditingFieldIndex(index);
+    setNewField({
+      key: f.key || "",
+      label: f.label || "",
+      type: f.type || "string",
+      description: f.description || "",
+      options: Array.isArray(f.options)
+        ? f.options.join(", ")
+        : f.options || "",
+      required: Boolean(f.required),
+    });
+    setShowAddFieldModal(true);
+  };
+
   const handleAddField = () => {
     if (!newField.key.trim() || !newField.label.trim()) return;
     const cleanKey = newField.key
@@ -487,17 +525,26 @@ export default function OrganizationProfile() {
       .map((o) => o.trim())
       .filter(Boolean);
 
-    const updated = [
-      ...aiSettings.qualificationFields,
-      {
-        key: cleanKey,
-        label: newField.label.trim(),
-        type: newField.type,
-        description: newField.description.trim(),
-        options: optionsArr,
-        required: newField.required,
-      },
-    ];
+    const fieldObj = {
+      key: cleanKey,
+      label: newField.label.trim(),
+      type: newField.type,
+      description: newField.description.trim(),
+      options: optionsArr,
+      required: newField.required,
+    };
+
+    let updated;
+    if (
+      editingFieldIndex !== null &&
+      editingFieldIndex >= 0 &&
+      editingFieldIndex < aiSettings.qualificationFields.length
+    ) {
+      updated = [...aiSettings.qualificationFields];
+      updated[editingFieldIndex] = fieldObj;
+    } else {
+      updated = [...aiSettings.qualificationFields, fieldObj];
+    }
 
     setAiSettings({ ...aiSettings, qualificationFields: updated });
     setNewField({
@@ -508,12 +555,15 @@ export default function OrganizationProfile() {
       options: "",
       required: false,
     });
+    setEditingFieldIndex(null);
     setShowAddFieldModal(false);
     handleSaveStep({ ...aiSettings, qualificationFields: updated });
   };
 
   const handleRemoveField = (index) => {
-    const updated = aiSettings.qualificationFields.filter((_, i) => i !== index);
+    const updated = aiSettings.qualificationFields.filter(
+      (_, i) => i !== index,
+    );
     setAiSettings({ ...aiSettings, qualificationFields: updated });
     handleSaveStep({ ...aiSettings, qualificationFields: updated });
   };
@@ -528,13 +578,19 @@ export default function OrganizationProfile() {
 
     setUploadingDoc(true);
     try {
-      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
-      const res = await axios.post(API_ENDPOINTS.ORGANIZATIONS.KNOWLEDGE_UPLOAD, formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data",
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
+      const res = await axios.post(
+        API_ENDPOINTS.ORGANIZATIONS.KNOWLEDGE_UPLOAD,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
         },
-      });
+      );
 
       if (res.data.success) {
         fetchAISettings();
@@ -561,15 +617,20 @@ export default function OrganizationProfile() {
   };
 
   const handleDeleteDoc = async (docId) => {
-    if (!window.confirm("Remove this document from the AI knowledge base?")) return;
+    if (!window.confirm("Remove this document from the AI knowledge base?"))
+      return;
     try {
-      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
       await axios.delete(API_ENDPOINTS.ORGANIZATIONS.KNOWLEDGE_DELETE(docId), {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchAISettings();
     } catch (err) {
-      const updatedDocs = aiSettings.knowledgeDocs.filter((d) => d.docId !== docId);
+      const updatedDocs = aiSettings.knowledgeDocs.filter(
+        (d) => d.docId !== docId,
+      );
       setAiSettings({ ...aiSettings, knowledgeDocs: updatedDocs });
       handleSaveStep({ ...aiSettings, knowledgeDocs: updatedDocs });
     }
@@ -598,9 +659,12 @@ export default function OrganizationProfile() {
           <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-4">
             <AlertTriangle size={24} />
           </div>
-          <h2 className="text-lg font-bold text-text-primary mb-2">Access Restricted</h2>
+          <h2 className="text-lg font-bold text-text-primary mb-2">
+            Access Restricted
+          </h2>
           <p className="text-xs text-text-secondary mb-6">
-            Only designated Organization Managers have permission to configure the AI sales engine and view licensing.
+            Only designated Organization Managers have permission to configure
+            the AI sales engine and view licensing.
           </p>
           <button
             onClick={() => navigate("/dashboard")}
@@ -617,7 +681,10 @@ export default function OrganizationProfile() {
   const totalSeats = org.seats || 1;
   const usedSeats = org.usedSeats || 0;
   const remainingSeats = Math.max(0, totalSeats - usedSeats);
-  const seatPercentage = Math.min(100, Math.round((usedSeats / Math.max(1, totalSeats)) * 100));
+  const seatPercentage = Math.min(
+    100,
+    Math.round((usedSeats / Math.max(1, totalSeats)) * 100),
+  );
 
   const isExpired =
     org.isExpired ||
@@ -626,7 +693,10 @@ export default function OrganizationProfile() {
   const remainingDays =
     org.remainingDays ??
     (org.subscriptionEndDate
-      ? Math.ceil((new Date(org.subscriptionEndDate) - new Date()) / (1000 * 60 * 60 * 24))
+      ? Math.ceil(
+          (new Date(org.subscriptionEndDate) - new Date()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null);
 
   const activeStepObj = STEPS.find((s) => s.id === currentStep) || STEPS[0];
@@ -664,7 +734,8 @@ export default function OrganizationProfile() {
                 </span>
               </div>
               <p className="text-xs text-text-secondary mt-1">
-                Customize your AI sales pilot, products catalog, qualification schema, and knowledge documents.
+                Customize your AI sales pilot, products catalog, qualification
+                schema, and knowledge documents.
               </p>
             </div>
           </div>
@@ -735,8 +806,8 @@ export default function OrganizationProfile() {
                         isCurrent
                           ? "bg-pilot-blue text-white shadow-md shadow-pilot-blue/20"
                           : isCompleted
-                          ? "bg-bg-secondary text-text-primary hover:bg-bg-secondary/80"
-                          : "text-text-secondary/70 hover:text-text-primary hover:bg-bg-secondary/40"
+                            ? "bg-bg-secondary text-text-primary hover:bg-bg-secondary/80"
+                            : "text-text-secondary/70 hover:text-text-primary hover:bg-bg-secondary/40"
                       }`}
                     >
                       <div
@@ -744,11 +815,15 @@ export default function OrganizationProfile() {
                           isCurrent
                             ? "bg-white/20 text-white"
                             : isCompleted
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : "bg-bg-secondary border border-border-main text-text-secondary"
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "bg-bg-secondary border border-border-main text-text-secondary"
                         }`}
                       >
-                        {isCompleted ? <Check size={16} /> : <StepIcon size={16} />}
+                        {isCompleted ? (
+                          <Check size={16} />
+                        ) : (
+                          <StepIcon size={16} />
+                        )}
                       </div>
 
                       <div className="hidden sm:block">
@@ -776,7 +851,8 @@ export default function OrganizationProfile() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-border-main">
               <div>
                 <span className="text-[11px] font-black uppercase tracking-wider text-pilot-blue block">
-                  STEP {activeStepObj.id} OF {STEPS.length} &bull; {activeStepObj.subtitle}
+                  STEP {activeStepObj.id} OF {STEPS.length} &bull;{" "}
+                  {activeStepObj.subtitle}
                 </span>
                 <h2 className="text-xl font-black text-text-primary mt-1">
                   {activeStepObj.title}
@@ -785,26 +861,6 @@ export default function OrganizationProfile() {
                   {activeStepObj.description}
                 </p>
               </div>
-
-              {/* Quick Template Picker (Shown in Steps 1, 2, 3) */}
-              {currentStep <= 3 && (
-                <div className="flex items-center gap-2 p-2 bg-bg-secondary border border-border-main rounded-2xl shrink-0">
-                  <span className="text-[10px] font-bold text-text-secondary uppercase px-1">
-                    Presets:
-                  </span>
-                  {INDUSTRY_TEMPLATES.map((tmpl) => (
-                    <button
-                      key={tmpl.key}
-                      onClick={() => handleApplyTemplate(tmpl)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-bg-card hover:bg-pilot-blue hover:text-white border border-border-main transition-all shadow-2xs"
-                      title={tmpl.subtitle}
-                    >
-                      <span>{tmpl.emoji}</span>
-                      <span>{tmpl.shortName}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* ── STEP 1: IDENTITY & PERSONA ──────────────────────────────── */}
@@ -818,12 +874,19 @@ export default function OrganizationProfile() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                     {TONE_PRESETS.map((t) => {
                       const Icon = t.icon;
-                      const isSelected = aiSettings.agentPersona.includes(t.title.toLowerCase().split(" ")[0]);
+                      const isSelected = aiSettings.agentPersona.includes(
+                        t.title.toLowerCase().split(" ")[0],
+                      );
                       return (
                         <button
                           key={t.id}
                           type="button"
-                          onClick={() => setAiSettings({ ...aiSettings, agentPersona: t.persona })}
+                          onClick={() =>
+                            setAiSettings({
+                              ...aiSettings,
+                              agentPersona: t.persona,
+                            })
+                          }
                           className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
                             isSelected
                               ? "bg-pilot-blue/10 border-pilot-blue text-pilot-blue shadow-xs ring-1 ring-pilot-blue"
@@ -832,14 +895,22 @@ export default function OrganizationProfile() {
                         >
                           <div className="flex items-center justify-between gap-2 mb-1.5">
                             <div className="flex items-center gap-2">
-                              <div className={`p-1.5 rounded-lg ${isSelected ? "bg-pilot-blue text-white" : "bg-bg-secondary text-text-primary"}`}>
+                              <div
+                                className={`p-1.5 rounded-lg ${isSelected ? "bg-pilot-blue text-white" : "bg-bg-secondary text-text-primary"}`}
+                              >
                                 <Icon size={16} />
                               </div>
-                              <span className="text-xs font-bold text-text-primary">{t.title}</span>
+                              <span className="text-xs font-bold text-text-primary">
+                                {t.title}
+                              </span>
                             </div>
-                            {isSelected && <Check size={14} className="text-pilot-blue" />}
+                            {isSelected && (
+                              <Check size={14} className="text-pilot-blue" />
+                            )}
                           </div>
-                          <p className="text-[11px] leading-relaxed text-text-secondary mt-1">{t.desc}</p>
+                          <p className="text-[11px] leading-relaxed text-text-secondary mt-1">
+                            {t.desc}
+                          </p>
                         </button>
                       );
                     })}
@@ -849,18 +920,29 @@ export default function OrganizationProfile() {
                 {/* Name & Role Inputs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
-                      Business / Display Name
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                        Brand Name / Display Name
+                      </label>
+                      <span className="text-[10px] font-bold text-pilot-blue bg-pilot-blue/10 px-2 py-0.5 rounded-md border border-pilot-blue/20">
+                        Auto-filled
+                      </span>
+                    </div>
                     <input
                       type="text"
                       value={aiSettings.companyName}
-                      onChange={(e) => setAiSettings({ ...aiSettings, companyName: e.target.value })}
+                      onChange={(e) =>
+                        setAiSettings({
+                          ...aiSettings,
+                          companyName: e.target.value,
+                        })
+                      }
                       placeholder={org.name || "e.g. SalesBuster AI"}
-                      className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
+                      className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-medium"
                     />
                     <span className="text-[10px] text-text-secondary mt-1.5 block">
-                      The official company name the AI assistant introduces on WhatsApp.
+                      The official brand name the AI assistant introduces on
+                      WhatsApp. Automatically pre-filled from your organization profile.
                     </span>
                   </div>
 
@@ -871,12 +953,18 @@ export default function OrganizationProfile() {
                     <input
                       type="text"
                       value={aiSettings.agentPersona}
-                      onChange={(e) => setAiSettings({ ...aiSettings, agentPersona: e.target.value })}
+                      onChange={(e) =>
+                        setAiSettings({
+                          ...aiSettings,
+                          agentPersona: e.target.value,
+                        })
+                      }
                       placeholder="e.g. warm, consultative sales advisor"
                       className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
                     />
                     <span className="text-[10px] text-text-secondary mt-1.5 block">
-                      Controls the AI assistant's personality traits and conversational vocabulary.
+                      Controls the AI assistant's personality traits and
+                      conversational vocabulary.
                     </span>
                   </div>
                 </div>
@@ -889,12 +977,18 @@ export default function OrganizationProfile() {
                   <textarea
                     rows={3}
                     value={aiSettings.businessDescription}
-                    onChange={(e) => setAiSettings({ ...aiSettings, businessDescription: e.target.value })}
+                    onChange={(e) =>
+                      setAiSettings({
+                        ...aiSettings,
+                        businessDescription: e.target.value,
+                      })
+                    }
                     placeholder="Briefly describe what your company offers, core target audience, and key customer benefits..."
                     className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all leading-relaxed"
                   />
                   <span className="text-[10px] text-text-secondary mt-1.5 block">
-                    Gives the AI context about your business when answering broad customer enquiries.
+                    Gives the AI context about your business when answering
+                    broad customer enquiries.
                   </span>
                 </div>
 
@@ -906,11 +1000,17 @@ export default function OrganizationProfile() {
                   <textarea
                     rows={4}
                     value={aiSettings.customInstructions}
-                    onChange={(e) => setAiSettings({ ...aiSettings, customInstructions: e.target.value })}
+                    onChange={(e) =>
+                      setAiSettings({
+                        ...aiSettings,
+                        customInstructions: e.target.value,
+                      })
+                    }
                     className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-mono leading-relaxed"
                   />
                   <span className="text-[10px] text-text-secondary mt-1.5 block">
-                    Defines strict pricing guidelines (e.g. never guess fixed quotes), callback triggers, and handoff rules.
+                    Defines strict pricing guidelines (e.g. never guess fixed
+                    quotes), callback triggers, and handoff rules.
                   </span>
                 </div>
               </div>
@@ -925,7 +1025,8 @@ export default function OrganizationProfile() {
                       Catalog Offerings ({aiSettings.services.length})
                     </h3>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      The AI automatically matches incoming customer messages against these products and keywords.
+                      The AI automatically matches incoming customer messages
+                      against these products and keywords.
                     </p>
                   </div>
 
@@ -944,9 +1045,11 @@ export default function OrganizationProfile() {
                     <div className="w-12 h-12 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center mx-auto">
                       <Layers size={22} />
                     </div>
-                    <h4 className="text-sm font-bold text-text-primary">No Catalog Services Configured Yet</h4>
+                    <h4 className="text-sm font-bold text-text-primary">
+                      No Catalog Services Configured Yet
+                    </h4>
                     <p className="text-xs text-text-secondary max-w-md mx-auto">
-                      Add your products or services so the AI knows what you sell, or click an Industry Preset above to get started instantly.
+                      Add your products or services so the AI knows what you sell and can guide your customers effectively.
                     </p>
                     <button
                       onClick={() => setShowAddServiceModal(true)}
@@ -964,7 +1067,9 @@ export default function OrganizationProfile() {
                       >
                         <div className="space-y-2">
                           <div className="flex items-start justify-between gap-2">
-                            <h4 className="text-xs font-black text-text-primary">{svc.name}</h4>
+                            <h4 className="text-xs font-black text-text-primary">
+                              {svc.name}
+                            </h4>
                             <button
                               onClick={() => handleRemoveService(idx)}
                               className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
@@ -973,7 +1078,9 @@ export default function OrganizationProfile() {
                               <Trash2 size={14} />
                             </button>
                           </div>
-                          <p className="text-xs text-text-secondary leading-relaxed">{svc.description}</p>
+                          <p className="text-xs text-text-secondary leading-relaxed">
+                            {svc.description}
+                          </p>
                         </div>
 
                         <div>
@@ -991,7 +1098,9 @@ export default function OrganizationProfile() {
                                 </span>
                               ))
                             ) : (
-                              <span className="text-[10px] text-text-secondary italic">No keywords tagged</span>
+                              <span className="text-[10px] text-text-secondary italic">
+                                No keywords tagged
+                              </span>
                             )}
                           </div>
                         </div>
@@ -1007,7 +1116,9 @@ export default function OrganizationProfile() {
                       <div className="flex justify-between items-center pb-2 border-b border-border-main">
                         <div className="flex items-center gap-2">
                           <Layers size={18} className="text-pilot-blue" />
-                          <h3 className="text-sm font-black text-text-primary">Add Product or Service</h3>
+                          <h3 className="text-sm font-black text-text-primary">
+                            Add Product or Service
+                          </h3>
                         </div>
                         <button
                           onClick={() => setShowAddServiceModal(false)}
@@ -1025,7 +1136,12 @@ export default function OrganizationProfile() {
                           <input
                             type="text"
                             value={newService.name}
-                            onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                            onChange={(e) =>
+                              setNewService({
+                                ...newService,
+                                name: e.target.value,
+                              })
+                            }
                             placeholder="e.g. 3 BHK Luxury Flat / MRL Passenger Lift"
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           />
@@ -1038,7 +1154,12 @@ export default function OrganizationProfile() {
                           <textarea
                             rows={3}
                             value={newService.description}
-                            onChange={(e) => setNewService({ ...newService, description: e.target.value })}
+                            onChange={(e) =>
+                              setNewService({
+                                ...newService,
+                                description: e.target.value,
+                              })
+                            }
                             placeholder="Describe features, suitability, and benefits so the AI can explain it to customers..."
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           />
@@ -1051,7 +1172,12 @@ export default function OrganizationProfile() {
                           <input
                             type="text"
                             value={newService.keywords}
-                            onChange={(e) => setNewService({ ...newService, keywords: e.target.value })}
+                            onChange={(e) =>
+                              setNewService({
+                                ...newService,
+                                keywords: e.target.value,
+                              })
+                            }
                             placeholder="e.g. 3bhk, luxury flat, gated community, apartment"
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           />
@@ -1082,42 +1208,31 @@ export default function OrganizationProfile() {
             {/* ── STEP 3: LEAD QUALIFICATION SCHEMA ───────────────────────── */}
             {currentStep === 3 && (
               <div className="space-y-6 animate-fadeIn">
-                {/* Core Extracted Attributes */}
-                <div className="p-5 rounded-2xl bg-pilot-blue/5 border border-pilot-blue/20 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Info size={16} className="text-pilot-blue" />
-                    <h4 className="text-xs font-black text-text-primary">
-                      Standard Core Attributes (Automatically Tracked)
-                    </h4>
-                  </div>
-                  <p className="text-xs text-text-secondary leading-relaxed">
-                    The AI Sales engine automatically detects and records these core CRM fields for every incoming conversation:
-                  </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
-                    {["City & Area", "Primary Intent", "Urgency Level", "Interest Score (1-10)", "Callback Date/Time"].map((f, i) => (
-                      <div
-                        key={i}
-                        className="px-3 py-2 rounded-xl bg-bg-card border border-border-main text-center text-[11px] font-bold text-text-primary shadow-2xs"
-                      >
-                        {f}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Custom Qualification Fields Header */}
+                {/* Lead Qualification Criteria Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
                     <h3 className="text-sm font-black text-text-primary">
-                      Custom Qualification Criteria ({aiSettings.qualificationFields.length})
+                      Lead Qualification Criteria (
+                      {aiSettings.qualificationFields.length})
                     </h3>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      Define the exact specifications your AI must extract from potential buyers before booking a consultation.
+                      Standard criteria your AI extracts to qualify leads. Customize, edit, delete, or add questions to suit your business.
                     </p>
                   </div>
 
                   <button
-                    onClick={() => setShowAddFieldModal(true)}
+                    onClick={() => {
+                      setEditingFieldIndex(null);
+                      setNewField({
+                        key: "",
+                        label: "",
+                        type: "string",
+                        description: "",
+                        options: "",
+                        required: false,
+                      });
+                      setShowAddFieldModal(true);
+                    }}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-all shadow-xs shrink-0 cursor-pointer"
                   >
                     <Plus size={15} />
@@ -1131,9 +1246,11 @@ export default function OrganizationProfile() {
                     <div className="w-12 h-12 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center mx-auto">
                       <ListFilter size={22} />
                     </div>
-                    <h4 className="text-sm font-bold text-text-primary">No Custom Questions Configured</h4>
+                    <h4 className="text-sm font-bold text-text-primary">
+                      No Custom Questions Configured
+                    </h4>
                     <p className="text-xs text-text-secondary max-w-md mx-auto">
-                      Add business-specific criteria (e.g. BHK, budget, number of floors, roof type) or load an industry preset above.
+                      Add business-specific criteria (e.g. budget, timeframe, product specifications) to capture key lead requirements.
                     </p>
                     <button
                       onClick={() => setShowAddFieldModal(true)}
@@ -1152,26 +1269,41 @@ export default function OrganizationProfile() {
                         <div className="space-y-1.5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <h4 className="text-xs font-black text-text-primary">{field.label}</h4>
+                              <h4 className="text-xs font-black text-text-primary">
+                                {field.label}
+                              </h4>
                               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-bg-card border border-border-main text-pilot-blue uppercase">
                                 {field.type}
                               </span>
                             </div>
-                            <button
-                              onClick={() => handleRemoveField(idx)}
-                              className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
-                              title="Delete Field"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleEditField(idx)}
+                                className="text-text-secondary hover:text-pilot-blue p-1 rounded-lg hover:bg-pilot-blue/10 transition-colors"
+                                title="Edit Question"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveField(idx)}
+                                className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
+                                title="Delete Field"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
 
                           <span className="text-[10px] font-mono text-text-secondary block">
-                            Key: <span className="font-bold text-text-primary">{field.key}</span>
+                            Key:{" "}
+                            <span className="font-bold text-text-primary">
+                              {field.key}
+                            </span>
                           </span>
 
                           <p className="text-xs text-text-secondary leading-relaxed">
-                            {field.description || "No extraction guidance specified."}
+                            {field.description ||
+                              "No extraction guidance specified."}
                           </p>
                         </div>
 
@@ -1204,10 +1336,17 @@ export default function OrganizationProfile() {
                       <div className="flex justify-between items-center pb-2 border-b border-border-main">
                         <div className="flex items-center gap-2">
                           <ListFilter size={18} className="text-pilot-blue" />
-                          <h3 className="text-sm font-black text-text-primary">Add Qualification Field</h3>
+                          <h3 className="text-sm font-black text-text-primary">
+                            {editingFieldIndex !== null
+                              ? "Edit Qualification Field"
+                              : "Add Qualification Field"}
+                          </h3>
                         </div>
                         <button
-                          onClick={() => setShowAddFieldModal(false)}
+                          onClick={() => {
+                            setEditingFieldIndex(null);
+                            setShowAddFieldModal(false);
+                          }}
                           className="p-1 text-text-secondary hover:text-text-primary rounded-lg"
                         >
                           <X size={16} />
@@ -1228,7 +1367,11 @@ export default function OrganizationProfile() {
                                 setNewField({
                                   ...newField,
                                   label: val,
-                                  key: newField.key || val.toLowerCase().replace(/[^a-z0-9]/g, "_"),
+                                  key:
+                                    newField.key ||
+                                    val
+                                      .toLowerCase()
+                                      .replace(/[^a-z0-9]/g, "_"),
                                 });
                               }}
                               placeholder="e.g. Budget Range / BHK"
@@ -1243,7 +1386,12 @@ export default function OrganizationProfile() {
                             <input
                               type="text"
                               value={newField.key}
-                              onChange={(e) => setNewField({ ...newField, key: e.target.value })}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  key: e.target.value,
+                                })
+                              }
                               placeholder="e.g. budget_range"
                               className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue font-mono"
                             />
@@ -1256,13 +1404,23 @@ export default function OrganizationProfile() {
                           </label>
                           <select
                             value={newField.type}
-                            onChange={(e) => setNewField({ ...newField, type: e.target.value })}
+                            onChange={(e) =>
+                              setNewField({ ...newField, type: e.target.value })
+                            }
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           >
-                            <option value="string">Text String (Freeform)</option>
-                            <option value="number">Numeric (Quantity / Amount)</option>
-                            <option value="select">Dropdown Select (Predefined Choices)</option>
-                            <option value="boolean">Yes / No (Boolean Flag)</option>
+                            <option value="string">
+                              Text String (Freeform)
+                            </option>
+                            <option value="number">
+                              Numeric (Quantity / Amount)
+                            </option>
+                            <option value="select">
+                              Dropdown Select (Predefined Choices)
+                            </option>
+                            <option value="boolean">
+                              Yes / No (Boolean Flag)
+                            </option>
                           </select>
                         </div>
 
@@ -1274,7 +1432,12 @@ export default function OrganizationProfile() {
                             <input
                               type="text"
                               value={newField.options}
-                              onChange={(e) => setNewField({ ...newField, options: e.target.value })}
+                              onChange={(e) =>
+                                setNewField({
+                                  ...newField,
+                                  options: e.target.value,
+                                })
+                              }
                               placeholder="e.g. 2 BHK, 3 BHK, 4 BHK, Villa"
                               className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                             />
@@ -1288,7 +1451,12 @@ export default function OrganizationProfile() {
                           <textarea
                             rows={2}
                             value={newField.description}
-                            onChange={(e) => setNewField({ ...newField, description: e.target.value })}
+                            onChange={(e) =>
+                              setNewField({
+                                ...newField,
+                                description: e.target.value,
+                              })
+                            }
                             placeholder="Explain what to ask the customer or how to extract this information..."
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           />
@@ -1297,17 +1465,24 @@ export default function OrganizationProfile() {
 
                       <div className="flex justify-end gap-2 pt-2 border-t border-border-main">
                         <button
-                          onClick={() => setShowAddFieldModal(false)}
+                          onClick={() => {
+                            setEditingFieldIndex(null);
+                            setShowAddFieldModal(false);
+                          }}
                           className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors"
                         >
                           Cancel
                         </button>
                         <button
                           onClick={handleAddField}
-                          disabled={!newField.label.trim() || !newField.key.trim()}
+                          disabled={
+                            !newField.label.trim() || !newField.key.trim()
+                          }
                           className="px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50"
                         >
-                          Save Field
+                          {editingFieldIndex !== null
+                            ? "Save Changes"
+                            : "Save Field"}
                         </button>
                       </div>
                     </div>
@@ -1329,12 +1504,17 @@ export default function OrganizationProfile() {
                       </h4>
                     </div>
                     <p className="text-xs text-text-secondary">
-                      Isolated multi-tenant vector space using <span className="font-bold text-text-primary">gemini-embedding-2</span> (768-dim).
+                      Isolated multi-tenant vector space using{" "}
+                      <span className="font-bold text-text-primary">
+                        gemini-embedding-2
+                      </span>{" "}
+                      (768-dim).
                     </p>
                   </div>
 
                   <span className="font-mono text-xs font-bold px-3 py-1.5 rounded-xl bg-bg-card border border-border-main text-pilot-blue">
-                    {aiSettings.qdrantCollection || `sb_kb_${(org.name || "tenant").toLowerCase().replace(/[^a-z0-9]/g, "_")}`}
+                    {aiSettings.qdrantCollection ||
+                      `sb_kb_${(org.name || "tenant").toLowerCase().replace(/[^a-z0-9]/g, "_")}`}
                   </span>
                 </div>
 
@@ -1353,13 +1533,18 @@ export default function OrganizationProfile() {
                     />
                     <div className="w-12 h-12 rounded-2xl bg-bg-card border border-border-main flex items-center justify-center text-pilot-blue mb-3 group-hover:scale-110 transition-transform shadow-xs">
                       {uploadingDoc ? (
-                        <RefreshCw size={20} className="animate-spin text-pilot-blue" />
+                        <RefreshCw
+                          size={20}
+                          className="animate-spin text-pilot-blue"
+                        />
                       ) : (
                         <Upload size={20} />
                       )}
                     </div>
                     <span className="text-xs font-bold text-text-primary">
-                      {uploadingDoc ? "Chunking & Indexing into Qdrant..." : "Click or drag & drop files here"}
+                      {uploadingDoc
+                        ? "Chunking & Indexing into Qdrant..."
+                        : "Click or drag & drop files here"}
                     </span>
                     <span className="text-[11px] text-text-secondary mt-1">
                       PDF, DOCX, or text files up to 25 MB per document
@@ -1370,12 +1555,14 @@ export default function OrganizationProfile() {
                 {/* Indexed Documents Table */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
-                    Indexed Knowledge Documents ({aiSettings.knowledgeDocs.length})
+                    Indexed Knowledge Documents (
+                    {aiSettings.knowledgeDocs.length})
                   </h4>
 
                   {aiSettings.knowledgeDocs.length === 0 ? (
                     <div className="p-6 rounded-2xl bg-bg-secondary/40 border border-border-main text-center text-xs text-text-secondary">
-                      No documents indexed yet. Upload your product brochures, spec sheets, or pricing FAQs above.
+                      No documents indexed yet. Upload your product brochures,
+                      spec sheets, or pricing FAQs above.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1393,7 +1580,11 @@ export default function OrganizationProfile() {
                                 {doc.originalName || doc.fileName}
                               </div>
                               <div className="text-[10px] text-text-secondary flex items-center gap-2 mt-0.5">
-                                <span>{doc.fileSize ? `${Math.round(doc.fileSize / 1024)} KB` : "1.2 MB"}</span>
+                                <span>
+                                  {doc.fileSize
+                                    ? `${Math.round(doc.fileSize / 1024)} KB`
+                                    : "1.2 MB"}
+                                </span>
                                 <span>&bull;</span>
                                 <span className="text-pilot-blue font-bold">
                                   {doc.chunkCount || 12} vector chunks
@@ -1453,23 +1644,34 @@ export default function OrganizationProfile() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                     <div
-                      onClick={() => !aiSettings.companyName.trim() && setCurrentStep(1)}
+                      onClick={() =>
+                        !aiSettings.companyName.trim() && setCurrentStep(1)
+                      }
                       className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
                         aiSettings.companyName.trim()
                           ? "bg-emerald-500/5 border-emerald-500/20"
                           : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
                       }`}
                     >
-                      <span className="font-bold text-text-primary">Company Identity</span>
+                      <span className="font-bold text-text-primary">
+                        Company Identity
+                      </span>
                       {aiSettings.companyName.trim() ? (
-                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                        <CheckCircle2
+                          size={15}
+                          className="text-emerald-500 shrink-0"
+                        />
                       ) : (
-                        <span className="text-[10px] font-bold text-red-400">Step 1 Required</span>
+                        <span className="text-[10px] font-bold text-red-400">
+                          Step 1 Required
+                        </span>
                       )}
                     </div>
 
                     <div
-                      onClick={() => aiSettings.services.length === 0 && setCurrentStep(2)}
+                      onClick={() =>
+                        aiSettings.services.length === 0 && setCurrentStep(2)
+                      }
                       className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
                         aiSettings.services.length > 0
                           ? "bg-emerald-500/5 border-emerald-500/20"
@@ -1480,15 +1682,21 @@ export default function OrganizationProfile() {
                         Services Catalog ({aiSettings.services.length})
                       </span>
                       {aiSettings.services.length > 0 ? (
-                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                        <CheckCircle2
+                          size={15}
+                          className="text-emerald-500 shrink-0"
+                        />
                       ) : (
-                        <span className="text-[10px] font-bold text-red-400">Min 1 Required</span>
+                        <span className="text-[10px] font-bold text-red-400">
+                          Min 1 Required
+                        </span>
                       )}
                     </div>
 
                     <div
                       onClick={() =>
-                        aiSettings.qualificationFields.length === 0 && setCurrentStep(3)
+                        aiSettings.qualificationFields.length === 0 &&
+                        setCurrentStep(3)
                       }
                       className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
                         aiSettings.qualificationFields.length > 0
@@ -1497,12 +1705,18 @@ export default function OrganizationProfile() {
                       }`}
                     >
                       <span className="font-bold text-text-primary">
-                        Questions Schema ({aiSettings.qualificationFields.length})
+                        Questions Schema (
+                        {aiSettings.qualificationFields.length})
                       </span>
                       {aiSettings.qualificationFields.length > 0 ? (
-                        <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                        <CheckCircle2
+                          size={15}
+                          className="text-emerald-500 shrink-0"
+                        />
                       ) : (
-                        <span className="text-[10px] font-bold text-red-400">Min 1 Required</span>
+                        <span className="text-[10px] font-bold text-red-400">
+                          Min 1 Required
+                        </span>
                       )}
                     </div>
                   </div>
@@ -1562,14 +1776,22 @@ export default function OrganizationProfile() {
                         onClick={copyPromptText}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-card border border-border-main text-xs font-bold text-text-secondary hover:text-text-primary transition-colors"
                       >
-                        {copiedPrompt ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                        {copiedPrompt ? (
+                          <Check size={13} className="text-emerald-500" />
+                        ) : (
+                          <Copy size={13} />
+                        )}
                         <span>{copiedPrompt ? "Copied" : "Copy"}</span>
                       </button>
                       <button
-                        onClick={() => setShowPromptInspector(!showPromptInspector)}
+                        onClick={() =>
+                          setShowPromptInspector(!showPromptInspector)
+                        }
                         className="text-xs font-bold text-pilot-blue hover:underline cursor-pointer"
                       >
-                        {showPromptInspector ? "Collapse" : "Expand Full Prompt"}
+                        {showPromptInspector
+                          ? "Collapse"
+                          : "Expand Full Prompt"}
                       </button>
                     </div>
                   </div>
@@ -1580,7 +1802,10 @@ export default function OrganizationProfile() {
                     </pre>
                   ) : (
                     <p className="text-xs text-text-secondary leading-relaxed">
-                      Your prompt is compiled dynamically from your Persona, Services Catalog, Qualification Criteria, and Knowledge Base chunks. Click "Expand Full Prompt" above to review before testing.
+                      Your prompt is compiled dynamically from your Persona,
+                      Services Catalog, Qualification Criteria, and Knowledge
+                      Base chunks. Click "Expand Full Prompt" above to review
+                      before testing.
                     </p>
                   )}
                 </div>
@@ -1592,7 +1817,8 @@ export default function OrganizationProfile() {
                       Ready to Test Your Custom Sales AI?
                     </h4>
                     <p className="text-xs text-text-secondary">
-                      Simulate real customer inquiries and test qualification in the interactive WhatsApp playground.
+                      Simulate real customer inquiries and test qualification in
+                      the interactive WhatsApp playground.
                     </p>
                   </div>
 
@@ -1646,7 +1872,9 @@ export default function OrganizationProfile() {
                     className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm cursor-pointer"
                   >
                     <CheckCheck size={16} />
-                    <span>{aiSaving ? "Activating..." : "Finish & Activate AI"}</span>
+                    <span>
+                      {aiSaving ? "Activating..." : "Finish & Activate AI"}
+                    </span>
                   </button>
                 )}
               </div>
@@ -1669,13 +1897,18 @@ export default function OrganizationProfile() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2.5">
-                    <h2 className="text-xl font-black text-text-primary">{org.name || "Client Organization"}</h2>
+                    <h2 className="text-xl font-black text-text-primary">
+                      {org.name || "Client Organization"}
+                    </h2>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
                       {org.status ? org.status.toUpperCase() : "ACTIVE"}
                     </span>
                   </div>
                   <p className="text-xs text-text-secondary mt-1 font-mono">
-                    Tenant Database: <span className="font-bold text-text-primary">{org.tenantDbName || "Single-Tenant Core"}</span>
+                    Tenant Database:{" "}
+                    <span className="font-bold text-text-primary">
+                      {org.tenantDbName || "Single-Tenant Core"}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -1687,8 +1920,12 @@ export default function OrganizationProfile() {
                 <span className="text-sm font-black text-text-primary block mt-0.5">
                   {formatDate(org.subscriptionEndDate)}
                 </span>
-                <span className={`text-[11px] font-bold ${isExpired ? "text-red-500" : "text-emerald-600"}`}>
-                  {isExpired ? "Subscription Expired" : `${remainingDays} days remaining`}
+                <span
+                  className={`text-[11px] font-bold ${isExpired ? "text-red-500" : "text-emerald-600"}`}
+                >
+                  {isExpired
+                    ? "Subscription Expired"
+                    : `${remainingDays} days remaining`}
                 </span>
               </div>
             </div>
@@ -1698,19 +1935,25 @@ export default function OrganizationProfile() {
                 <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue">
                   <Mail size={14} />
                 </div>
-                <span className="text-text-primary font-medium truncate">{org.email || "No email"}</span>
+                <span className="text-text-primary font-medium truncate">
+                  {org.email || "No email"}
+                </span>
               </div>
               <div className="flex items-center gap-2.5 text-text-secondary">
                 <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue">
                   <Phone size={14} />
                 </div>
-                <span className="text-text-primary font-medium">{org.mobile || "No phone"}</span>
+                <span className="text-text-primary font-medium">
+                  {org.mobile || "No phone"}
+                </span>
               </div>
               <div className="flex items-center gap-2.5 text-text-secondary">
                 <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue">
                   <Globe size={14} />
                 </div>
-                <span className="text-text-primary font-medium truncate">{org.website || "No website"}</span>
+                <span className="text-text-primary font-medium truncate">
+                  {org.website || "No website"}
+                </span>
               </div>
             </div>
           </div>
@@ -1721,7 +1964,9 @@ export default function OrganizationProfile() {
               <div className="flex items-center justify-between pb-3 border-b border-border-main">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-pilot-blue" />
-                  <h3 className="font-bold text-xs text-text-primary">Seat Utilization & Licensing</h3>
+                  <h3 className="font-bold text-xs text-text-primary">
+                    Seat Utilization & Licensing
+                  </h3>
                 </div>
                 <span className="text-xs font-black text-pilot-blue">
                   {usedSeats} / {totalSeats} Used
@@ -1737,16 +1982,28 @@ export default function OrganizationProfile() {
 
               <div className="grid grid-cols-3 gap-2 pt-2 text-center">
                 <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                  <div className="text-[10px] text-text-secondary font-bold uppercase">Total Seats</div>
-                  <div className="text-base font-black text-text-primary mt-0.5">{totalSeats}</div>
+                  <div className="text-[10px] text-text-secondary font-bold uppercase">
+                    Total Seats
+                  </div>
+                  <div className="text-base font-black text-text-primary mt-0.5">
+                    {totalSeats}
+                  </div>
                 </div>
                 <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                  <div className="text-[10px] text-text-secondary font-bold uppercase">Active Reps</div>
-                  <div className="text-base font-black text-pilot-blue mt-0.5">{usedSeats}</div>
+                  <div className="text-[10px] text-text-secondary font-bold uppercase">
+                    Active Reps
+                  </div>
+                  <div className="text-base font-black text-pilot-blue mt-0.5">
+                    {usedSeats}
+                  </div>
                 </div>
                 <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                  <div className="text-[10px] text-text-secondary font-bold uppercase">Available</div>
-                  <div className="text-base font-black text-emerald-600 mt-0.5">{remainingSeats}</div>
+                  <div className="text-[10px] text-text-secondary font-bold uppercase">
+                    Available
+                  </div>
+                  <div className="text-base font-black text-emerald-600 mt-0.5">
+                    {remainingSeats}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1755,7 +2012,9 @@ export default function OrganizationProfile() {
               <div className="flex items-center justify-between pb-3 border-b border-border-main">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-pilot-blue" />
-                  <h3 className="font-bold text-xs text-text-primary">Billing & Commercial Model</h3>
+                  <h3 className="font-bold text-xs text-text-primary">
+                    Billing & Commercial Model
+                  </h3>
                 </div>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue uppercase">
                   {org.subscriptionPlan || "MONTHLY"}
@@ -1764,9 +2023,13 @@ export default function OrganizationProfile() {
 
               <div className="space-y-2.5 text-xs">
                 <div className="flex justify-between py-1.5 border-b border-border-main/50">
-                  <span className="text-text-secondary">Subscription Plan:</span>
+                  <span className="text-text-secondary">
+                    Subscription Plan:
+                  </span>
                   <span className="font-bold text-text-primary uppercase">
-                    {org.subscriptionPlan ? `${org.subscriptionPlan} Seat-Wise` : "Monthly Seat-Wise"}
+                    {org.subscriptionPlan
+                      ? `${org.subscriptionPlan} Seat-Wise`
+                      : "Monthly Seat-Wise"}
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5 border-b border-border-main/50">
@@ -1776,14 +2039,17 @@ export default function OrganizationProfile() {
                     {org.subscriptionPlan === "annually"
                       ? "year"
                       : org.subscriptionPlan === "quarterly"
-                      ? "quarter"
-                      : "month"}
+                        ? "quarter"
+                        : "month"}
                   </span>
                 </div>
                 <div className="flex justify-between py-1.5">
-                  <span className="text-text-secondary">Current Billing Cycle:</span>
+                  <span className="text-text-secondary">
+                    Current Billing Cycle:
+                  </span>
                   <span className="font-medium text-text-primary">
-                    {formatDate(org.subscriptionStartDate)} &rarr; {formatDate(org.subscriptionEndDate)}
+                    {formatDate(org.subscriptionStartDate)} &rarr;{" "}
+                    {formatDate(org.subscriptionEndDate)}
                   </span>
                 </div>
               </div>
@@ -1797,25 +2063,41 @@ export default function OrganizationProfile() {
                 <ShieldCheck size={18} />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-text-primary">Enterprise Data Isolation</h3>
+                <h3 className="text-xs font-bold text-text-primary">
+                  Enterprise Data Isolation
+                </h3>
                 <p className="text-[11px] text-text-secondary">
-                  Your leads, conversations, audio recordings, and vectors are strictly partitioned.
+                  Your leads, conversations, audio recordings, and vectors are
+                  strictly partitioned.
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2">
               <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                <div className="text-[10px] text-text-secondary font-bold uppercase">Database Tenant</div>
-                <div className="font-mono font-bold text-pilot-blue mt-0.5 truncate">{org.tenantDbName || "Single-Tenant Core"}</div>
+                <div className="text-[10px] text-text-secondary font-bold uppercase">
+                  Database Tenant
+                </div>
+                <div className="font-mono font-bold text-pilot-blue mt-0.5 truncate">
+                  {org.tenantDbName || "Single-Tenant Core"}
+                </div>
               </div>
               <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                <div className="text-[10px] text-text-secondary font-bold uppercase">Knowledge Partition</div>
-                <div className="font-mono font-bold text-text-primary mt-0.5 truncate">{aiSettings.qdrantCollection || `org_${org._id || "tenant"}_kb`}</div>
+                <div className="text-[10px] text-text-secondary font-bold uppercase">
+                  Knowledge Partition
+                </div>
+                <div className="font-mono font-bold text-text-primary mt-0.5 truncate">
+                  {aiSettings.qdrantCollection ||
+                    `org_${org._id || "tenant"}_kb`}
+                </div>
               </div>
               <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                <div className="text-[10px] text-text-secondary font-bold uppercase">Socket Channel</div>
-                <div className="font-mono font-bold text-emerald-600 mt-0.5 truncate">org_{org._id || "active"}</div>
+                <div className="text-[10px] text-text-secondary font-bold uppercase">
+                  Socket Channel
+                </div>
+                <div className="font-mono font-bold text-emerald-600 mt-0.5 truncate">
+                  org_{org._id || "active"}
+                </div>
               </div>
             </div>
           </div>
