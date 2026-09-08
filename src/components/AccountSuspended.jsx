@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
-import crmLogo from "../assets/images/CRM-LOGO.png";
+import crmLogo from "../assets/images/Logo.png";
 
 export default function AccountSuspended() {
   const { organization, logout, fetchOrganization, isSubscriptionExpired } = useAuth();
@@ -123,7 +123,7 @@ export default function AccountSuspended() {
           <div className="px-6 py-3 rounded-2xl bg-white shadow-xs border border-slate-200/80 inline-flex items-center justify-center">
             <img
               src={crmLogo}
-              alt="MySalesPilot.ai"
+              alt="SalesBuster AI"
               className="h-12 sm:h-14 w-auto object-contain max-w-[280px]"
             />
           </div>

@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 import { BACKEND_URL } from "./constants.js";
 
-// Extract subpath (e.g., "/kranthi-elevators-crm") to prevent Nginx root path clashes
+// Extract subpath to prevent Nginx root path clashes
 const url = new URL(BACKEND_URL);
 const customPath = url.pathname === "/" ? "" : url.pathname;
 

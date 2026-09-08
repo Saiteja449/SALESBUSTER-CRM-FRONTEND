@@ -3,8 +3,16 @@ import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
 
+// Token & Session Storage helpers (with backward-compatibility fallback)
+const getStoredToken = () =>
+  localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
+const getStoredUser = () =>
+  localStorage.getItem("salesbuster_session_user") || localStorage.getItem("kranthi_session_user");
+const getStoredOrg = () =>
+  localStorage.getItem("salesbuster_session_org") || localStorage.getItem("kranthi_session_org");
+
 // Initialize default axios authorization header from stored token
-const initialToken = localStorage.getItem("kranthi_token");
+const initialToken = getStoredToken();
 if (initialToken) {
   axios.defaults.headers.common["Authorization"] = `Bearer ${initialToken}`;
 }
@@ -15,7 +23,7 @@ export function AuthProvider({ children }) {
   const [allUsers, setAllUsers] = useState([]);
 
   const [currentUser, setCurrentUser] = useState(() => {
-    const savedSession = localStorage.getItem("kranthi_session_user");
+    const savedSession = getStoredUser();
     if (savedSession) {
       try {
         return JSON.parse(savedSession);
@@ -27,7 +35,7 @@ export function AuthProvider({ children }) {
   });
 
   const [organization, setOrganization] = useState(() => {
-    const savedOrg = localStorage.getItem("kranthi_session_org");
+    const savedOrg = getStoredOrg();
     if (savedOrg) {
       try {
         return JSON.parse(savedOrg);
@@ -39,13 +47,13 @@ export function AuthProvider({ children }) {
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    const savedSession = localStorage.getItem("kranthi_session_user");
+    const savedSession = getStoredUser();
     return !!savedSession;
   });
 
   // Fetch users from backend
   const fetchUsers = async () => {
-    const token = localStorage.getItem("kranthi_token");
+    const token = getStoredToken();
     if (!token) return;
 
     try {
@@ -82,6 +90,7 @@ export function AuthProvider({ children }) {
           ...(response.data.organization || {}),
         };
         setOrganization(updatedOrg);
+        localStorage.setItem("salesbuster_session_org", JSON.stringify(updatedOrg));
         localStorage.setItem("kranthi_session_org", JSON.stringify(updatedOrg));
       }
     } catch (error) {
@@ -104,6 +113,7 @@ export function AuthProvider({ children }) {
           if (error.response.data?.subscriptionExpired) {
             setOrganization((prev) => {
               const updated = { ...(prev || {}), isExpired: true };
+              localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
               localStorage.setItem("kranthi_session_org", JSON.stringify(updated));
               return updated;
             });
@@ -112,12 +122,14 @@ export function AuthProvider({ children }) {
             const newStatus = error.response.data.organizationStatus;
             setOrganization((prev) => {
               const updated = { ...(prev || {}), status: newStatus };
+              localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
               localStorage.setItem("kranthi_session_org", JSON.stringify(updated));
               return updated;
             });
           } else if (error.response.data?.accountSuspended) {
             setOrganization((prev) => {
               const updated = { ...(prev || {}), status: "suspended" };
+              localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
               localStorage.setItem("kranthi_session_org", JSON.stringify(updated));
               return updated;
             });
@@ -134,7 +146,7 @@ export function AuthProvider({ children }) {
 
   // Fetch full organization profile from backend to ensure fresh license seats & subscription dates
   const fetchOrganization = async () => {
-    const token = localStorage.getItem("kranthi_token");
+    const token = getStoredToken();
     if (!token) return;
 
     try {
@@ -143,6 +155,7 @@ export function AuthProvider({ children }) {
       });
       if (res.data.success && res.data.data) {
         setOrganization(res.data.data);
+        localStorage.setItem("salesbuster_session_org", JSON.stringify(res.data.data));
         localStorage.setItem("kranthi_session_org", JSON.stringify(res.data.data));
       }
     } catch (err) {
@@ -150,6 +163,7 @@ export function AuthProvider({ children }) {
         if (err.response.data?.subscriptionExpired) {
           setOrganization((prev) => {
             const updated = { ...(prev || {}), isExpired: true };
+            localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
             localStorage.setItem("kranthi_session_org", JSON.stringify(updated));
             return updated;
           });
@@ -158,6 +172,7 @@ export function AuthProvider({ children }) {
           const newStatus = err.response.data.organizationStatus;
           setOrganization((prev) => {
             const updated = { ...(prev || {}), status: newStatus };
+            localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
             localStorage.setItem("kranthi_session_org", JSON.stringify(updated));
             return updated;
           });
@@ -168,7 +183,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (isAuthenticated) {
-      const token = localStorage.getItem("kranthi_token");
+      const token = getStoredToken();
       if (token) {
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       }
@@ -184,6 +199,7 @@ export function AuthProvider({ children }) {
         if (updatedOrg) {
           setOrganization((prev) => {
             const merged = { ...prev, ...updatedOrg };
+            localStorage.setItem("salesbuster_session_org", JSON.stringify(merged));
             localStorage.setItem("kranthi_session_org", JSON.stringify(merged));
             return merged;
           });
@@ -238,14 +254,18 @@ export function AuthProvider({ children }) {
 
       setCurrentUser(userWithToken);
       setIsAuthenticated(true);
+      localStorage.setItem("salesbuster_session_user", JSON.stringify(userWithToken));
+      localStorage.setItem("salesbuster_token", data.token);
       localStorage.setItem("kranthi_session_user", JSON.stringify(userWithToken));
       localStorage.setItem("kranthi_token", data.token);
 
       if (data.organization) {
         setOrganization(data.organization);
+        localStorage.setItem("salesbuster_session_org", JSON.stringify(data.organization));
         localStorage.setItem("kranthi_session_org", JSON.stringify(data.organization));
       } else {
         setOrganization(null);
+        localStorage.removeItem("salesbuster_session_org");
         localStorage.removeItem("kranthi_session_org");
       }
 
@@ -272,6 +292,9 @@ export function AuthProvider({ children }) {
     setOrganization(null);
     setIsAuthenticated(false);
     delete axios.defaults.headers.common["Authorization"];
+    localStorage.removeItem("salesbuster_session_user");
+    localStorage.removeItem("salesbuster_session_org");
+    localStorage.removeItem("salesbuster_token");
     localStorage.removeItem("kranthi_session_user");
     localStorage.removeItem("kranthi_session_org");
     localStorage.removeItem("kranthi_token");

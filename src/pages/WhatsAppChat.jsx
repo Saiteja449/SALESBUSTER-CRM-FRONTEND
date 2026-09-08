@@ -183,6 +183,7 @@ export default function WhatsAppChat() {
         params: {
           role: currentUser?.role,
           name: currentUser?.name,
+          userId: currentUser?.id || currentUser?._id,
         },
       });
       const data = res.data;

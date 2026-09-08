@@ -150,6 +150,18 @@ export function getLeadAge(createdAtString) {
 }
 
 /**
+ * Resolves a display name for a lead assignee (handles both User ID and legacy string name)
+ */
+export function getRepName(assignedTo, allUsers = []) {
+  if (!assignedTo || assignedTo === "Unassigned") return "Unassigned";
+  const user = allUsers.find(
+    (u) => (u.id && String(u.id) === String(assignedTo)) || (u._id && String(u._id) === String(assignedTo))
+  );
+  if (user && user.name) return user.name;
+  return assignedTo; // Return existing name string if legacy
+}
+
+/**
  * Filter leads based on query inputs
  */
 export function filterLeads(
@@ -160,8 +172,14 @@ export function filterLeads(
     stage = "All",
     salesperson = "All",
     status = "All",
+    allUsers = [],
   },
 ) {
+  const selectedUser = allUsers.find(
+    (u) => u.id === salesperson || u._id === salesperson,
+  );
+  const selectedUserName = selectedUser?.name?.toLowerCase();
+
   return leads.filter((lead) => {
     // Search filter (handles name, phone, email)
     const matchSearch =
@@ -173,8 +191,11 @@ export function filterLeads(
     const matchService =
       service === "All" || lead.service === service;
     const matchStage = stage === "All" || lead.stage === stage;
+    const leadAssigned = String(lead.assignedTo || "");
     const matchSalesperson =
-      salesperson === "All" || lead.assignedTo === salesperson;
+      salesperson === "All" ||
+      leadAssigned === String(salesperson) ||
+      (selectedUserName && leadAssigned.toLowerCase() === selectedUserName);
     const matchStatus = status === "All" || lead.status === status;
 
     return (

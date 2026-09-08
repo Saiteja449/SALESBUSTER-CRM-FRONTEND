@@ -472,7 +472,7 @@ export default function TeamPerformance() {
                     <div className="flex items-center justify-center gap-3">
                       <button
                         onClick={() =>
-                          navigate(`/salesperson/${encodeURIComponent(p.name)}`)
+                          navigate(`/salesperson/${p.id || encodeURIComponent(p.name)}`)
                         }
                         className="text-brand-primary/60 hover:text-blue-600 transition-colors"
                         title="View Details"

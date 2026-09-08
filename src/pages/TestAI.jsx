@@ -20,7 +20,7 @@ export default function TestAI() {
 
   const API_URL = import.meta.env.VITE_API_BASE_URL
     ? `${import.meta.env.VITE_API_BASE_URL}/whatsapp/test-ai`
-    : "https://holyminicow.com/kranthi/api/whatsapp/test-ai";
+    : "https://api.salesbuster.ai/api/whatsapp/test-ai";
 
   const fetchHistory = async () => {
     try {

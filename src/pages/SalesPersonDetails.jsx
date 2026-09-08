@@ -34,11 +34,22 @@ const Badge = ({ children, colorClass, className = "" }) => (
 );
 
 export default function SalesPersonDetails() {
-  const { name } = useParams();
+  const { id, name } = useParams();
   const navigate = useNavigate();
   const { leads } = useLeads();
   const { allUsers } = useAuth();
-  const decodedName = decodeURIComponent(name);
+  const paramVal = id || name;
+  const decodedParam = decodeURIComponent(paramVal || "");
+
+  const repUser = (allUsers || []).find(
+    (u) =>
+      u.id === decodedParam ||
+      u._id === decodedParam ||
+      u.name?.toLowerCase() === decodedParam?.toLowerCase(),
+  );
+  const repId = repUser ? repUser.id || repUser._id : decodedParam;
+  const repName = repUser ? repUser.name : decodedParam;
+
   const [activeTab, setActiveTab] = useState("New Leads");
   const [analytics, setAnalytics] = useState([]);
   const scrollContainerRef = useRef(null);
@@ -46,14 +57,16 @@ export default function SalesPersonDetails() {
   React.useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const res = await axios.get(`${API_ENDPOINTS.ANALYTICS.BASE}/${decodedName}`);
+        const res = await axios.get(`${API_ENDPOINTS.ANALYTICS.BASE}/${repId}`);
         setAnalytics(res.data.data || []);
       } catch (error) {
         console.error("Failed to fetch analytics:", error);
       }
     };
-    fetchAnalytics();
-  }, [decodedName]);
+    if (repId) {
+      fetchAnalytics();
+    }
+  }, [repId]);
 
   const formatTalkTime = (seconds) => {
     if (!seconds) return '00:00';
@@ -90,7 +103,13 @@ export default function SalesPersonDetails() {
     }
   };
 
-  const repLeads = leads.filter((l) => l.assignedTo === decodedName);
+  const repLeads = leads.filter((l) => {
+    const assigned = String(l.assignedTo || "");
+    return (
+      assigned === String(repId) ||
+      (repName && assigned.toLowerCase() === repName.toLowerCase())
+    );
+  });
 
   const newLeads = repLeads.filter((l) => l.status?.toLowerCase() === "new");
   const todayStr = new Date().toISOString().split("T")[0];
@@ -171,11 +190,11 @@ export default function SalesPersonDetails() {
       <div className="flex items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-blue-600 text-brand-primary flex items-center justify-center font-bold text-2xl shrink-0">
-            {decodedName.substring(0, 1).toUpperCase()}
+            {repName.substring(0, 1).toUpperCase()}
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-brand-primary tracking-tight">
-              {decodedName}'s Leads
+              {repName}'s Leads
             </h1>
             <p className="text-sm text-brand-primary/70 mt-1">
               Total assigned leads: {repLeads.length}
@@ -200,7 +219,7 @@ export default function SalesPersonDetails() {
             </button>
           </div>
           <button
-            onClick={() => navigate(`/salesperson/${name}/reports`)}
+            onClick={() => navigate(`/salesperson/${repId}/reports`)}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-brand-primary text-sm font-bold rounded-lg transition-colors"
           >
             <BarChart2 className="w-4 h-4" /> View Reports

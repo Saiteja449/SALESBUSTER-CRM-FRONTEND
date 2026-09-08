@@ -131,8 +131,8 @@ const INDUSTRY_TEMPLATES = [
     shortName: "Elevators",
     emoji: "🛗",
     subtitle: "Passenger, MRL, hydraulic, and AMC services",
-    companyName: "Kranthi Elevators",
-    persona: "friendly, knowledgeable technical sales consultant at Kranthi Elevators",
+    companyName: "SalesBuster AI",
+    persona: "friendly, knowledgeable technical sales consultant at SalesBuster AI",
     description:
       "Precision-engineered elevator solutions across residential, commercial, industrial, and hospital segments in and around Hyderabad.",
     services: [
@@ -289,7 +289,7 @@ export default function OrganizationProfile() {
   const fetchOrganizationProfile = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("kranthi_token");
+      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
       const res = await axios.get(API_ENDPOINTS.ORGANIZATIONS.MY_ORG, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -297,6 +297,7 @@ export default function OrganizationProfile() {
       if (res.data.success && res.data.data) {
         setOrgData(res.data.data);
         if (setOrganization) setOrganization(res.data.data);
+        localStorage.setItem("salesbuster_session_org", JSON.stringify(res.data.data));
         localStorage.setItem("kranthi_session_org", JSON.stringify(res.data.data));
 
         if (res.data.data.aiSettings) {
@@ -323,7 +324,7 @@ export default function OrganizationProfile() {
     }
 
     try {
-      const token = localStorage.getItem("kranthi_token");
+      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
       const res = await axios.get(API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -372,7 +373,7 @@ export default function OrganizationProfile() {
     localStorage.setItem(`sb_ai_settings_${orgId}`, JSON.stringify(payload));
 
     try {
-      const token = localStorage.getItem("kranthi_token");
+      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
       const res = await axios.put(API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -527,7 +528,7 @@ export default function OrganizationProfile() {
 
     setUploadingDoc(true);
     try {
-      const token = localStorage.getItem("kranthi_token");
+      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
       const res = await axios.post(API_ENDPOINTS.ORGANIZATIONS.KNOWLEDGE_UPLOAD, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -562,7 +563,7 @@ export default function OrganizationProfile() {
   const handleDeleteDoc = async (docId) => {
     if (!window.confirm("Remove this document from the AI knowledge base?")) return;
     try {
-      const token = localStorage.getItem("kranthi_token");
+      const token = localStorage.getItem("salesbuster_token") || localStorage.getItem("kranthi_token");
       await axios.delete(API_ENDPOINTS.ORGANIZATIONS.KNOWLEDGE_DELETE(docId), {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -855,7 +856,7 @@ export default function OrganizationProfile() {
                       type="text"
                       value={aiSettings.companyName}
                       onChange={(e) => setAiSettings({ ...aiSettings, companyName: e.target.value })}
-                      placeholder={org.name || "e.g. Infasta / Kranthi Elevators"}
+                      placeholder={org.name || "e.g. SalesBuster AI"}
                       className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
                     />
                     <span className="text-[10px] text-text-secondary mt-1.5 block">

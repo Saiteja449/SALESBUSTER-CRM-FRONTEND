@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
-import crmLogo from "../assets/images/CRM-LOGO.png";
+import crmLogo from "../assets/images/Logo.png";
 
 const sidebarDrawerWidth = 260;
 
@@ -104,7 +104,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
         <div className="w-full h-11 bg-white flex items-center justify-center">
           <img
             src={crmLogo}
-            alt="Kranthi Elevators"
+            alt="SalesBuster AI"
             className="w-full h-full object-contain"
           />
         </div>

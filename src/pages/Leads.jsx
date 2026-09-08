@@ -28,6 +28,7 @@ import {
   getSourceColor,
   filterLeads,
   normalizeServices,
+  getRepName,
 } from "../utils/helpers.js";
 
 // Helper components for UI
@@ -105,7 +106,10 @@ export default function Leads() {
     source: "Manual Entry",
     service: activeServices?.[0]?.code || "General Enquiry",
 
-    assignedTo: currentUser?.role === "Sales Representative" ? currentUser.name : "Unassigned",
+    assignedTo:
+      currentUser?.role === "Sales Representative"
+        ? currentUser.id || currentUser._id || "Unassigned"
+        : "Unassigned",
     nextFollowUp: "2026-05-26",
     followupTime: "11:00 AM",
     followupType: "Call",
@@ -162,10 +166,12 @@ export default function Leads() {
           search,
           service,
           salesperson,
+          salespersonId: salesperson !== "All" ? salesperson : "",
           status,
           leadTypeTab,
           currentUserRole: currentUser?.role || "",
           currentUserName: currentUser?.name || "",
+          currentUserId: currentUser?.id || currentUser?._id || "",
         });
         const res = await axios.get(
           `${API_ENDPOINTS.LEADS.BASE}/paginated?${queryParams}`,
@@ -238,14 +244,24 @@ export default function Leads() {
 
   const handleOpenEdit = (lead) => {
     setSelectedLead(lead);
+    let currentAssignee = lead.assignedTo || "Unassigned";
+    const foundUser = (allUsers || []).find(
+      (u) =>
+        u.id === currentAssignee ||
+        u._id === currentAssignee ||
+        u.name?.toLowerCase() === currentAssignee?.toLowerCase(),
+    );
+    if (foundUser) {
+      currentAssignee = foundUser.id || foundUser._id;
+    }
+
     setFormFields({
       name: lead.name,
       phone: lead.phone,
       email: lead.email || "",
       source: lead.source,
       service: normalizeServices(lead.service),
-
-      assignedTo: lead.assignedTo,
+      assignedTo: currentAssignee,
       nextFollowUp: lead.nextFollowUp || "",
       followupTime: lead.followupTime || "11:00 AM",
       followupType: lead.followupType || "Call",
@@ -408,9 +424,9 @@ export default function Leads() {
               className="w-full px-3 py-2 bg-brand-light border border-brand-secondary rounded-lg text-sm text-brand-primary focus:outline-none focus:border-purple-500 transition-colors appearance-none"
             >
               <option value="All">All Reps</option>
-              {salespeople.map((rep) => (
-                <option key={rep} value={rep}>
-                  {rep}
+              {(allUsers || []).map((rep) => (
+                <option key={rep.id || rep._id} value={rep.id || rep._id}>
+                  {rep.name}
                 </option>
               ))}
             </select>
@@ -527,7 +543,7 @@ export default function Leads() {
                     </td>
                     {currentUser?.role !== "Sales Representative" && (
                       <td className="px-4 py-3 text-sm text-brand-primary">
-                        {lead.assignedTo || "Unassigned"}
+                        {getRepName(lead.assignedTo, allUsers)}
                       </td>
                     )}
                     <td className="px-4 py-3 text-sm">
@@ -777,14 +793,9 @@ export default function Leads() {
                       className="w-full bg-brand-light border border-brand-secondary rounded-lg px-3 py-2 text-sm text-brand-primary focus:outline-none focus:border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="Unassigned">Unassigned (Auto Assign)</option>
-                      {currentUser?.role !== "Sales Representative" && 
-                       formFields.assignedTo !== "Unassigned" && 
-                       !salespeople.includes(formFields.assignedTo) && (
-                        <option value={formFields.assignedTo}>{formFields.assignedTo}</option>
-                      )}
-                      {salespeople.map((rep) => (
-                        <option key={rep} value={rep}>
-                          {rep}
+                      {(allUsers || []).map((rep) => (
+                        <option key={rep.id || rep._id} value={rep.id || rep._id}>
+                          {rep.name}
                         </option>
                       ))}
                     </select>

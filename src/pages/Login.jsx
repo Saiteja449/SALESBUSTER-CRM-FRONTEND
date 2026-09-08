@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
-import crmLogo from "../assets/images/CRM-LOGO.png";
+import crmLogo from "../assets/images/Logo.png";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -45,7 +45,7 @@ export default function Login() {
         <div className="mb-6 lg:mb-10">
           <img
             src={crmLogo}
-            alt="Kranthi Elevators"
+            alt="SalesBuster AI"
             className="h-9 sm:h-12 w-auto object-contain"
           />
         </div>
@@ -87,7 +87,7 @@ export default function Login() {
                     setEmail(e.target.value);
                     if (error) setError("");
                   }}
-                  placeholder="e.g. admin@kranthielevators.com"
+                  placeholder="e.g. admin@salesbuster.ai"
                   className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-xs"
                   disabled={loading}
                 />
@@ -168,7 +168,7 @@ export default function Login() {
 
         {/* Footer info */}
         <div className="text-center lg:text-left text-[11px] text-slate-400 pt-6">
-          &copy; {new Date().getFullYear()} Kranthi Elevators. All rights
+          &copy; {new Date().getFullYear()} SalesBuster AI. All rights
           reserved.
         </div>
       </div>

@@ -35,20 +35,30 @@ export function DashboardProvider({ children }) {
   // Filter based on user role: if Sales Representative, only show their assigned leads for simple dashboard KPIs
   const leads = useMemo(() => {
     if (currentUser && currentUser.role === "Sales Representative") {
-      return rawLeads.filter(
-        (l) => l.assignedTo?.toLowerCase() === currentUser.name?.toLowerCase(),
-      );
+      const uId = currentUser.id || currentUser._id;
+      const uName = currentUser.name?.toLowerCase();
+      return rawLeads.filter((l) => {
+        const assigned = String(l.assignedTo || "");
+        return (
+          (uId && assigned === String(uId)) ||
+          (uName && assigned.toLowerCase() === uName)
+        );
+      });
     }
     return rawLeads;
   }, [rawLeads, currentUser]);
 
   const followups = useMemo(() => {
     if (currentUser && currentUser.role === "Sales Representative") {
+      const uId = currentUser.id || currentUser._id;
+      const uName = currentUser.name?.toLowerCase();
       return rawFollowups.filter((f) => {
         const lead = rawLeads.find((l) => l.id === f.leadId);
+        if (!lead) return false;
+        const assigned = String(lead.assignedTo || "");
         return (
-          lead &&
-          lead.assignedTo?.toLowerCase() === currentUser.name?.toLowerCase()
+          (uId && assigned === String(uId)) ||
+          (uName && assigned.toLowerCase() === uName)
         );
       });
     }
@@ -114,10 +124,16 @@ export function DashboardProvider({ children }) {
     // Seed performerMap with all active salespeople so they exist even with zero assigned leads
     (allUsers || []).forEach((user) => {
       if (user.role === "Sales Representative") {
+        const userId = user.id || user._id;
         const userAnalytics =
-          todayAnalytics.find((a) => a.salesperson === user.name) || {};
-        performerMap[user.name] = {
-          id: user.id,
+          todayAnalytics.find(
+            (a) =>
+              (a.salespersonId && String(a.salespersonId) === String(userId)) ||
+              a.salesperson === user.name ||
+              a.salesperson === String(userId)
+          ) || {};
+        performerMap[String(userId)] = {
+          id: userId,
           name: user.name,
           email: user.email,
           role: user.role,
@@ -130,13 +146,17 @@ export function DashboardProvider({ children }) {
 
     // Fill metrics using raw global leads list
     rawLeads.forEach((lead) => {
-      const rep = lead.assignedTo;
+      const repAssigned = String(lead.assignedTo || "");
+      const matchedPerformer = Object.values(performerMap).find(
+        (p) =>
+          String(p.id) === repAssigned ||
+          (p.name && p.name.toLowerCase() === repAssigned.toLowerCase())
+      );
 
-      // Only track metrics for legitimate Sales Representatives currently in the system
-      if (rep && performerMap[rep]) {
-        performerMap[rep].assigned += 1;
+      if (matchedPerformer) {
+        matchedPerformer.assigned += 1;
         if (isLeadWon(lead)) {
-          performerMap[rep].won += 1;
+          matchedPerformer.won += 1;
         }
       }
     });
@@ -148,7 +168,12 @@ export function DashboardProvider({ children }) {
         // Get completion rate of follow-ups assigned to them
         const repFws = rawFollowups.filter((f) => {
           const leadObj = rawLeads.find((l) => l.id === f.leadId);
-          return leadObj && leadObj.assignedTo === p.name;
+          if (!leadObj) return false;
+          const assigned = String(leadObj.assignedTo || "");
+          return (
+            assigned === String(p.id) ||
+            assigned.toLowerCase() === p.name.toLowerCase()
+          );
         });
         const completedRepFws = repFws.filter((f) => f.done).length;
         const fwCompletionPct =
@@ -157,14 +182,23 @@ export function DashboardProvider({ children }) {
             : 80; // default average
 
         let dynamicResponseTime = "--";
-        const repLeadsData = rawLeads.filter((l) => l.assignedTo === p.name);
+        const repLeadsData = rawLeads.filter((l) => {
+          const assigned = String(l.assignedTo || "");
+          return (
+            assigned === String(p.id) ||
+            assigned.toLowerCase() === p.name.toLowerCase()
+          );
+        });
         if (repLeadsData.length > 0) {
           let totalResponseMs = 0;
           let respondedLeadsCount = 0;
 
           repLeadsData.forEach((lead) => {
             const repActivities = rawFollowups.filter(
-              (a) => a.done && a.leadId === lead.id && a.author === p.name,
+              (a) =>
+                a.done &&
+                a.leadId === lead.id &&
+                (a.author === p.name || a.author === String(p.id)),
             );
             if (repActivities.length > 0) {
               repActivities.sort((a, b) => new Date(a.date) - new Date(b.date));

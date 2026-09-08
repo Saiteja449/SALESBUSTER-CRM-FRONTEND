@@ -86,7 +86,7 @@ export default function App() {
 
   return (
     <RootProvider>
-      <BrowserRouter basename="/salesbuster-crm">
+      <BrowserRouter basename="/">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<AppLayout />}>
@@ -108,9 +108,9 @@ export default function App() {
             <Route path="/followups" element={<FollowUpReport />} />
             <Route path="/performance" element={<TeamPerformance />} />
             <Route path="/organization" element={<OrganizationProfile />} />
-            <Route path="/salesperson/:name" element={<SalesPersonDetails />} />
+            <Route path="/salesperson/:id" element={<SalesPersonDetails />} />
             <Route
-              path="/salesperson/:name/reports"
+              path="/salesperson/:id/reports"
               element={<SalesPersonReports />}
             />
             <Route path="/notifications" element={<NotificationsPage />} />

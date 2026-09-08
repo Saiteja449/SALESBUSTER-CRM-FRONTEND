@@ -8,11 +8,13 @@ import {
   Mail,
 } from "lucide-react";
 import { useLeads } from "../context/LeadsContext.jsx";
-import { formatDate } from "../utils/helpers.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { formatDate, getRepName } from "../utils/helpers.js";
 
 export default function FollowUpReport() {
   const navigate = useNavigate();
   const { leads, followups } = useLeads();
+  const { allUsers } = useAuth();
 
   const reportData = useMemo(() => {
     const today = new Date();
@@ -42,10 +44,14 @@ export default function FollowUpReport() {
       }
     });
 
-    return Object.entries(grouped).sort(([repA], [repB]) =>
-      repA.localeCompare(repB),
-    );
-  }, [leads, followups]);
+    return Object.entries(grouped)
+      .map(([repKey, activeLeads]) => ({
+        repKey,
+        displayName: getRepName(repKey, allUsers),
+        activeLeads,
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [leads, followups, allUsers]);
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -74,17 +80,17 @@ export default function FollowUpReport() {
         </div>
       ) : (
         <div className="space-y-6">
-          {reportData.map(([salesperson, activeLeads]) => (
+          {reportData.map(({ repKey, displayName, activeLeads }) => (
             <div
-              key={salesperson}
+              key={repKey}
               className="bg-brand-light border border-brand-secondary rounded-xl overflow-hidden shadow-sm"
             >
               <div className="bg-brand-light px-5 py-4 border-b border-brand-secondary flex justify-between items-center">
                 <h3 className="text-lg font-bold text-brand-primary flex items-center gap-2">
                   <span className="w-8 h-8 rounded-full bg-blue-600 text-brand-primary flex items-center justify-center text-sm">
-                    {salesperson.substring(0, 1).toUpperCase()}
+                    {displayName.substring(0, 1).toUpperCase()}
                   </span>
-                  {salesperson}
+                  {displayName}
                 </h3>
                 <span className="px-3 py-1 bg-purple-500/10 text-purple-500 border border-purple-500/20 rounded-full text-xs font-bold">
                   {activeLeads.length} Active Leads

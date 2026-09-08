@@ -15,6 +15,7 @@ import {
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { formatDate } from "../utils/helpers.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const formatTalkTime = (seconds) => {
   if (!seconds) return '00:00';
@@ -26,16 +27,28 @@ const formatTalkTime = (seconds) => {
 };
 
 export default function SalesPersonReports() {
-  const { name } = useParams();
+  const { id, name } = useParams();
   const navigate = useNavigate();
-  const decodedName = decodeURIComponent(name);
+  const { allUsers } = useAuth();
+  const paramVal = id || name;
+  const decodedParam = decodeURIComponent(paramVal || "");
+
+  const repUser = (allUsers || []).find(
+    (u) =>
+      u.id === decodedParam ||
+      u._id === decodedParam ||
+      u.name?.toLowerCase() === decodedParam?.toLowerCase(),
+  );
+  const repId = repUser ? (repUser.id || repUser._id) : decodedParam;
+  const repName = repUser ? repUser.name : decodedParam;
+
   const [analytics, setAnalytics] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const res = await axios.get(`${API_ENDPOINTS.ANALYTICS.BASE}/${decodedName}`);
+        const res = await axios.get(`${API_ENDPOINTS.ANALYTICS.BASE}/${repId}`);
         setAnalytics(res.data.data || []);
       } catch (error) {
         console.error("Failed to fetch analytics:", error);
@@ -43,8 +56,10 @@ export default function SalesPersonReports() {
         setIsLoading(false);
       }
     };
-    fetchAnalytics();
-  }, [decodedName]);
+    if (repId) {
+      fetchAnalytics();
+    }
+  }, [repId]);
 
   const todayStrDate = new Date().toISOString().split("T")[0];
   const todayAnalytics = analytics.find(a => a.date === todayStrDate) || {
@@ -74,11 +89,11 @@ export default function SalesPersonReports() {
 
       <div className="flex items-center gap-4 mb-6">
         <div className="w-16 h-16 rounded-full bg-blue-600 text-brand-primary flex items-center justify-center font-bold text-2xl shrink-0">
-          {decodedName.substring(0, 1).toUpperCase()}
+          {repName.substring(0, 1).toUpperCase()}
         </div>
         <div>
           <h1 className="text-2xl font-extrabold text-brand-primary tracking-tight">
-            {decodedName}'s Reports
+            {repName}'s Reports
           </h1>
           <p className="text-sm text-brand-primary/70 mt-1">
             Performance Analytics & Daily Logs

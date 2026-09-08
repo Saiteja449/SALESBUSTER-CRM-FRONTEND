@@ -3,7 +3,7 @@ import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { services } from "../data.js";
 import { useAuth } from "./AuthContext.jsx";
-import { getServiceColor } from "../utils/helpers.js";
+import { getServiceColor, getRepName } from "../utils/helpers.js";
 import { socket } from "../utils/socket.js";
 
 const LeadsContext = createContext(null);
@@ -25,7 +25,7 @@ const mapServicesToActive = (rawServices) => {
 };
 
 export function LeadsProvider({ children }) {
-  const { organization } = useAuth();
+  const { organization, allUsers } = useAuth();
   const [leads, setLeads] = useState([]);
 
   const [activeServices, setActiveServices] = useState(() => {
@@ -122,8 +122,10 @@ export function LeadsProvider({ children }) {
           updatedFields.assignedTo &&
           updatedFields.assignedTo !== lead.assignedTo
         ) {
+          const oldName = getRepName(lead.assignedTo, allUsers);
+          const newName = getRepName(updatedFields.assignedTo, allUsers);
           changes.push(
-            `assignee from "${lead.assignedTo}" to "${updatedFields.assignedTo}"`,
+            `assignee from "${oldName}" to "${newName}"`,
           );
         }
         if (updatedFields.status && updatedFields.status !== lead.status) {

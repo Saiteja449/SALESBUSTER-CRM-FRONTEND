@@ -14,8 +14,8 @@ export default function Settings() {
 
   // Local settings states
   const [profile, setProfile] = useState({
-    name: currentUser?.name || "Kranthi Elevators Admin",
-    email: currentUser?.email || "admin@kranthielevators.com",
+    name: currentUser?.name || "SalesBuster AI Admin",
+    email: currentUser?.email || "admin@salesbuster.ai",
     role: currentUser?.role || "Sales Manager",
     department: "Sales & Client Relations",
     joined: "Aug 2023",

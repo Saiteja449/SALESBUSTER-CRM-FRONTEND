@@ -18,7 +18,7 @@ import {
 import { API_BASE_URL, BACKEND_URL } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { formatDate, getServiceColor } from "../utils/helpers.js";
+import { formatDate, getServiceColor, getRepName } from "../utils/helpers.js";
 import DatePicker from "../components/DatePicker.jsx";
 
 export default function LeadDetails() {
@@ -436,20 +436,29 @@ export default function LeadDetails() {
                 </span>
                 {currentUser?.role === "Sales Manager" ? (
                   <select
-                    value={currentLead.assignedTo || ""}
+                    value={
+                      allUsers.find(
+                        (u) =>
+                          u.id === currentLead.assignedTo ||
+                          u.name?.toLowerCase() ===
+                            String(currentLead.assignedTo).toLowerCase(),
+                      )?.id ||
+                      currentLead.assignedTo ||
+                      ""
+                    }
                     onChange={handleAssigneeChange}
                     className="bg-brand-light border border-brand-secondary text-sm font-semibold text-brand-primary rounded px-2 py-1 focus:outline-none focus:border-purple-500 cursor-pointer w-full max-w-[200px]"
                   >
-                    <option value="">Unassigned</option>
+                    <option value="Unassigned">Unassigned</option>
                     {allUsers.map((u) => (
-                      <option key={u.id} value={u.name}>
+                      <option key={u.id} value={u.id}>
                         {u.name}
                       </option>
                     ))}
                   </select>
                 ) : (
                   <span className="text-sm font-semibold text-brand-primary truncate block">
-                    {currentLead.assignedTo}
+                    {getRepName(currentLead.assignedTo, allUsers)}
                   </span>
                 )}
               </div>

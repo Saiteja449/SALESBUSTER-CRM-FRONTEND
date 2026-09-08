@@ -251,7 +251,7 @@ export default function Dashboard() {
             Executive Dashboard
           </h1>
           <p className="text-sm text-brand-primary/70">
-            Real-time analytical performance summary for {organization?.name || "Kranthi Elevators"}.
+            Real-time analytical performance summary for {organization?.name || "SalesBuster AI"}.
           </p>
         </div>
         <button
