@@ -192,9 +192,14 @@ export function AuthProvider({ children }) {
       fetchOrganization();
 
       const orgId = organization?.id || organization?._id || currentUser?.organizationId;
-      if (orgId) {
-        socket.emit("join_organization", orgId);
-      }
+      const joinOrg = () => {
+        if (orgId) {
+          socket.emit("join_organization", orgId);
+        }
+      };
+
+      joinOrg();
+      socket.on("connect", joinOrg);
 
       const handleOrgUpdate = (updatedOrg) => {
         if (updatedOrg) {
@@ -209,6 +214,7 @@ export function AuthProvider({ children }) {
 
       socket.on("organization_updated", handleOrgUpdate);
       return () => {
+        socket.off("connect", joinOrg);
         socket.off("organization_updated", handleOrgUpdate);
       };
     }

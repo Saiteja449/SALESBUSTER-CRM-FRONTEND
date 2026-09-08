@@ -113,9 +113,6 @@ export default function WhatsAppChat() {
     });
 
     return () => {
-      if (orgId) {
-        socket.emit("leave_organization", orgId);
-      }
       socket.off("whatsapp_status");
       socket.off("conversation_updated");
     };
@@ -190,9 +187,13 @@ export default function WhatsAppChat() {
       setConversations(data);
       setConversationsLoading(false);
 
-      const targetLeadId = location.state?.selectLeadId;
+      const searchParams = new URLSearchParams(location.search);
+      const targetLeadId = location.state?.selectLeadId || searchParams.get("leadId");
       if (targetLeadId) {
-        const found = data.find((c) => c.leadId?.id === targetLeadId);
+        const found = data.find((c) => {
+          const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+          return String(lId) === String(targetLeadId);
+        });
         if (found) {
           handleSelectConversation(found);
         } else {
@@ -209,7 +210,13 @@ export default function WhatsAppChat() {
               lastMessageTime: new Date(),
             };
             setConversations((prev) => {
-              if (prev.some((c) => c.leadId?.id === targetLeadId)) return prev;
+              if (
+                prev.some((c) => {
+                  const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+                  return String(lId) === String(targetLeadId);
+                })
+              )
+                return prev;
               return [newMockConv, ...prev];
             });
             handleSelectConversation(newMockConv);
