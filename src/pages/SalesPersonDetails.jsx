@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Phone,
+  Mail,
   PhoneIncoming,
   PhoneOutgoing,
   PhoneMissed,
@@ -196,9 +197,27 @@ export default function SalesPersonDetails() {
             <h1 className="text-2xl font-extrabold text-brand-primary tracking-tight">
               {repName}'s Leads
             </h1>
-            <p className="text-sm text-brand-primary/70 mt-1">
-              Total assigned leads: {repLeads.length}
-            </p>
+            <div className="flex items-center gap-3 text-sm text-brand-primary/70 mt-1 flex-wrap">
+              <span>Total assigned leads: {repLeads.length}</span>
+              {repUser?.phone && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                    <Phone size={13} className="shrink-0" />
+                    {repUser.phone}
+                  </span>
+                </>
+              )}
+              {repUser?.email && (
+                <>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 text-brand-primary/60">
+                    <Mail size={13} className="shrink-0" />
+                    {repUser.email}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3">

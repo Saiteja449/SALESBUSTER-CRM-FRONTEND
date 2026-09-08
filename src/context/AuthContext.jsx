@@ -73,6 +73,7 @@ export function AuthProvider({ children }) {
         id: user._id,
         name: user.name || user.email.split("@")[0],
         email: user.email,
+        phone: user.phone || user.mobile || "",
         role: roleMap[user.role?.toLowerCase()] || user.role,
         avatar: (user.name || user.email).substring(0, 2).toUpperCase(),
       }));
@@ -239,6 +240,7 @@ export function AuthProvider({ children }) {
         id: data._id,
         name: data.name || email.split("@")[0],
         email: data.email,
+        phone: data.phone || data.mobile || "",
         role: roleMap[data.role?.toLowerCase()] || data.role,
         token: data.token,
         organizationId: orgId,
@@ -300,13 +302,26 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("kranthi_token");
   };
 
-  const addSalesPerson = async (name, email, password) => {
+  const addSalesPerson = async (nameOrData, email, phone) => {
     try {
-      const response = await axios.post(API_ENDPOINTS.USERS.BASE, {
-        name,
-        email,
-        password,
-      });
+      let payload = {};
+      if (typeof nameOrData === "object" && nameOrData !== null) {
+        payload = {
+          name: nameOrData.name,
+          email: nameOrData.email,
+          phone: nameOrData.phone || nameOrData.mobile,
+          mobile: nameOrData.mobile || nameOrData.phone,
+        };
+      } else {
+        payload = {
+          name: nameOrData,
+          email,
+          phone,
+          mobile: phone,
+        };
+      }
+
+      const response = await axios.post(API_ENDPOINTS.USERS.BASE, payload);
 
       // Refresh the users list and seat counts
       await fetchUsers();

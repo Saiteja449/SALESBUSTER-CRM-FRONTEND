@@ -39,8 +39,7 @@ export default function TeamPerformance() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [newMobile, setNewMobile] = useState("");
   const [createError, setCreateError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,18 +65,14 @@ export default function TeamPerformance() {
       return;
     }
 
-    if (!newName.trim() || !newEmail.trim() || !newPassword) {
-      setCreateError("All fields are required.");
+    if (!newName.trim() || !newEmail.trim() || !newMobile.trim()) {
+      setCreateError("Please provide name, email, and mobile number.");
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      setCreateError("Passwords do not match.");
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setCreateError("Password must be at least 6 characters.");
+    const digits = newMobile.replace(/\D/g, "");
+    if (digits.length < 7 || digits.length > 15) {
+      setCreateError("Please enter a valid mobile number (7 to 15 digits).");
       return;
     }
 
@@ -86,13 +81,12 @@ export default function TeamPerformance() {
       await addSalesPerson(
         newName.trim(),
         newEmail.trim(),
-        newPassword
+        newMobile.trim()
       );
       setCreateOpen(false);
       setNewName("");
       setNewEmail("");
-      setNewPassword("");
-      setConfirmPassword("");
+      setNewMobile("");
     } catch (err) {
       setCreateError(err.message || "Failed to create representative.");
     } finally {
@@ -424,9 +418,16 @@ export default function TeamPerformance() {
 
                   {/* REPRESENTATIVE NAME */}
                   <td className="py-4 px-6">
-                    <span className="font-bold text-brand-primary text-sm">
+                    <span className="font-bold text-brand-primary text-sm block">
                       {p.name}
                     </span>
+                    {(p.phone || p.email) && (
+                      <div className="flex items-center gap-1.5 text-xs text-brand-primary/60 font-normal mt-0.5 flex-wrap">
+                        {p.phone && <span>{p.phone}</span>}
+                        {p.phone && p.email && <span>•</span>}
+                        {p.email && <span>{p.email}</span>}
+                      </div>
+                    )}
                   </td>
 
                   {/* LEADS ASSIGNED */}
@@ -576,29 +577,23 @@ export default function TeamPerformance() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                  Password
+                  Mobile Number
                 </label>
                 <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Enter a secure password"
+                  type="tel"
+                  value={newMobile}
+                  onChange={(e) => setNewMobile(e.target.value)}
+                  placeholder="e.g. +91 98765 43210"
                   className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Confirm the password"
-                  className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
-                  required
-                />
+
+              <div className="bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 p-3 rounded-xl text-xs flex items-start gap-2">
+                <span className="text-sm shrink-0 mt-0.5">🔐</span>
+                <span className="leading-relaxed">
+                  A temporary login password will be automatically generated and emailed to the representative.
+                </span>
               </div>
             </form>
 
@@ -614,9 +609,9 @@ export default function TeamPerformance() {
                 type="submit"
                 form="create-form"
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors shadow-sm"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
               >
-                {submitting ? "Registering..." : "Register Representative"}
+                {submitting ? "Registering & Sending..." : "Register & Send Credentials"}
               </button>
             </div>
           </div>

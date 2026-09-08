@@ -86,8 +86,7 @@ export default function Dashboard() {
   const [newUser, setNewUser] = useState({
     name: "",
     email: "",
-    password: "",
-    confirmPassword: "",
+    mobile: "",
   });
   const [addUserLoading, setAddUserLoading] = useState(false);
   const [addUserError, setAddUserError] = useState("");
@@ -98,16 +97,14 @@ export default function Dashboard() {
     setAddUserError("");
     setAddUserSuccess("");
 
-    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.password) {
-      setAddUserError("Please fill in name, email, and password.");
+    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.mobile.trim()) {
+      setAddUserError("Please provide name, email, and mobile number.");
       return;
     }
-    if (newUser.password.length < 6) {
-      setAddUserError("Password must be at least 6 characters.");
-      return;
-    }
-    if (newUser.password !== newUser.confirmPassword) {
-      setAddUserError("Passwords do not match.");
+
+    const digitsOnly = newUser.mobile.replace(/\D/g, "");
+    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
+      setAddUserError("Please enter a valid mobile number (7 to 15 digits).");
       return;
     }
 
@@ -116,14 +113,14 @@ export default function Dashboard() {
       await addSalesPerson(
         newUser.name.trim(),
         newUser.email.trim(),
-        newUser.password,
+        newUser.mobile.trim(),
       );
-      setAddUserSuccess("Sales representative added successfully!");
-      setNewUser({ name: "", email: "", password: "", confirmPassword: "" });
+      setAddUserSuccess("Sales representative added! Login credentials sent via email.");
+      setNewUser({ name: "", email: "", mobile: "" });
       setTimeout(() => {
         setShowAddUserModal(false);
         setAddUserSuccess("");
-      }, 1200);
+      }, 1500);
     } catch (err) {
       setAddUserError(err.message || "Failed to add sales representative.");
     } finally {
@@ -1006,34 +1003,25 @@ export default function Dashboard() {
 
               <div>
                 <label className="text-xs font-bold text-text-primary block mb-1">
-                  Password
+                  Mobile Number
                 </label>
                 <input
-                  type="password"
-                  placeholder="Minimum 6 characters"
-                  value={newUser.password}
+                  type="tel"
+                  placeholder="+91 98765 43210"
+                  value={newUser.mobile}
                   onChange={(e) =>
-                    setNewUser({ ...newUser, password: e.target.value })
+                    setNewUser({ ...newUser, mobile: e.target.value })
                   }
                   required
                   className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-text-primary block mb-1">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  placeholder="Re-enter password"
-                  value={newUser.confirmPassword}
-                  onChange={(e) =>
-                    setNewUser({ ...newUser, confirmPassword: e.target.value })
-                  }
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
-                />
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-600 dark:text-blue-400 flex items-start gap-2">
+                <span className="text-sm shrink-0 mt-0.5">🔐</span>
+                <span className="leading-relaxed">
+                  A secure login password will be automatically generated and sent to this email address.
+                </span>
               </div>
 
               <div className="pt-3 flex justify-end gap-2.5">
@@ -1049,7 +1037,7 @@ export default function Dashboard() {
                   disabled={addUserLoading}
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm transition-all disabled:opacity-60 cursor-pointer"
                 >
-                  {addUserLoading ? "Creating..." : "Add Representative"}
+                  {addUserLoading ? "Creating & Sending..." : "Add & Send Credentials"}
                 </button>
               </div>
             </form>

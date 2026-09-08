@@ -136,6 +136,7 @@ export function DashboardProvider({ children }) {
           id: userId,
           name: user.name,
           email: user.email,
+          phone: user.phone || user.mobile || "",
           role: user.role,
           assigned: 0,
           won: 0,
