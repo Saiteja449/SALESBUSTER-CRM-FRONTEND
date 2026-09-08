@@ -88,7 +88,7 @@ export default function Login() {
                     if (error) setError("");
                   }}
                   placeholder="e.g. admin@salesbuster.ai"
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-xs"
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#28a0a4] focus:border-[#28a0a4] transition-all shadow-xs"
                   disabled={loading}
                 />
               </div>
@@ -111,7 +111,7 @@ export default function Login() {
                     if (error) setError("");
                   }}
                   placeholder="Enter your password"
-                  className="w-full pl-10 pr-11 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-xs"
+                  className="w-full pl-10 pr-11 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#28a0a4] focus:border-[#28a0a4] transition-all shadow-xs"
                   disabled={loading}
                 />
                 <button
@@ -133,7 +133,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-3 py-3 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-sm rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full mt-3 py-3 px-4 bg-[#28a0a4] hover:bg-[#1e8b90] active:bg-[#175659] text-white font-semibold text-sm rounded-xl shadow-md shadow-[#28a0a4]/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
@@ -174,7 +174,7 @@ export default function Login() {
       </div>
 
       {/* ================= RIGHT COLUMN: VISUAL BRAND SHOWCASE ================= */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#0c7cfd] via-[#096fe3] to-[#0448a3] flex-col items-center justify-between p-12 xl:p-16 relative overflow-hidden text-white">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#102434] via-[#1e4765] to-[#28a0a4] flex-col items-center justify-between p-12 xl:p-16 relative overflow-hidden text-white">
         {/* Subtle Ambient Rings */}
         <div className="absolute w-[600px] h-[600px] rounded-full border border-white/10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
         <div className="absolute w-[440px] h-[440px] rounded-full bg-white/5 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none blur-xl"></div>
@@ -232,7 +232,7 @@ export default function Login() {
               className="absolute left-2 top-[134px] w-14 h-14 rounded-full bg-white shadow-xl flex items-center justify-center transform hover:scale-105 transition-transform"
               title="Call Management"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-sm">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#245070] to-[#28a0a4] flex items-center justify-center text-white shadow-sm">
                 <svg
                   className="w-4 h-4 fill-current"
                   viewBox="0 0 24 24"

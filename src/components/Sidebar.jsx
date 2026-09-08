@@ -101,7 +101,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
     <div className="flex flex-col h-full bg-brand-light text-brand-primary overflow-y-auto">
       {/* Brand Section */}
       <div className="p-4 pb-3">
-        <div className="w-full h-11 bg-white flex items-center justify-center">
+        <div className="w-full h-11 bg-white flex items-center justify-center rounded-lg px-2 shadow-2xs">
           <img
             src={crmLogo}
             alt="SalesBuster AI"

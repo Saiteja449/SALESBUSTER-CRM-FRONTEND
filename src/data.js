@@ -42,7 +42,7 @@ export const services = [
     name: "Passenger Lift",
     code: "Passenger Lift",
     active: true,
-    color: "#0c7dfd",
+    color: "#28a0a4",
   },
   {
     id: "s3",

@@ -4,29 +4,35 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --bg-main: #f8fafc;
+  --bg-main: #f4f8fa;
   --bg-card: #ffffff;
-  --bg-secondary: #f1f5f9;
-  --text-primary: #0c1f37;
-  --text-secondary: #5a6e85;
-  --border: #e2e8f0;
+  --bg-secondary: #eaf2f6;
+  --text-primary: #132a3c;
+  --text-secondary: #52738c;
+  --border: #d8e5ed;
 
-  --color-pilot-blue: #0c7cfd;
-  --color-pilot-blue-hover: #0b6fe5;
+  --color-pilot-blue: #28a0a4;
+  --color-pilot-blue-hover: #1e8b90;
   --color-pilot-green: #11a139;
   --color-pilot-green-hover: #0e8830;
-  --color-pilot-navy: #0c1f37;
+  --color-pilot-navy: #132a3c;
+  --color-pilot-teal: #28a0a4;
 
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 .dark {
-  --bg-main: #071222;
-  --bg-card: #0c1f37;
-  --bg-secondary: #132742;
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --border: #1a3356;
+  --bg-main: #0a1622;
+  --bg-card: #132a3c;
+  --bg-secondary: #1a374e;
+  --text-primary: #f4f8fa;
+  --text-secondary: #9ebcd0;
+  --border: #1f435e;
+
+  --color-pilot-blue: #28a0a4;
+  --color-pilot-blue-hover: #33b5b9;
+  --color-pilot-navy: #0a1622;
+  --color-pilot-teal: #28a0a4;
 }
 
 @theme {
@@ -42,11 +48,12 @@
   --color-border-main: var(--border);
 
   /* Official SalesBuster AI Logo Colors */
-  --color-pilot-blue: #0c7cfd;
-  --color-pilot-blue-hover: #0b6fe5;
+  --color-pilot-blue: #28a0a4;
+  --color-pilot-blue-hover: #1e8b90;
   --color-pilot-green: #11a139;
   --color-pilot-green-hover: #0e8830;
-  --color-pilot-navy: #0c1f37;
+  --color-pilot-navy: #132a3c;
+  --color-pilot-teal: #28a0a4;
 
   /* Legacy brand colors dynamically mapped to active theme */
   --color-brand-primary: var(--text-primary);
@@ -54,37 +61,39 @@
   --color-brand-light: var(--bg-card);
 
   /* Accents */
-  --color-primary-indigo: #0c7cfd;
-  --color-accent-purple: #3b82f6;
-  --color-accent-blue: #0c7cfd;
+  --color-primary-indigo: #28a0a4;
+  --color-accent-purple: #245070;
+  --color-accent-blue: #28a0a4;
   --color-success: #11a139;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
-  --color-cyan: #0ea5e9;
+  --color-cyan: #28a0a4;
 
-  /* Remap teal and purple palettes to Pilot Blue so all existing components conform to new logo identity */
-  --color-teal-50: #f0f7ff;
-  --color-teal-100: #e0effe;
-  --color-teal-200: #bae0fd;
-  --color-teal-300: #7cc5fb;
-  --color-teal-400: #38a5f8;
-  --color-teal-500: #0c7dfd;
-  --color-teal-600: #0b6fe5;
-  --color-teal-700: #0957b7;
-  --color-teal-800: #0c4a96;
-  --color-teal-900: #103f78;
+  /* Remap teal palette to Logo Teal (#28a0a4) */
+  --color-teal-50: #f0fafa;
+  --color-teal-100: #dcf4f5;
+  --color-teal-200: #b8e8ea;
+  --color-teal-300: #87d5d9;
+  --color-teal-400: #4dbec3;
+  --color-teal-500: #28a0a4;
+  --color-teal-600: #1e8b90;
+  --color-teal-700: #1b6c70;
+  --color-teal-800: #175659;
+  --color-teal-900: #15474a;
+  --color-teal-950: #09282a;
 
-  --color-purple-50: #f0f7ff;
-  --color-purple-100: #e0effe;
-  --color-purple-200: #bae0fd;
-  --color-purple-300: #7cc5fb;
-  --color-purple-400: #38a5f8;
-  --color-purple-500: #0c7dfd;
-  --color-purple-600: #0b6fe5;
-  --color-purple-700: #0957b7;
-  --color-purple-800: #0c4a96;
-  --color-purple-900: #103f78;
-  --color-purple-950: #0c1f37;
+  /* Remap purple palette to Logo Petrol Navy (#245070) */
+  --color-purple-50: #f2f6f9;
+  --color-purple-100: #e1ecf2;
+  --color-purple-200: #c6dce6;
+  --color-purple-300: #9ec3d4;
+  --color-purple-400: #5c9ab9;
+  --color-purple-500: #28a0a4;
+  --color-purple-600: #245070;
+  --color-purple-700: #1e405b;
+  --color-purple-800: #173248;
+  --color-purple-900: #132a3c;
+  --color-purple-950: #0a1622;
 
   /* Official Pilot Green Palette */
   --color-green-500: #11a139;

@@ -65,19 +65,19 @@ export function getStageColor(stage) {
  */
 export const serviceColors = {
   "General Enquiry": "#64748b", // Slate Gray
-  "Passenger Lift": "#0c7dfd", // Royal Blue
+  "Passenger Lift": "#28a0a4", // Logo Teal
   "MRL Lift": "#8b5cf6", // Purple
   "Hydraulic Lift": "#f59e0b", // Amber
   "Hospital Bed Lift": "#ef4444", // Crimson Red
   "Elevator Maintenance & AMC": "#10b981", // Emerald Green
-  "Elevator Modernization": "#6366f1", // Indigo
+  "Elevator Modernization": "#245070", // Logo Petrol Navy
 };
 
 const DYNAMIC_PALETTE = [
-  "#0c7dfd",
-  "#8b5cf6",
-  "#f59e0b",
+  "#28a0a4",
+  "#245070",
   "#10b981",
+  "#f59e0b",
   "#ef4444",
   "#6366f1",
   "#ec4899",

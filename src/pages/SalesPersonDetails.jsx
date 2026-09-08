@@ -226,7 +226,7 @@ export default function SalesPersonDetails() {
           </button>
           <button
             onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-brand-primary text-sm font-bold rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer"
           >
             <Download className="w-4 h-4" /> Export
           </button>

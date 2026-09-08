@@ -45,7 +45,7 @@ import { formatDate, getServiceColor, exportToCSV } from "../utils/helpers.js";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
 
-const CHART_COLORS = ["#0c7dfd", "#11a139", "#f59e0b", "#0c1f37", "#0ea5e9"];
+const CHART_COLORS = ["#28a0a4", "#245070", "#11a139", "#f59e0b", "#36799f"];
 
 const Instagram = ({ className }) => (
   <svg
@@ -116,7 +116,7 @@ export default function Dashboard() {
       await addSalesPerson(
         newUser.name.trim(),
         newUser.email.trim(),
-        newUser.password
+        newUser.password,
       );
       setAddUserSuccess("Sales representative added successfully!");
       setNewUser({ name: "", email: "", password: "", confirmPassword: "" });
@@ -183,7 +183,10 @@ export default function Dashboard() {
       });
     } catch (err) {
       console.error("Failed to update welcome message setting:", err);
-      setGlobalSettings((prev) => ({ ...prev, welcomeMessageEnabled: !newVal }));
+      setGlobalSettings((prev) => ({
+        ...prev,
+        welcomeMessageEnabled: !newVal,
+      }));
     }
   };
 
@@ -251,12 +254,13 @@ export default function Dashboard() {
             Executive Dashboard
           </h1>
           <p className="text-sm text-brand-primary/70">
-            Real-time analytical performance summary for {organization?.name || "SalesBuster AI"}.
+            Real-time analytical performance summary for{" "}
+            {organization?.name || "SalesBuster AI"}.
           </p>
         </div>
         <button
           onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-brand-primary text-sm font-bold rounded-lg transition-colors cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer"
         >
           <Download className="w-4 h-4" /> Export Data
         </button>
@@ -275,18 +279,20 @@ export default function Dashboard() {
                   {!hasSalesPerson && !isAiConfigured
                     ? "Action Required: Complete Organization Setup"
                     : !isAiConfigured
-                    ? "Action Required: Configure AI Setup"
-                    : "Action Required: Add Sales Representative"}
+                      ? "Action Required: Configure AI Setup"
+                      : "Action Required: Add Sales Representative"}
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                    {!hasSalesPerson && !isAiConfigured ? "2 Actions Remaining" : "1 Action Remaining"}
+                    {!hasSalesPerson && !isAiConfigured
+                      ? "2 Actions Remaining"
+                      : "1 Action Remaining"}
                   </span>
                 </h3>
                 <p className="text-xs text-brand-primary/70 mt-0.5">
                   {!hasSalesPerson && !isAiConfigured
                     ? "Your organization must configure AI and add at least 1 sales representative to unlock automatic routing and operations."
                     : !isAiConfigured
-                    ? "Define your company persona, services catalog, and lead qualification schema so our AI can automatically handle customer inquiries."
-                    : "Your organization currently has 0 sales representatives. Add at least 1 representative so incoming leads can be assigned and managed."}
+                      ? "Define your company persona, services catalog, and lead qualification schema so our AI can automatically handle customer inquiries."
+                      : "Your organization currently has 0 sales representatives. Add at least 1 representative so incoming leads can be assigned and managed."}
                 </p>
               </div>
             </div>
@@ -295,7 +301,9 @@ export default function Dashboard() {
             <div className="w-full md:w-48 shrink-0">
               <div className="flex justify-between text-[10px] font-bold text-brand-primary/70 mb-1">
                 <span>Setup Progress</span>
-                <span>{((hasSalesPerson ? 1 : 0) + (isAiConfigured ? 1 : 0)) * 50}%</span>
+                <span>
+                  {((hasSalesPerson ? 1 : 0) + (isAiConfigured ? 1 : 0)) * 50}%
+                </span>
               </div>
               <div className="w-full h-2 rounded-full bg-bg-main border border-brand-secondary overflow-hidden">
                 <div
@@ -308,7 +316,9 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className={`grid gap-4 pt-4 ${!hasSalesPerson && !isAiConfigured ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}>
+          <div
+            className={`grid gap-4 pt-4 ${!hasSalesPerson && !isAiConfigured ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}
+          >
             {/* Requirement 1: AI Setup - Only shown if NOT configured */}
             {!isAiConfigured && (
               <div className="p-4 rounded-xl border border-amber-500/40 bg-bg-main/90 shadow-sm transition-all">
@@ -327,7 +337,9 @@ export default function Dashboard() {
                         </span>
                       </div>
                       <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
-                        Define your company persona, services catalog, and lead qualification schema so our AI can automatically handle customer inquiries and qualify leads.
+                        Define your company persona, services catalog, and lead
+                        qualification schema so our AI can automatically handle
+                        customer inquiries and qualify leads.
                       </p>
                     </div>
                   </div>
@@ -366,7 +378,9 @@ export default function Dashboard() {
                         </span>
                       </div>
                       <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
-                        Your organization currently has 0 sales representatives. Add a representative so incoming leads can be assigned and managed.
+                        Your organization currently has 0 sales representatives.
+                        Add a representative so incoming leads can be assigned
+                        and managed.
                       </p>
                     </div>
                   </div>
@@ -405,7 +419,8 @@ export default function Dashboard() {
                 </span>
               </h2>
               <p className="text-xs text-brand-primary/70">
-                Instantly control global AI auto-replies and automated enquiry greetings across all channels.
+                Instantly control global AI auto-replies and automated enquiry
+                greetings across all channels.
               </p>
             </div>
           </div>
@@ -416,7 +431,9 @@ export default function Dashboard() {
               <div className="flex items-center gap-2.5 min-w-0">
                 <Bot
                   className={`w-4 h-4 shrink-0 ${
-                    globalSettings.globalAIEnabled ? "text-emerald-500" : "text-amber-500"
+                    globalSettings.globalAIEnabled
+                      ? "text-emerald-500"
+                      : "text-amber-500"
                   }`}
                 />
                 <div className="min-w-0">
@@ -435,13 +452,21 @@ export default function Dashboard() {
                 type="button"
                 onClick={handleToggleGlobalAI}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  globalSettings.globalAIEnabled ? "bg-emerald-500" : "bg-brand-secondary/70"
+                  globalSettings.globalAIEnabled
+                    ? "bg-emerald-500"
+                    : "bg-brand-secondary/70"
                 }`}
-                title={globalSettings.globalAIEnabled ? "Pause Global AI" : "Enable Global AI"}
+                title={
+                  globalSettings.globalAIEnabled
+                    ? "Pause Global AI"
+                    : "Enable Global AI"
+                }
               >
                 <span
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    globalSettings.globalAIEnabled ? "translate-x-5" : "translate-x-0"
+                    globalSettings.globalAIEnabled
+                      ? "translate-x-5"
+                      : "translate-x-0"
                   }`}
                 />
               </button>
@@ -452,7 +477,9 @@ export default function Dashboard() {
               <div className="flex items-center gap-2.5 min-w-0">
                 <MessageCircle
                   className={`w-4 h-4 shrink-0 ${
-                    globalSettings.welcomeMessageEnabled ? "text-teal-500" : "text-brand-primary/40"
+                    globalSettings.welcomeMessageEnabled
+                      ? "text-teal-500"
+                      : "text-brand-primary/40"
                   }`}
                 />
                 <div className="min-w-0">
@@ -471,13 +498,21 @@ export default function Dashboard() {
                 type="button"
                 onClick={handleToggleWelcomeMessage}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  globalSettings.welcomeMessageEnabled ? "bg-teal-500" : "bg-brand-secondary/70"
+                  globalSettings.welcomeMessageEnabled
+                    ? "bg-teal-500"
+                    : "bg-brand-secondary/70"
                 }`}
-                title={globalSettings.welcomeMessageEnabled ? "Pause Welcome Messages" : "Enable Welcome Messages"}
+                title={
+                  globalSettings.welcomeMessageEnabled
+                    ? "Pause Welcome Messages"
+                    : "Enable Welcome Messages"
+                }
               >
                 <span
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    globalSettings.welcomeMessageEnabled ? "translate-x-5" : "translate-x-0"
+                    globalSettings.welcomeMessageEnabled
+                      ? "translate-x-5"
+                      : "translate-x-0"
                   }`}
                 />
               </button>
@@ -485,7 +520,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
 
       {/* Latest Enquiry Times Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
