@@ -15,6 +15,22 @@ import {
   ClipboardList,
 } from "lucide-react";
 
+// Helper to sanitize display text and prevent literal 'null', 'undefined', etc.
+const cleanDisplay = (val, fallback = "") => {
+  if (val === null || val === undefined) return fallback;
+  const s = String(val).trim();
+  if (
+    !s ||
+    s.toLowerCase() === "null" ||
+    s.toLowerCase() === "undefined" ||
+    s.toLowerCase() === "none" ||
+    s.toLowerCase() === "n/a"
+  ) {
+    return fallback;
+  }
+  return s;
+};
+
 export default function AIFollowUps() {
   const { leads, followups } = useLeads();
   const navigate = useNavigate();
@@ -134,7 +150,7 @@ export default function AIFollowUps() {
                   {formatDate(f.createdAt || f.date)}
                 </div>
                 <p className="text-xs text-brand-primary/80 line-clamp-2 italic">
-                  "{f.notes}"
+                  "{cleanDisplay(f.notes, f.lead?.service ? `Follow-up scheduled for ${f.lead.service}` : "Follow-up scheduled by AI Agent")}"
                 </p>
               </button>
             ))
@@ -198,7 +214,7 @@ export default function AIFollowUps() {
                     Service
                   </span>
                   <span className="font-bold text-brand-primary text-sm truncate block">
-                    {selectedData.lead.service || selectedData.lead.services?.join(", ") || "General Enquiry"}
+                    {cleanDisplay(selectedData.lead.service) || cleanDisplay(selectedData.lead.services?.join(", ")) || "General Enquiry"}
                   </span>
                 </div>
                 <div className="bg-bg-main p-4 rounded-xl border border-brand-secondary">
@@ -206,7 +222,7 @@ export default function AIFollowUps() {
                     City
                   </span>
                   <span className="font-bold text-brand-primary text-sm truncate block">
-                    {selectedData.lead.city || selectedData.lead.aiQualification?.city || "Not Specified"}
+                    {cleanDisplay(selectedData.lead.city) || cleanDisplay(selectedData.lead.aiQualification?.city) || "Not Specified"}
                   </span>
                 </div>
                 <div className="bg-bg-main p-4 rounded-xl border border-brand-secondary">
@@ -274,7 +290,7 @@ export default function AIFollowUps() {
                             </span>
                             <span className="text-xs font-bold text-teal-600 bg-teal-500/10 px-2 py-1 rounded">
                               {formatDate(selectedData.date)}{" "}
-                              {selectedData.time ? `• ${selectedData.time}` : ""}
+                              {cleanDisplay(selectedData.time) ? `• ${cleanDisplay(selectedData.time)}` : ""}
                             </span>
                           </div>
                         )}
@@ -297,7 +313,7 @@ export default function AIFollowUps() {
                       </div>
 
                       <p className="text-sm italic text-brand-primary mb-3 p-3 bg-brand-light rounded-lg border border-brand-secondary/50">
-                        "{selectedData.notes}"
+                        "{cleanDisplay(selectedData.notes, selectedData.lead?.service ? `Follow-up scheduled for ${selectedData.lead.service}` : "Follow-up scheduled by AI Agent")}"
                       </p>
 
                       <hr className="border-brand-secondary mb-3" />

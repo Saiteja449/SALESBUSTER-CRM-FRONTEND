@@ -296,14 +296,31 @@ export function AIFollowUpToastItem({ toast, onDismiss }) {
     }
   };
 
-  const leadName = toast.followup?.leadName || toast.lead?.name || toast.lead?.phone || "Lead";
-  const leadPhone = toast.lead?.phone || "";
-  const followupType = toast.followup?.type || "Call";
-  const followupDate = toast.followup?.date || "";
-  const followupTime = toast.followup?.time || "10:00 AM";
-  const priority = toast.followup?.priority || "Medium";
-  const assignedRep = toast.assignedRepName || "Sales Representative";
-  const notesPreview = toast.message || toast.followup?.notes || "Follow-up scheduled by AI Agent";
+  const cleanStr = (val, fallback = "") => {
+    if (!val) return fallback;
+    const s = String(val).trim();
+    if (
+      s.toLowerCase() === "null" ||
+      s.toLowerCase() === "undefined" ||
+      s.toLowerCase() === "none" ||
+      s.toLowerCase() === "n/a"
+    ) {
+      return fallback;
+    }
+    return s;
+  };
+
+  const leadName = cleanStr(toast.followup?.leadName) || cleanStr(toast.lead?.name) || cleanStr(toast.lead?.phone) || "Lead";
+  const leadPhone = cleanStr(toast.lead?.phone, "");
+  const followupType = cleanStr(toast.followup?.type, "Call");
+  const followupDate = cleanStr(toast.followup?.date, "");
+  const followupTime = cleanStr(toast.followup?.time, "10:00 AM");
+  const priority = cleanStr(toast.followup?.priority, "Medium");
+  const assignedRep = cleanStr(toast.assignedRepName, "Sales Representative");
+  const notesPreview =
+    cleanStr(toast.message) ||
+    cleanStr(toast.followup?.notes) ||
+    (toast.lead?.service ? `Follow-up scheduled for ${cleanStr(toast.lead.service)}` : "Follow-up scheduled by AI Agent");
 
   // Priority color styles
   const priorityStyle =

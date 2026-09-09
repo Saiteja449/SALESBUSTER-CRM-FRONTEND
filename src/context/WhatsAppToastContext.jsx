@@ -50,13 +50,32 @@ export function WhatsAppToastProvider({ children }) {
 
   const addAiFollowupToast = useCallback(
     ({ followup, lead, message, assignedRepName, timestamp }) => {
+      const cleanText = (val, fallback = "") => {
+        if (!val) return fallback;
+        const s = String(val).trim();
+        if (
+          s.toLowerCase() === "null" ||
+          s.toLowerCase() === "undefined" ||
+          s.toLowerCase() === "none" ||
+          s.toLowerCase() === "n/a"
+        ) {
+          return fallback;
+        }
+        return s;
+      };
+
+      const cleanNotes =
+        cleanText(message) ||
+        cleanText(followup?.notes) ||
+        (lead?.service ? `Follow-up scheduled for ${cleanText(lead.service)}` : "Follow-up scheduled by AI Agent");
+
       const newToast = {
         id: "ai_followup_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
         toastType: "ai_followup",
-        followup,
+        followup: followup ? { ...followup, notes: cleanNotes } : null,
         lead,
-        message: message || followup?.notes || "Follow-up scheduled by AI Agent",
-        assignedRepName: assignedRepName || "Sales Representative",
+        message: cleanNotes,
+        assignedRepName: cleanText(assignedRepName, "Sales Representative"),
         timestamp: timestamp || new Date(),
       };
 
@@ -79,6 +98,12 @@ export function WhatsAppToastProvider({ children }) {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    // Ensure client joins organization room for tenant scoped events
+    const orgId = organization?.id || organization?._id || currentUser?.organizationId;
+    if (orgId) {
+      socket.emit("join_organization", orgId);
+    }
 
     const handleWhatsAppNewLead = (data) => {
       console.log("[DEBUG] Received whatsapp_new_lead socket event:", data);
