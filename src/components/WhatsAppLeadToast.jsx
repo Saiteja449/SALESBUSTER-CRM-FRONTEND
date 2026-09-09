@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, ExternalLink, X, User, Phone, Briefcase, UserCheck } from "lucide-react";
+import { MessageSquare, ExternalLink, X, User, Phone, Briefcase, UserCheck, Calendar, Clock, Sparkles, PhoneCall } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 // Web Audio API notification chime generator (D5 -> A5 pleasant chord)
@@ -239,6 +239,242 @@ export function WhatsAppLeadToastItem({ toast, onDismiss }) {
   );
 }
 
+export function AIFollowUpToastItem({ toast, onDismiss }) {
+  const navigate = useNavigate();
+  const [progress, setProgress] = useState(100);
+  const [isPaused, setIsPaused] = useState(false);
+  const duration = 10000; // 10 seconds auto-dismiss
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    if (isPaused) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      return;
+    }
+
+    const stepMs = 100;
+    const decrement = (stepMs / duration) * 100;
+
+    intervalRef.current = setInterval(() => {
+      setProgress((prev) => {
+        if (prev <= 0) {
+          clearInterval(intervalRef.current);
+          onDismiss(toast.id);
+          return 0;
+        }
+        return Math.max(0, prev - decrement);
+      });
+    }, stepMs);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isPaused, toast.id, onDismiss]);
+
+  const leadId = toast.followup?.leadId || toast.lead?.id || toast.lead?._id;
+
+  const handleViewFollowups = () => {
+    onDismiss(toast.id);
+    navigate("/ai-followups");
+  };
+
+  const handleOpenChat = () => {
+    onDismiss(toast.id);
+    if (leadId) {
+      navigate(`/whatsapp?leadId=${leadId}`, {
+        state: { selectLeadId: leadId },
+      });
+    } else {
+      navigate("/whatsapp");
+    }
+  };
+
+  const handleViewLead = () => {
+    onDismiss(toast.id);
+    if (leadId) {
+      navigate(`/lead-details/${leadId}`);
+    }
+  };
+
+  const leadName = toast.followup?.leadName || toast.lead?.name || toast.lead?.phone || "Lead";
+  const leadPhone = toast.lead?.phone || "";
+  const followupType = toast.followup?.type || "Call";
+  const followupDate = toast.followup?.date || "";
+  const followupTime = toast.followup?.time || "10:00 AM";
+  const priority = toast.followup?.priority || "Medium";
+  const assignedRep = toast.assignedRepName || "Sales Representative";
+  const notesPreview = toast.message || toast.followup?.notes || "Follow-up scheduled by AI Agent";
+
+  // Priority color styles
+  const priorityStyle =
+    priority === "High"
+      ? "bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/60"
+      : priority === "Low"
+        ? "bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-800/60"
+        : "bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200/80 dark:border-amber-800/60";
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 30, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.92, transition: { duration: 0.2 } }}
+      transition={{ type: "spring", stiffness: 400, damping: 28 }}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      className="relative pointer-events-auto w-full max-w-sm sm:max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-purple-500/40 dark:border-purple-500/50 shadow-2xl shadow-purple-500/10 dark:shadow-purple-900/25 rounded-2xl p-4 overflow-hidden text-slate-800 dark:text-slate-100 select-none group"
+      role="alert"
+      aria-live="assertive"
+    >
+      {/* Top accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-violet-600 via-purple-500 to-indigo-600" />
+
+      {/* Header Bar */}
+      <div className="flex items-center justify-between gap-2 mb-2.5">
+        <div className="flex items-center gap-2">
+          {/* Animated AI bot badge */}
+          <span className="relative flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-500 text-white shadow-sm shadow-indigo-500/40">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+          </span>
+
+          <span className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+            AI Follow-up Scheduled
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+            Just now
+          </span>
+          <button
+            type="button"
+            onClick={() => onDismiss(toast.id)}
+            className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            title="Dismiss notification"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Lead Information Card */}
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/20 border border-violet-500/30 flex items-center justify-center text-violet-600 dark:text-violet-300 font-bold text-xs shrink-0">
+              {leadName.charAt(0).toUpperCase()}
+            </div>
+            <div className="truncate">
+              <h4 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                {leadName}
+              </h4>
+              {leadPhone && (
+                <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 font-mono">
+                  <Phone className="w-3 h-3 text-purple-500 shrink-0" />
+                  <span>{leadPhone}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Badges row: Date & Time, Type, Priority, Assigned Rep */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          {followupDate && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60">
+              <Calendar className="w-3 h-3 text-indigo-500 shrink-0" />
+              <span>{followupDate}{followupTime ? ` • ${followupTime}` : ""}</span>
+            </span>
+          )}
+
+          {followupType && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800/60">
+              {followupType === "Call" ? (
+                <PhoneCall className="w-3 h-3 text-teal-500 shrink-0" />
+              ) : (
+                <MessageSquare className="w-3 h-3 text-teal-500 shrink-0" />
+              )}
+              <span>{followupType}</span>
+            </span>
+          )}
+
+          {priority && (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${priorityStyle}`}>
+              <span>{priority}</span>
+            </span>
+          )}
+
+          {assignedRep && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/60">
+              <UserCheck className="w-3 h-3 text-purple-500 shrink-0" />
+              <span className="truncate max-w-[120px]">{assignedRep}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Message preview speech bubble */}
+        <div className="relative mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/60 text-xs text-slate-700 dark:text-slate-300">
+          <div className="flex items-start gap-1.5">
+            <span className="text-purple-500 font-bold text-sm leading-none select-none">“</span>
+            <p className="line-clamp-2 italic font-normal text-[12px] flex-1 leading-relaxed">
+              {notesPreview}
+            </p>
+            <span className="text-purple-500 font-bold text-sm leading-none select-none">”</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center gap-2 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+        <button
+          type="button"
+          onClick={handleViewFollowups}
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 active:from-violet-700 active:to-indigo-700 text-white shadow-sm shadow-indigo-600/30 transition-all cursor-pointer"
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>View AI Follow-ups</span>
+        </button>
+
+        {leadId && (
+          <button
+            type="button"
+            onClick={handleOpenChat}
+            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/60 transition-colors cursor-pointer"
+          >
+            <MessageSquare className="w-3 h-3 text-slate-400" />
+            <span>Open Chat</span>
+          </button>
+        )}
+
+        {leadId && (
+          <button
+            type="button"
+            onClick={handleViewLead}
+            className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/60 transition-colors cursor-pointer"
+            title="View Lead Details"
+            aria-label="View Lead Details"
+          >
+            <ExternalLink className="w-3 h-3 text-slate-400" />
+          </button>
+        )}
+      </div>
+
+      {/* Auto-dismiss progress countdown line */}
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all ease-linear"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </motion.div>
+  );
+}
+
 export default function WhatsAppLeadToastContainer({ toasts = [], onDismiss }) {
   if (!toasts || toasts.length === 0) return null;
 
@@ -246,16 +482,24 @@ export default function WhatsAppLeadToastContainer({ toasts = [], onDismiss }) {
     <div
       className="fixed bottom-5 right-5 z-[9999] flex flex-col-reverse gap-3 pointer-events-none max-w-sm sm:max-w-md w-full px-4 sm:px-0"
       aria-live="polite"
-      aria-label="New WhatsApp Lead Notifications"
+      aria-label="Real-time Alert Notifications"
     >
       <AnimatePresence mode="popLayout">
-        {toasts.map((toast) => (
-          <WhatsAppLeadToastItem
-            key={toast.id}
-            toast={toast}
-            onDismiss={onDismiss}
-          />
-        ))}
+        {toasts.map((toast) =>
+          toast.toastType === "ai_followup" ? (
+            <AIFollowUpToastItem
+              key={toast.id}
+              toast={toast}
+              onDismiss={onDismiss}
+            />
+          ) : (
+            <WhatsAppLeadToastItem
+              key={toast.id}
+              toast={toast}
+              onDismiss={onDismiss}
+            />
+          )
+        )}
       </AnimatePresence>
     </div>
   );

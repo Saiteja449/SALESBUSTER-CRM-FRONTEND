@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { Send, RefreshCw, Bot } from "lucide-react";
+import { Send, RefreshCw, Bot, Sparkles } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useLeads } from "../context/LeadsContext.jsx";
+import { useWhatsAppToast } from "../context/WhatsAppToastContext.jsx";
 
 export default function TestAI() {
   const { qualificationFields: contextQualFields } = useLeads();
+  const { addAiFollowupToast } = useWhatsAppToast();
   const [schemaFields, setSchemaFields] = useState([]);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
@@ -21,6 +23,35 @@ export default function TestAI() {
   const API_URL = import.meta.env.VITE_API_BASE_URL
     ? `${import.meta.env.VITE_API_BASE_URL}/whatsapp/test-ai`
     : "https://api.salesbuster.ai/api/whatsapp/test-ai";
+
+  const handleSimulateAIFollowupToast = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
+    addAiFollowupToast({
+      followup: {
+        id: "test_fu_" + Date.now(),
+        leadId: leadId || "mock_lead_1",
+        leadName: "Rahul Sharma",
+        type: "Call",
+        date: tomorrowStr,
+        time: "11:00 AM",
+        priority: "High",
+        notes: "Customer requested a callback regarding MRL Passenger Elevator quotation and site measurement.",
+        author: "AI Agent",
+      },
+      lead: {
+        id: leadId || "mock_lead_1",
+        name: "Rahul Sharma",
+        phone: "+91 98765 43210",
+        service: "Passenger Lifts",
+      },
+      message: "Customer requested a callback regarding MRL Passenger Elevator quotation and site measurement.",
+      assignedRepName: "Sales Representative",
+      timestamp: new Date(),
+    });
+  };
 
   const fetchHistory = async () => {
     try {
@@ -104,13 +135,25 @@ export default function TestAI() {
               AI Testing Interface
             </h2>
           </div>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-brand-primary bg-bg-main hover:bg-brand-secondary border border-brand-secondary rounded-lg transition-colors"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Reset Conversation
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSimulateAIFollowupToast}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 rounded-lg shadow-sm shadow-purple-500/30 transition-all cursor-pointer"
+              title="Preview the real-time AI follow-up alert toast"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Test AI Follow-up Alert</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-brand-primary bg-bg-main hover:bg-brand-secondary border border-brand-secondary rounded-lg transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Reset Conversation</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">

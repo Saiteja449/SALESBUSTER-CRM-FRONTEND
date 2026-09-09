@@ -85,8 +85,8 @@ export default function App() {
   }, [theme]);
 
   return (
-    <RootProvider>
-      <BrowserRouter basename="/">
+    <BrowserRouter basename="/">
+      <RootProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<AppLayout />}>
@@ -121,7 +121,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-      </BrowserRouter>
-    </RootProvider>
+      </RootProvider>
+    </BrowserRouter>
   );
 }

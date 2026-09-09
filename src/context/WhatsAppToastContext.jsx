@@ -48,6 +48,35 @@ export function WhatsAppToastProvider({ children }) {
     [refreshData, refreshNotifications]
   );
 
+  const addAiFollowupToast = useCallback(
+    ({ followup, lead, message, assignedRepName, timestamp }) => {
+      const newToast = {
+        id: "ai_followup_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+        toastType: "ai_followup",
+        followup,
+        lead,
+        message: message || followup?.notes || "Follow-up scheduled by AI Agent",
+        assignedRepName: assignedRepName || "Sales Representative",
+        timestamp: timestamp || new Date(),
+      };
+
+      // Play audio chime alert
+      playLeadAlertChime();
+
+      // Show toast (stack max 3 active alerts)
+      setToasts((prev) => [newToast, ...prev.slice(0, 2)]);
+
+      // Seamlessly sync leads, followups and notifications in background
+      if (typeof refreshData === "function") {
+        refreshData();
+      }
+      if (typeof refreshNotifications === "function") {
+        refreshNotifications();
+      }
+    },
+    [refreshData, refreshNotifications]
+  );
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -63,12 +92,27 @@ export function WhatsAppToastProvider({ children }) {
       }
     };
 
+    const handleAiNewFollowup = (data) => {
+      console.log("[DEBUG] Received ai_new_followup socket event:", data);
+      if (data && (data.followup || data.lead)) {
+        addAiFollowupToast({
+          followup: data.followup,
+          lead: data.lead,
+          message: data.message || data.followup?.notes,
+          assignedRepName: data.assignedRepName,
+          timestamp: data.timestamp,
+        });
+      }
+    };
+
     socket.on("whatsapp_new_lead", handleWhatsAppNewLead);
+    socket.on("ai_new_followup", handleAiNewFollowup);
 
     return () => {
       socket.off("whatsapp_new_lead", handleWhatsAppNewLead);
+      socket.off("ai_new_followup", handleAiNewFollowup);
     };
-  }, [isAuthenticated, addLeadToast]);
+  }, [isAuthenticated, addLeadToast, addAiFollowupToast]);
 
   return (
     <WhatsAppToastContext.Provider
@@ -77,6 +121,7 @@ export function WhatsAppToastProvider({ children }) {
         dismissToast,
         clearToasts,
         addLeadToast,
+        addAiFollowupToast,
       }}
     >
       {children}

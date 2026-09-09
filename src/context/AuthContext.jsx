@@ -51,6 +51,25 @@ export function AuthProvider({ children }) {
     return !!savedSession;
   });
 
+  const logout = useCallback(() => {
+    const orgId = organization?.id || organization?._id || currentUser?.organizationId;
+    if (orgId) {
+      try {
+        socket.emit("leave_organization", orgId);
+      } catch (err) {}
+    }
+    setCurrentUser(null);
+    setOrganization(null);
+    setIsAuthenticated(false);
+    delete axios.defaults.headers.common["Authorization"];
+    localStorage.removeItem("salesbuster_session_user");
+    localStorage.removeItem("salesbuster_session_org");
+    localStorage.removeItem("salesbuster_token");
+    localStorage.removeItem("kranthi_session_user");
+    localStorage.removeItem("kranthi_session_org");
+    localStorage.removeItem("kranthi_token");
+  }, [organization?.id, organization?._id, currentUser?.organizationId]);
+
   // Fetch users from backend
   const fetchUsers = async () => {
     const token = getStoredToken();
@@ -95,23 +114,45 @@ export function AuthProvider({ children }) {
         localStorage.setItem("kranthi_session_org", JSON.stringify(updatedOrg));
       }
     } catch (error) {
+      if (error.response?.status === 401) {
+        logout();
+        return;
+      }
       console.error("Failed to fetch users:", error);
     }
   };
 
-  // Set up global Axios interceptor for 403 suspension / expiration responses
+  // Set up global Axios interceptor for 401 unauthorized / 404 deleted org / 403 suspension responses
   useEffect(() => {
     const interceptor = axios.interceptors.response.use(
       (response) => response,
       (error) => {
+        const status = error.response?.status;
+        const errData = error.response?.data;
+        const url = error.config?.url || "";
+
+        // Auto-logout when user or organization was deleted from DB or token is no longer valid
+        const isAuthError =
+          status === 401 ||
+          errData?.organizationDeleted ||
+          (status === 404 && url.includes("/organizations/my-org")) ||
+          (status === 404 && typeof errData?.message === "string" && errData.message.toLowerCase().includes("organization not found"));
+
+        const isLoginRequest = url.includes("/auth/login");
+
+        if (isAuthError && !isLoginRequest) {
+          console.warn("[Auth] User account or organization no longer exists in database. Logging out automatically.");
+          logout();
+          return Promise.reject(error);
+        }
+
         if (
-          error.response &&
-          error.response.status === 403 &&
-          (error.response.data?.accountSuspended ||
-            error.response.data?.organizationStatus ||
-            error.response.data?.subscriptionExpired)
+          status === 403 &&
+          (errData?.accountSuspended ||
+            errData?.organizationStatus ||
+            errData?.subscriptionExpired)
         ) {
-          if (error.response.data?.subscriptionExpired) {
+          if (errData?.subscriptionExpired) {
             setOrganization((prev) => {
               const updated = { ...(prev || {}), isExpired: true };
               localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
@@ -119,15 +160,15 @@ export function AuthProvider({ children }) {
               return updated;
             });
           }
-          if (error.response.data?.organizationStatus) {
-            const newStatus = error.response.data.organizationStatus;
+          if (errData?.organizationStatus) {
+            const newStatus = errData.organizationStatus;
             setOrganization((prev) => {
               const updated = { ...(prev || {}), status: newStatus };
               localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
               localStorage.setItem("kranthi_session_org", JSON.stringify(updated));
               return updated;
             });
-          } else if (error.response.data?.accountSuspended) {
+          } else if (errData?.accountSuspended) {
             setOrganization((prev) => {
               const updated = { ...(prev || {}), status: "suspended" };
               localStorage.setItem("salesbuster_session_org", JSON.stringify(updated));
@@ -143,7 +184,7 @@ export function AuthProvider({ children }) {
     return () => {
       axios.interceptors.response.eject(interceptor);
     };
-  }, []);
+  }, [logout]);
 
   // Fetch full organization profile from backend to ensure fresh license seats & subscription dates
   const fetchOrganization = async () => {
@@ -160,7 +201,13 @@ export function AuthProvider({ children }) {
         localStorage.setItem("kranthi_session_org", JSON.stringify(res.data.data));
       }
     } catch (err) {
-      if (err.response?.status === 403) {
+      const status = err.response?.status;
+      if (status === 401 || status === 404 || err.response?.data?.organizationDeleted) {
+        console.warn("[Auth] Organization deleted from database or user invalid. Logging out.");
+        logout();
+        return;
+      }
+      if (status === 403) {
         if (err.response.data?.subscriptionExpired) {
           setOrganization((prev) => {
             const updated = { ...(prev || {}), isExpired: true };
@@ -291,22 +338,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
-    const orgId = organization?.id || organization?._id || currentUser?.organizationId;
-    if (orgId) {
-      socket.emit("leave_organization", orgId);
-    }
-    setCurrentUser(null);
-    setOrganization(null);
-    setIsAuthenticated(false);
-    delete axios.defaults.headers.common["Authorization"];
-    localStorage.removeItem("salesbuster_session_user");
-    localStorage.removeItem("salesbuster_session_org");
-    localStorage.removeItem("salesbuster_token");
-    localStorage.removeItem("kranthi_session_user");
-    localStorage.removeItem("kranthi_session_org");
-    localStorage.removeItem("kranthi_token");
-  };
 
   const addSalesPerson = async (nameOrData, email, phone) => {
     try {
