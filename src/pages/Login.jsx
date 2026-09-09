@@ -87,6 +87,7 @@ export default function Login() {
                     setEmail(e.target.value);
                     if (error) setError("");
                   }}
+                  autoComplete="email"
                   placeholder="e.g. admin@salesbuster.ai"
                   className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#28a0a4] focus:border-[#28a0a4] transition-all shadow-xs"
                   disabled={loading}
@@ -110,6 +111,7 @@ export default function Login() {
                     setPassword(e.target.value);
                     if (error) setError("");
                   }}
+                  autoComplete="current-password"
                   placeholder="Enter your password"
                   className="w-full pl-10 pr-11 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#28a0a4] focus:border-[#28a0a4] transition-all shadow-xs"
                   disabled={loading}
