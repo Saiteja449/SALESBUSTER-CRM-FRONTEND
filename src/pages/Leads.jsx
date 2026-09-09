@@ -306,7 +306,6 @@ export default function Leads() {
       case "not attended":
       case "price issue":
       case "not interested":
-      case "not responding":
         return "bg-red-500/10 text-red-500 border border-red-500/20";
       default:
         return "bg-brand-secondary/40 text-brand-primary/70 border border-brand-secondary/50";
@@ -443,7 +442,6 @@ export default function Leads() {
               <option value="New">New</option>
               <option value="Follow Up">Follow Up</option>
               <option value="Not Interested">Not Interested</option>
-              <option value="Not Responding">Not Responding</option>
               <option value="Not Attended">Not Attended</option>
               <option value="Price Issue">Price Issue</option>
               <option value="Converted">Converted</option>
@@ -815,7 +813,6 @@ export default function Leads() {
                       <option value="New">New</option>
                       <option value="Follow Up">Follow Up</option>
                       <option value="Not Interested">Not Interested</option>
-                      <option value="Not Responding">Not Responding</option>
                       <option value="Not Attended">Not Attended</option>
                       <option value="Price Issue">Price Issue</option>
                       <option value="Converted">Converted</option>

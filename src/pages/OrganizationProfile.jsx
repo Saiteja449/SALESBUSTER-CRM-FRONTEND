@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import {
   Building2,
@@ -54,6 +54,8 @@ import {
   Braces,
   Lightbulb,
   Headphones,
+  MessageCircle,
+  RotateCcw,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
@@ -98,6 +100,8 @@ const STEPS = [
     icon: Sparkles,
   },
 ];
+
+const DEFAULT_WELCOME_TEMPLATE = `Hello {{name}}! 👋\n\nThank you for reaching out to {{company}} regarding *{{service}}*.\n\nWe have received your enquiry and our specialist will connect with you shortly.\n\nFeel free to reply with any specific requirements or questions you may have!`;
 
 // Default single enquiry service for all new/unconfigured organizations
 const DEFAULT_SERVICE_TEMPLATE = {
@@ -298,7 +302,7 @@ Example:
   - New: Just started conversation
   - Follow Up: Showed interest, needs nurturing
   - Not Interested: Explicitly declined
-  - Not Responding: No reply after X messages
+  - Not Attended: Did not attend scheduled meeting/call
   - Price Issue: Interested but budget concerns
   - Converted: Booked/purchased/signed up
 
@@ -688,7 +692,19 @@ export default function OrganizationProfile() {
     organization: cachedOrg,
     setOrganization,
     fetchOrganization,
+    isManager: authIsManager,
   } = useAuth();
+
+  const isAuthorized =
+    authIsManager ||
+    currentUser?.role === "Sales Manager" ||
+    currentUser?.role === "Super Admin" ||
+    currentUser?.isOrgOwner;
+
+  if (!isAuthorized) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const { openSupportModal } = useSupportModal();
 
   // Primary Navigation: "wizard" | "billing"
@@ -715,6 +731,8 @@ export default function OrganizationProfile() {
       qualificationFields: DEFAULT_QUALIFICATION_FIELDS,
       qdrantCollection: "",
       knowledgeDocs: [],
+      welcomeMessageTemplate: "",
+      welcomeMessageFallbackService: "",
       dailyAiUsage: {
         date: new Date().toISOString().slice(0, 10),
         chatApiCalls: 0,
@@ -922,6 +940,14 @@ export default function OrganizationProfile() {
         knowledgeDocs: Array.isArray(data?.knowledgeDocs)
           ? data.knowledgeDocs
           : prev.knowledgeDocs,
+        welcomeMessageTemplate:
+          data?.welcomeMessageTemplate !== undefined
+            ? data.welcomeMessageTemplate
+            : prev.welcomeMessageTemplate || "",
+        welcomeMessageFallbackService:
+          data?.welcomeMessageFallbackService !== undefined
+            ? data.welcomeMessageFallbackService
+            : prev.welcomeMessageFallbackService || "",
         dailyAiUsage: data?.dailyAiUsage ||
           prev.dailyAiUsage || {
             date: new Date().toISOString().slice(0, 10),
@@ -1870,8 +1896,8 @@ export default function OrganizationProfile() {
           </div>
         </div>
 
-        {/* 2-Column Breakdown Cards for Specific Purposes: CHATS vs AUDIO CALLS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Breakdown Cards for Specific Purposes */}
+        <div className="grid grid-cols-1 gap-4">
           {/* Purpose 1: WhatsApp AI Chats */}
           <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-pilot-blue/30 transition-all space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
@@ -1910,7 +1936,7 @@ export default function OrganizationProfile() {
             </div>
           </div>
 
-          {/* Purpose 2: Audio & Voice Calls */}
+          {/* Purpose 2: Audio & Voice Calls - Temporarily hidden
           <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-violet-500/30 transition-all space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1947,6 +1973,7 @@ export default function OrganizationProfile() {
               </span>
             </div>
           </div>
+          */}
         </div>
 
         {/* Footer Guarantee Info */}
@@ -2477,6 +2504,193 @@ export default function OrganizationProfile() {
                     Defines strict pricing guidelines (e.g. never guess fixed
                     quotes), callback triggers, and handoff rules.
                   </span>
+                </div>
+
+                {/* ── AUTOMATED WHATSAPP WELCOME GREETING ───────────────── */}
+                <div className="p-6 rounded-3xl bg-gradient-to-br from-bg-secondary/70 via-bg-secondary/40 to-bg-card border border-border-main space-y-4 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-500 flex items-center justify-center shrink-0">
+                        <MessageCircle size={18} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                            Automated Welcome Greeting
+                          </h3>
+                          <span className="text-[10px] font-bold text-teal-500 bg-teal-500/10 px-2 py-0.5 rounded-full border border-teal-500/20">
+                            Instant WhatsApp Lead Response
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-secondary mt-0.5">
+                          Sent automatically to prospective customers when an enquiry arrives via Website, Meta Ads, Call, or Mobile App.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
+                          Insert Dynamic Placeholders
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { key: "name", label: "{{name}}" },
+                            { key: "firstName", label: "{{firstName}}" },
+                            { key: "service", label: "{{service}}" },
+                            { key: "company", label: "{{company}}" },
+                            { key: "city", label: "{{city}}" },
+                            { key: "phone", label: "{{phone}}" },
+                          ].map((item) => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => {
+                                const current =
+                                  aiSettings.welcomeMessageTemplate ||
+                                  DEFAULT_WELCOME_TEMPLATE;
+                                setAiSettings({
+                                  ...aiSettings,
+                                  welcomeMessageTemplate: `${current} {{${item.key}}}`,
+                                });
+                              }}
+                              className="px-2 py-1 text-[11px] font-semibold bg-bg-secondary/70 hover:bg-teal-500/20 text-text-primary hover:text-teal-600 rounded-lg border border-border-main transition-colors cursor-pointer"
+                              title={`Insert ${item.label}`}
+                            >
+                              + {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                            Message Template
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAiSettings({
+                                ...aiSettings,
+                                welcomeMessageTemplate: DEFAULT_WELCOME_TEMPLATE,
+                              })
+                            }
+                            className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Reset Default
+                          </button>
+                        </div>
+                        <textarea
+                          rows={6}
+                          value={
+                            aiSettings.welcomeMessageTemplate !== undefined &&
+                            aiSettings.welcomeMessageTemplate !== ""
+                              ? aiSettings.welcomeMessageTemplate
+                              : DEFAULT_WELCOME_TEMPLATE
+                          }
+                          onChange={(e) =>
+                            setAiSettings({
+                              ...aiSettings,
+                              welcomeMessageTemplate: e.target.value,
+                            })
+                          }
+                          placeholder="Type your organization's custom WhatsApp welcome greeting..."
+                          className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-mono leading-relaxed resize-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
+                          Fallback Service Name
+                        </label>
+                        <input
+                          type="text"
+                          value={aiSettings.welcomeMessageFallbackService || ""}
+                          onChange={(e) =>
+                            setAiSettings({
+                              ...aiSettings,
+                              welcomeMessageFallbackService: e.target.value,
+                            })
+                          }
+                          placeholder={
+                            aiSettings.services?.[0]?.name ||
+                            "e.g. Solutions & Services"
+                          }
+                          className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
+                        />
+                        <span className="text-[10px] text-text-secondary mt-1 block">
+                          Substituted into {"{{service}}"} if the enquiry does not specify a specific service.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Preview Bubble */}
+                    <div className="flex flex-col justify-between p-4 rounded-2xl bg-[#0b141a] border border-border-main text-white shadow-inner min-h-[260px]">
+                      <div className="pb-2.5 border-b border-white/10 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-teal-600 flex items-center justify-center font-bold text-[10px]">
+                          {(
+                            aiSettings.companyName ||
+                            orgData?.name ||
+                            "O"
+                          )[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-white truncate">
+                            {aiSettings.companyName ||
+                              orgData?.name ||
+                              "Our Company"}
+                          </div>
+                          <div className="text-[9px] text-white/50">
+                            WhatsApp Preview
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="my-auto py-2">
+                        <div className="max-w-[95%] ml-auto bg-[#005c4b] text-white text-xs p-3 rounded-2xl rounded-tr-sm shadow-md whitespace-pre-line leading-relaxed">
+                          {(
+                            aiSettings.welcomeMessageTemplate ||
+                            DEFAULT_WELCOME_TEMPLATE
+                          )
+                            .replace(/\{\{?\s*name\s*\}?\}/gi, "John Doe")
+                            .replace(/\{\{?\s*firstname\s*\}?\}/gi, "John")
+                            .replace(
+                              /\{\{?\s*service\s*\}?\}/gi,
+                              aiSettings.welcomeMessageFallbackService ||
+                                aiSettings.services?.[0]?.name ||
+                                "our services",
+                            )
+                            .replace(
+                              /\{\{?\s*company(name)?\s*\}?\}/gi,
+                              aiSettings.companyName ||
+                                orgData?.name ||
+                                "Our Company",
+                            )
+                            .replace(/\{\{?\s*city\s*\}?\}/gi, "New York")
+                            .replace(
+                              /\{\{?\s*phone\s*\}?\}/gi,
+                              "+91 98765 43210",
+                            )
+                            .replace(
+                              /\{\{?\s*source\s*\}?\}/gi,
+                              "Website Form",
+                            )}
+                          <div className="mt-1 flex items-center justify-end gap-1 text-[9px] text-white/60">
+                            <span>Just now</span>
+                            <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 text-[10px] text-white/40 text-center border-t border-white/5">
+                        Live preview demonstrating placeholder substitution
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

@@ -114,7 +114,7 @@ export function getStatusColor(status) {
     return "primary";
   if (st === "not interested" || st === "not intersted") return "error";
   if (st === "not attended") return "warning";
-  if (st === "price issue" || st === "not responding") return "error";
+  if (st === "price issue") return "error";
   return "default";
 }
 

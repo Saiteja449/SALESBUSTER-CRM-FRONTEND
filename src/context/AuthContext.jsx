@@ -424,6 +424,20 @@ export function AuthProvider({ children }) {
 
   const isOrganizationBlocked = isAccountSuspended || isSubscriptionExpired;
 
+  const userRole = (currentUser?.role || "").toLowerCase();
+  const isSalesPerson =
+    userRole === "sales person" ||
+    userRole === "sales representative" ||
+    userRole === "sales_person" ||
+    currentUser?.role === "Sales Representative";
+  const isManager =
+    Boolean(currentUser?.isOrgOwner) ||
+    userRole === "sales manager" ||
+    userRole === "super admin" ||
+    userRole === "super_admin" ||
+    currentUser?.role === "Sales Manager" ||
+    currentUser?.role === "Super Admin";
+
   return (
     <AuthContext.Provider
       value={{
@@ -443,6 +457,8 @@ export function AuthProvider({ children }) {
         isSubscriptionExpired,
         isAccountSuspended,
         isOrganizationBlocked,
+        isSalesPerson,
+        isManager,
         login,
         logout,
         fetchUsers,

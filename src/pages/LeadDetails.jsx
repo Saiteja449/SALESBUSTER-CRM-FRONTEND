@@ -712,8 +712,8 @@ export default function LeadDetails() {
           </div>
         )}
 
-        {/* 2.5 Call Recordings & Analysis */}
-        {currentLead.recordings && currentLead.recordings.length > 0 && (
+        {/* 2.5 Call Recordings & Analysis - Temporarily hidden */}
+        {false && currentLead.recordings && currentLead.recordings.length > 0 && (
           <div className="bg-brand-light border border-brand-secondary rounded-xl shadow-sm mb-6">
             <div className="p-4 border-b border-brand-secondary bg-brand-light/50 rounded-t-xl">
               <h3 className="font-bold text-brand-primary flex items-center gap-2">
@@ -823,7 +823,6 @@ export default function LeadDetails() {
                     <option value="New">New</option>
                     <option value="Follow Up">Follow Up</option>
                     <option value="Not Interested">Not Interested</option>
-                    <option value="Not Responding">Not Responding</option>
                     <option value="Not Attended">Not Attended</option>
                     <option value="Price Issue">Price Issue</option>
                     <option value="Converted">Converted</option>

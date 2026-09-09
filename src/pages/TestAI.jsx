@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { Send, RefreshCw, Bot, Sparkles } from "lucide-react";
 import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext.jsx";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useWhatsAppToast } from "../context/WhatsAppToastContext.jsx";
 
 export default function TestAI() {
+  const { isManager, currentUser } = useAuth();
   const { qualificationFields: contextQualFields } = useLeads();
   const { addAiFollowupToast } = useWhatsAppToast();
   const [schemaFields, setSchemaFields] = useState([]);
@@ -16,7 +18,13 @@ export default function TestAI() {
   const [leadId, setLeadId] = useState(null);
   const messagesEndRef = useRef(null);
 
-  if (import.meta.env.VITE_PROD === "true") {
+  const isAuthorized =
+    isManager ||
+    currentUser?.role === "Sales Manager" ||
+    currentUser?.role === "Super Admin" ||
+    currentUser?.isOrgOwner;
+
+  if (import.meta.env.VITE_PROD === "true" || !isAuthorized) {
     return <Navigate to="/dashboard" replace />;
   }
 

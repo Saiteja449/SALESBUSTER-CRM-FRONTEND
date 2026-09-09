@@ -196,12 +196,12 @@ export default function CalendlySupportModal() {
         <div className="px-5 py-2.5 border-t border-border-main bg-bg-card flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-text-secondary shrink-0">
           <span>
             Need urgent assistance? Reach our team directly at{" "}
-            <a
+            {/* <a
               href="mailto:support@salesbuster.ai"
               className="text-purple-500 hover:underline font-medium"
             >
               support@salesbuster.ai
-            </a>
+            </a> */}
           </span>
           <div className="flex items-center gap-2">
             <button

@@ -10,7 +10,7 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
-  const { organization } = useAuth();
+  const { organization, isManager } = useAuth();
   const { openSupportModal } = useSupportModal();
 
   // Get dynamic title based on path
@@ -47,15 +47,25 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
               {getPageTitle()}
             </h1>
             {organization && (
-              <button
-                type="button"
-                onClick={() => navigate("/organization")}
-                title="View Organization Profile"
-                className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 truncate max-w-[220px] transition-colors cursor-pointer"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                <span className="truncate">{organization.name}</span>
-              </button>
+              isManager ? (
+                <button
+                  type="button"
+                  onClick={() => navigate("/organization")}
+                  title="View Organization Profile"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 truncate max-w-[220px] transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                  <span className="truncate">{organization.name}</span>
+                </button>
+              ) : (
+                <div
+                  title={`Workspace: ${organization.name}`}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20 truncate max-w-[220px]"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                  <span className="truncate">{organization.name}</span>
+                </div>
+              )
             )}
           </div>
         </div>
@@ -84,35 +94,39 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
             </>
           )}
 
-          {/* Human Assistance / Calendly Meeting Button */}
-          <button
-            type="button"
-            onClick={() =>
-              openSupportModal(
-                "Book 1-on-1 Human Assistance & Consultation Session with our team."
-              )
-            }
-            title="Book Human Assistance & Support Meeting (Calendly)"
-            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
-          >
-            <Headphones className="w-4 h-4 text-purple-500 shrink-0" />
-            <span className="hidden md:inline">Human Assistance</span>
-            <span className="md:hidden">Support</span>
-          </button>
+          {/* Human Assistance / Calendly Meeting Button - Managers Only */}
+          {isManager && (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  openSupportModal(
+                    "Book 1-on-1 Human Assistance & Consultation Session with our team."
+                  )
+                }
+                title="Book Human Assistance & Support Meeting (Calendly)"
+                className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+              >
+                <Headphones className="w-4 h-4 text-purple-500 shrink-0" />
+                <span className="hidden md:inline">Human Assistance</span>
+                <span className="md:hidden">Support</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() =>
-              openSupportModal(
-                "Book 1-on-1 Human Assistance & Consultation Session with our team."
-              )
-            }
-            title="Book Human Assistance (Calendly)"
-            className="sm:hidden p-2 rounded-lg bg-bg-card border border-border-main hover:bg-bg-secondary/30 transition-colors text-purple-500"
-            aria-label="Book Human Assistance"
-          >
-            <Headphones className="w-5 h-5" />
-          </button>
+              <button
+                type="button"
+                onClick={() =>
+                  openSupportModal(
+                    "Book 1-on-1 Human Assistance & Consultation Session with our team."
+                  )
+                }
+                title="Book Human Assistance (Calendly)"
+                className="sm:hidden p-2 rounded-lg bg-bg-card border border-border-main hover:bg-bg-secondary/30 transition-colors text-purple-500"
+                aria-label="Book Human Assistance"
+              >
+                <Headphones className="w-5 h-5" />
+              </button>
+            </>
+          )}
 
           {/* Theme Toggle */}
           <ThemeToggle />

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { socket } from "../utils/socket.js";
 import { useAuth } from "./AuthContext.jsx";
 import { useLeads } from "./LeadsContext.jsx";
@@ -13,6 +13,26 @@ export function WhatsAppToastProvider({ children }) {
   const { refreshData } = useLeads();
   const { refreshNotifications } = useNotifications();
 
+  // Alert deduplication cache to prevent duplicate alerts within 5 seconds
+  const recentAlertsRef = useRef(new Map());
+  const isDuplicateAlert = useCallback((key, windowMs = 5000) => {
+    if (!key) return false;
+    const now = Date.now();
+    const lastSeen = recentAlertsRef.current.get(key);
+    if (lastSeen && now - lastSeen < windowMs) {
+      return true;
+    }
+    recentAlertsRef.current.set(key, now);
+    if (recentAlertsRef.current.size > 100) {
+      for (const [k, time] of recentAlertsRef.current.entries()) {
+        if (now - time > 30000) {
+          recentAlertsRef.current.delete(k);
+        }
+      }
+    }
+    return false;
+  }, []);
+
   const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
@@ -23,6 +43,11 @@ export function WhatsAppToastProvider({ children }) {
 
   const addLeadToast = useCallback(
     ({ lead, message, assignedRepName, timestamp }) => {
+      const leadKey = `lead_${lead?._id || lead?.id || lead?.phone || ""}`;
+      if (isDuplicateAlert(leadKey)) {
+        return;
+      }
+
       const newToast = {
         id: "wa_lead_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
         lead,
@@ -45,11 +70,23 @@ export function WhatsAppToastProvider({ children }) {
         refreshNotifications();
       }
     },
-    [refreshData, refreshNotifications]
+    [refreshData, refreshNotifications, isDuplicateAlert]
   );
 
   const addAiFollowupToast = useCallback(
     ({ followup, lead, message, assignedRepName, timestamp }) => {
+      const followupId = followup?.id || followup?._id;
+      const leadId = lead?._id || lead?.id || followup?.leadId || "lead";
+      const dateKey = followup?.date || "";
+      const timeKey = followup?.time || "";
+      const dedupKey = followupId
+        ? `ai_followup_${followupId}`
+        : `ai_followup_${leadId}_${dateKey}_${timeKey}`;
+
+      if (isDuplicateAlert(dedupKey)) {
+        return;
+      }
+
       const cleanText = (val, fallback = "") => {
         if (!val) return fallback;
         const s = String(val).trim();
@@ -93,7 +130,7 @@ export function WhatsAppToastProvider({ children }) {
         refreshNotifications();
       }
     },
-    [refreshData, refreshNotifications]
+    [refreshData, refreshNotifications, isDuplicateAlert]
   );
 
   useEffect(() => {

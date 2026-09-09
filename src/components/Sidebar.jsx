@@ -33,12 +33,13 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
     totalSeats,
     usedSeats,
     isSubscriptionExpired,
+    isManager,
   } = useAuth();
   const { unreadCount } = useNotifications();
   const { openSupportModal } = useSupportModal();
 
   const isOrgOwner =
-    currentUser?.role === "Sales Manager" || currentUser?.isOrgOwner;
+    isManager || currentUser?.role === "Sales Manager" || currentUser?.isOrgOwner;
 
   const menuItems = [
     {
@@ -77,15 +78,19 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       icon: <MessageSquare className="w-5 h-5" />,
       path: "/whatsapp",
     },
-    {
-      text: "Human Assistance",
-      icon: <Headphones className="w-5 h-5" />,
-      onClick: () =>
-        openSupportModal(
-          "Book 1-on-1 Human Assistance & Consultation Session with our team."
-        ),
-    },
-    ...(import.meta.env.VITE_PROD === "true"
+    ...(isOrgOwner
+      ? [
+          {
+            text: "Human Assistance",
+            icon: <Headphones className="w-5 h-5" />,
+            onClick: () =>
+              openSupportModal(
+                "Book 1-on-1 Human Assistance & Consultation Session with our team."
+              ),
+          },
+        ]
+      : []),
+    ...(import.meta.env.VITE_PROD === "true" || !isOrgOwner
       ? []
       : [
           {
@@ -188,40 +193,42 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
         </ul>
       </nav>
 
-      {/* Human Assistance Quick Booking Card */}
-      <div className="mx-3 mt-3 p-3 bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-transparent border border-purple-500/20 rounded-2xl">
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-            <Headphones className="w-4 h-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-xs font-bold text-brand-primary truncate">
-              Human Assistance
+      {/* Human Assistance Quick Booking Card - Managers Only */}
+      {isOrgOwner && (
+        <div className="mx-3 mt-3 p-3 bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-transparent border border-purple-500/20 rounded-2xl">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+              <Headphones className="w-4 h-4" />
             </div>
-            <div className="text-[10px] text-purple-500 font-semibold">
-              30-Min Strategy Call
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-bold text-brand-primary truncate">
+                Human Assistance
+              </div>
+              <div className="text-[10px] text-purple-500 font-semibold">
+                30-Min Strategy Call
+              </div>
             </div>
           </div>
+          <p className="text-[11px] text-brand-primary/70 mb-2.5 leading-relaxed">
+            Need setup guidance or technical assistance? Connect with our team.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              openSupportModal(
+                "Book 1-on-1 Human Assistance & Consultation Session with our team."
+              );
+              if (handleDrawerToggle && mobileOpen) handleDrawerToggle();
+            }}
+            className="w-full flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-colors cursor-pointer active:scale-[0.98]"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Book Support Meeting</span>
+          </button>
         </div>
-        <p className="text-[11px] text-brand-primary/70 mb-2.5 leading-relaxed">
-          Need setup guidance or technical assistance? Connect with our team.
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            openSupportModal(
-              "Book 1-on-1 Human Assistance & Consultation Session with our team."
-            );
-            if (handleDrawerToggle && mobileOpen) handleDrawerToggle();
-          }}
-          className="w-full flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition-colors cursor-pointer active:scale-[0.98]"
-        >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>Book Support Meeting</span>
-        </button>
-      </div>
+      )}
 
-      {organization && (
+      {organization && isOrgOwner && (
         <button
           type="button"
           onClick={() => handleNav("/organization")}
