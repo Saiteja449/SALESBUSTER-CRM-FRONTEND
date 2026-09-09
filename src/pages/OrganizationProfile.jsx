@@ -53,9 +53,12 @@ import {
   Code,
   Braces,
   Lightbulb,
+  Headphones,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useSupportModal } from "../context/SupportModalContext.jsx";
 import { API_ENDPOINTS } from "../utils/constants.js";
+import KBGeneratorPromptCard from "../components/KBGeneratorPromptCard.jsx";
 
 // Wizard steps configuration
 const STEPS = [
@@ -686,6 +689,7 @@ export default function OrganizationProfile() {
     setOrganization,
     fetchOrganization,
   } = useAuth();
+  const { openSupportModal } = useSupportModal();
 
   // Primary Navigation: "wizard" | "billing"
   const [activeTab, setActiveTab] = useState("wizard");
@@ -2007,7 +2011,7 @@ export default function OrganizationProfile() {
           </div>
 
           {/* Primary View Switcher Tabs */}
-          <div className="flex items-center p-1.5 bg-bg-secondary border border-border-main rounded-2xl gap-1.5 self-stretch lg:self-auto shrink-0">
+          <div className="flex items-center p-1.5 bg-bg-secondary border border-border-main rounded-2xl gap-1.5 self-stretch lg:self-auto shrink-0 flex-wrap">
             <button
               onClick={() => setActiveTab("wizard")}
               className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
@@ -2030,6 +2034,20 @@ export default function OrganizationProfile() {
             >
               <Building2 size={16} />
               <span>Subscription & Seats</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                openSupportModal(
+                  "Book 1-on-1 Human Assistance & Consultation Session for AI Pilot Setup."
+                )
+              }
+              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+              title="Schedule a 1-on-1 support meeting via Calendly"
+            >
+              <Headphones size={16} />
+              <span>Book Human Assistance</span>
             </button>
           </div>
         </div>
@@ -2120,6 +2138,20 @@ export default function OrganizationProfile() {
                       <span>Copy System Prompt</span>
                     </>
                   )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    openSupportModal(
+                      "Book 1-on-1 Human Assistance & Consultation Session for AI Pilot Setup."
+                    )
+                  }
+                  className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black transition-all shadow-md shadow-purple-600/20 cursor-pointer"
+                  title="Schedule a 30-min strategy & onboarding call with our team"
+                >
+                  <Headphones size={15} />
+                  <span>Book Human Assistance</span>
                 </button>
               </div>
             </div>
@@ -3059,6 +3091,11 @@ export default function OrganizationProfile() {
                       `sb_kb_${(org.name || "tenant").toLowerCase().replace(/[^a-z0-9]/g, "_")}`}
                   </span>
                 </div>
+
+                {/* AI Knowledge Base Generator System Prompt Card */}
+                <KBGeneratorPromptCard
+                  businessName={aiSettings.companyName || org.name}
+                />
 
                 {/* File Upload Zone */}
                 <div>

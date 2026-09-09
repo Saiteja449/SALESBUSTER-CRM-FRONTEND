@@ -30,6 +30,7 @@ import OrganizationProfile from "./pages/OrganizationProfile.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import AccountSuspended from "./components/AccountSuspended.jsx";
+import CalendlySupportModal from "./components/CalendlySupportModal.jsx";
 
 function AppLayout() {
   const { isAuthenticated, isOrganizationBlocked } = useAuth();
@@ -121,6 +122,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        <CalendlySupportModal />
       </RootProvider>
     </BrowserRouter>
   );

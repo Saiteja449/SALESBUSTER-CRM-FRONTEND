@@ -4,6 +4,7 @@ import { LeadsProvider } from "./LeadsContext.jsx";
 import { NotificationProvider } from "./NotificationContext.jsx";
 import { DashboardProvider } from "./DashboardContext.jsx";
 import { WhatsAppToastProvider } from "./WhatsAppToastContext.jsx";
+import { SupportModalProvider } from "./SupportModalContext.jsx";
 
 export default function RootProvider({ children }) {
   return (
@@ -12,7 +13,9 @@ export default function RootProvider({ children }) {
         <NotificationProvider>
           <DashboardProvider>
             <WhatsAppToastProvider>
-              {children}
+              <SupportModalProvider>
+                {children}
+              </SupportModalProvider>
             </WhatsAppToastProvider>
           </DashboardProvider>
         </NotificationProvider>

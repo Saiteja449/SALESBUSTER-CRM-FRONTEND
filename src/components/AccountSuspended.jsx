@@ -15,11 +15,13 @@ import {
   Lock,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useSupportModal } from "../context/SupportModalContext.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
 import crmLogo from "../assets/images/Logo.png";
 
 export default function AccountSuspended() {
   const { organization, logout, fetchOrganization, isSubscriptionExpired } = useAuth();
+  const { openSupportModal } = useSupportModal();
   const [checking, setChecking] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
@@ -278,13 +280,27 @@ export default function AccountSuspended() {
             {checking ? "Checking Status..." : "Recheck Status"}
           </button>
 
+          {/* Book Support Meeting (Calendly) Button */}
+          <button
+            type="button"
+            onClick={() =>
+              openSupportModal(
+                `Workspace Assistance & Reactivation Session for ${orgName}`
+              )
+            }
+            className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-600/20 active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Book Meeting (Calendly)</span>
+          </button>
+
           {/* Contact Support Button */}
           <a
             href={supportEmailHref}
             className="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-600 shadow-xs active:scale-[0.98] transition-all cursor-pointer"
           >
             <Headphones className="w-4 h-4 text-[#28a0a4]" />
-            <span>Contact Support</span>
+            <span>Email Support</span>
             <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
           </a>
 
@@ -302,13 +318,28 @@ export default function AccountSuspended() {
 
         {/* Dedicated Support Footer */}
         <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between text-xs sm:text-sm text-slate-600 dark:text-slate-400 gap-2">
-          <span>Need direct help? Contact SalesBuster Support:</span>
-          <a
-            href="mailto:support@salesbuster.ai"
-            className="font-semibold text-[#28a0a4] hover:underline inline-flex items-center gap-1"
-          >
-            support@salesbuster.ai
-          </a>
+          <span>Need direct help? Connect with our team:</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                openSupportModal(
+                  `Workspace Assistance & Reactivation Session for ${orgName}`
+                )
+              }
+              className="font-semibold text-purple-600 dark:text-purple-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              Schedule 1-on-1 Call
+            </button>
+            <span>•</span>
+            <a
+              href="mailto:support@salesbuster.ai"
+              className="font-semibold text-[#28a0a4] hover:underline inline-flex items-center gap-1"
+            >
+              support@salesbuster.ai
+            </a>
+          </div>
         </div>
       </div>
     </div>

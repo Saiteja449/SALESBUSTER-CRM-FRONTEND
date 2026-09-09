@@ -1,8 +1,9 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Menu, Bell, Plus, Search } from "lucide-react";
+import { Menu, Bell, Plus, Search, Headphones } from "lucide-react";
 import { useNotifications } from "../context/NotificationContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useSupportModal } from "../context/SupportModalContext.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
 
 export default function Header({ handleDrawerToggle, onQuickAddLead }) {
@@ -10,6 +11,7 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
   const navigate = useNavigate();
   const { unreadCount } = useNotifications();
   const { organization } = useAuth();
+  const { openSupportModal } = useSupportModal();
 
   // Get dynamic title based on path
   const getPageTitle = () => {
@@ -81,6 +83,36 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
               </button>
             </>
           )}
+
+          {/* Human Assistance / Calendly Meeting Button */}
+          <button
+            type="button"
+            onClick={() =>
+              openSupportModal(
+                "Book 1-on-1 Human Assistance & Consultation Session with our team."
+              )
+            }
+            title="Book Human Assistance & Support Meeting (Calendly)"
+            className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+          >
+            <Headphones className="w-4 h-4 text-purple-500 shrink-0" />
+            <span className="hidden md:inline">Human Assistance</span>
+            <span className="md:hidden">Support</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              openSupportModal(
+                "Book 1-on-1 Human Assistance & Consultation Session with our team."
+              )
+            }
+            title="Book Human Assistance (Calendly)"
+            className="sm:hidden p-2 rounded-lg bg-bg-card border border-border-main hover:bg-bg-secondary/30 transition-colors text-purple-500"
+            aria-label="Book Human Assistance"
+          >
+            <Headphones className="w-5 h-5" />
+          </button>
 
           {/* Theme Toggle */}
           <ThemeToggle />
