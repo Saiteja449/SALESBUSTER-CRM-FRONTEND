@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Sparkles,
   ClipboardList,
+  CheckCircle,
 } from "lucide-react";
 
 // Helper to sanitize display text and prevent literal 'null', 'undefined', etc.
@@ -32,18 +33,59 @@ const cleanDisplay = (val, fallback = "") => {
 };
 
 export default function AIFollowUps() {
-  const { leads, followups } = useLeads();
+  const { leads, followups, toggleFollowupDone } = useLeads();
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFollowupId, setSelectedFollowupId] = useState(null);
+  const [resolvingId, setResolvingId] = useState(null);
 
-  // Filter followups to only those created by AI Agent
+  // Filter followups to only active ones created by AI Agent and deduplicate so only 1 action per lead
   const aiFollowups = useMemo(() => {
-    return followups
-      .filter((f) => f.author === "AI Agent")
+    const active = followups
+      .filter((f) => f.author === "AI Agent" && !f.done)
       .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+
+    // Deduplicate so only the latest active immediate action per lead is displayed
+    const seenLeads = new Set();
+    const unique = [];
+    for (const f of active) {
+      const key = String(f.leadId);
+      if (!seenLeads.has(key)) {
+        seenLeads.add(key);
+        unique.push(f);
+      }
+    }
+    return unique;
   }, [followups]);
+
+  const handleMarkHandled = async (followupId, leadId) => {
+    if (!followupId) return;
+    setResolvingId(followupId);
+    try {
+      if (toggleFollowupDone) {
+        await toggleFollowupDone(followupId);
+      }
+      if (leadId) {
+        const leadIdStr = String(leadId);
+        followups.forEach((f) => {
+          if (
+            String(f.leadId) === leadIdStr &&
+            f.id !== followupId &&
+            f._id !== followupId &&
+            !f.done &&
+            f.author === "AI Agent"
+          ) {
+            toggleFollowupDone(f.id || f._id);
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Error marking follow-up as handled:", err);
+    } finally {
+      setResolvingId(null);
+    }
+  };
 
   // Combine followups with lead data
   const combinedData = useMemo(() => {
@@ -185,6 +227,18 @@ export default function AIFollowUps() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={() =>
+                      handleMarkHandled(selectedData.id, selectedData.lead.id)
+                    }
+                    disabled={resolvingId === selectedData.id}
+                    className="flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-lg transition-colors cursor-pointer shadow-sm"
+                  >
+                    <CheckCircle size={18} />
+                    {resolvingId === selectedData.id
+                      ? "Resolving..."
+                      : "Mark Handled"}
+                  </button>
                   <button
                     onClick={() =>
                       navigate(`/whatsapp`, {

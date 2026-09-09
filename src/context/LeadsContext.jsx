@@ -62,6 +62,35 @@ export function LeadsProvider({ children }) {
 
   const [followups, setFollowups] = useState([]);
 
+  // Listen for real-time AI followup socket events to update active follow-up rather than duplicating
+  useEffect(() => {
+    const handleAiNewFollowup = (data) => {
+      if (data?.followup) {
+        const fu = data.followup;
+        setFollowups((prev) => {
+          const idx = prev.findIndex(
+            (item) =>
+              (fu.id && (item.id === fu.id || item._id === fu.id)) ||
+              (String(item.leadId) === String(fu.leadId) &&
+                item.author === "AI Agent" &&
+                !item.done),
+          );
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], ...fu, done: false };
+            return updated;
+          }
+          return [fu, ...prev];
+        });
+      }
+    };
+
+    socket.on("ai_new_followup", handleAiNewFollowup);
+    return () => {
+      socket.off("ai_new_followup", handleAiNewFollowup);
+    };
+  }, []);
+
   const refreshData = React.useCallback(async () => {
     try {
       const [leadsRes, followupsRes] = await Promise.all([
@@ -154,6 +183,20 @@ export function LeadsProvider({ children }) {
       }
 
       setLeads((prev) => prev.map((l) => (l.id === leadId ? updatedLead : l)));
+
+      // Automatically mark pending AI follow-ups for this lead as done in local state so it immediately disappears from Immediate Actions
+      setFollowups((prev) =>
+        prev.map((f) => {
+          const isMatch =
+            String(f.leadId) === String(leadId) ||
+            String(f.leadId) === String(updatedLead?._id) ||
+            String(f.leadId) === String(updatedLead?.id);
+          if (isMatch && f.author === "AI Agent" && !f.done) {
+            return { ...f, done: true };
+          }
+          return f;
+        }),
+      );
     } catch (error) {
       console.error("Error updating lead:", error);
       throw error;
@@ -186,18 +229,23 @@ export function LeadsProvider({ children }) {
   };
 
   const toggleFollowupDone = async (fwId) => {
-    const f = followups.find((f) => f.id === fwId);
+    const f = followups.find((f) => f.id === fwId || f._id === fwId);
     if (!f) return;
     const nextStatus = !f.done;
 
     try {
+      const targetId = f.id || f._id || fwId;
       const response = await axios.put(
-        `${API_ENDPOINTS.FOLLOWUPS.BASE}/${fwId}`,
+        `${API_ENDPOINTS.FOLLOWUPS.BASE}/${targetId}`,
         { done: nextStatus },
       );
       const updatedFollowup = response.data.data || response.data;
       setFollowups((prev) =>
-        prev.map((item) => (item.id === fwId ? updatedFollowup : item)),
+        prev.map((item) =>
+          item.id === targetId || item._id === targetId || item.id === fwId
+            ? { ...item, ...updatedFollowup, done: nextStatus }
+            : item,
+        ),
       );
     } catch (error) {
       console.error("Error updating followup:", error);

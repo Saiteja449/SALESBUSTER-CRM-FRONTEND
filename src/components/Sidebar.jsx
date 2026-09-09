@@ -78,18 +78,18 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       icon: <MessageSquare className="w-5 h-5" />,
       path: "/whatsapp",
     },
-    ...(isOrgOwner
-      ? [
-          {
-            text: "Human Assistance",
-            icon: <Headphones className="w-5 h-5" />,
-            onClick: () =>
-              openSupportModal(
-                "Book 1-on-1 Human Assistance & Consultation Session with our team."
-              ),
-          },
-        ]
-      : []),
+    // ...(isOrgOwner
+    //   ? [
+    //       {
+    //         text: "Human Assistance",
+    //         icon: <Headphones className="w-5 h-5" />,
+    //         onClick: () =>
+    //           openSupportModal(
+    //             "Book 1-on-1 Human Assistance & Consultation Session with our team."
+    //           ),
+    //       },
+    //     ]
+    //   : []),
     ...(import.meta.env.VITE_PROD === "true" || !isOrgOwner
       ? []
       : [
