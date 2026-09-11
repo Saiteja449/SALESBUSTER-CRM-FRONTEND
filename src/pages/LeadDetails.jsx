@@ -12,6 +12,7 @@ import {
   Circle,
   MapPin,
   MessageSquare,
+  Building2,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -336,6 +337,9 @@ export default function LeadDetails() {
   };
 
   const getSourceBg = (source) => {
+    if (source === "Website Chat") {
+      return "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 font-semibold";
+    }
     return "bg-brand-secondary/30/50 text-brand-primary/70 border-brand-secondary";
   };
 
@@ -389,6 +393,11 @@ export default function LeadDetails() {
             >
               {currentLead.source}
             </span>
+            {(currentLead.appointmentDate || currentLead.tags?.includes("Demo Booked")) && (
+              <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                📅 Demo Booked{currentLead.appointmentDate ? `: ${currentLead.appointmentDate}` : ""} {currentLead.appointmentTime || ""}
+              </span>
+            )}
             <button
               type="button"
               onClick={() =>
@@ -399,13 +408,13 @@ export default function LeadDetails() {
               className="px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/30 rounded-md text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
             >
               <MessageSquare size={14} />
-              Open WhatsApp Chat
+              {currentLead.source === "Website Chat" ? "Open Chat History" : "Open WhatsApp Chat"}
             </button>
           </div>
 
           <hr className="border-brand-secondary mb-5" />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="flex items-start gap-3">
               <Phone className="text-brand-primary/70 mt-0.5" size={18} />
               <div className="min-w-0">
@@ -425,6 +434,17 @@ export default function LeadDetails() {
                 </span>
                 <span className="text-sm font-semibold text-brand-primary truncate block">
                   {currentLead.email || "No email profile"}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Building2 className="text-brand-primary/70 mt-0.5" size={18} />
+              <div className="min-w-0">
+                <span className="text-xs text-brand-primary/70 block mb-0.5">
+                  Company
+                </span>
+                <span className="text-sm font-semibold text-brand-primary truncate block">
+                  {currentLead.company || currentLead.aiQualification?.company || "Not specified"}
                 </span>
               </div>
             </div>
