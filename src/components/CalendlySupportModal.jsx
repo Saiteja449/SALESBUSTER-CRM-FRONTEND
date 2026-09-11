@@ -12,7 +12,7 @@ import {
 import { useSupportModal } from "../context/SupportModalContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const CALENDLY_BASE_URL = "https://calendly.com/saiteja-infasta/30min";
+const CALENDLY_BASE_URL = "https://calendly.com/team-salesbuster/30min";
 
 export default function CalendlySupportModal() {
   const { isOpen, closeSupportModal, meetingContext } = useSupportModal();
