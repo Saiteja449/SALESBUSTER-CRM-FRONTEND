@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Headphones,
   Calendar,
+  Send,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
@@ -77,6 +78,11 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       text: "WhatsApp Chat",
       icon: <MessageSquare className="w-5 h-5" />,
       path: "/whatsapp",
+    },
+    {
+      text: "WhatsApp Campaigns",
+      icon: <Send className="w-5 h-5" />,
+      path: "/whatsapp/campaigns",
     },
     // ...(isOrgOwner
     //   ? [

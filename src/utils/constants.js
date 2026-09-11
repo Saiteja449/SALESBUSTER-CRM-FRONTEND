@@ -31,6 +31,26 @@ export const API_ENDPOINTS = {
     AI_TOGGLE: `${API_BASE_URL}/whatsapp/ai/toggle`,
     SETTINGS: `${API_BASE_URL}/whatsapp/settings`,
   },
+  WHATSAPP_CLOUD: {
+    STATUS: `${API_BASE_URL}/whatsapp/cloud/status`,
+    CONNECT: `${API_BASE_URL}/whatsapp/cloud/connect`,
+    DISCONNECT: `${API_BASE_URL}/whatsapp/cloud/disconnect`,
+    TEMPLATES: `${API_BASE_URL}/whatsapp/cloud/templates`,
+    SYNC_TEMPLATES: `${API_BASE_URL}/whatsapp/cloud/templates/sync`,
+    AUDIENCE_ESTIMATE: `${API_BASE_URL}/whatsapp/cloud/audience/estimate`,
+    CAMPAIGNS: `${API_BASE_URL}/whatsapp/cloud/campaigns`,
+    CAMPAIGN: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}`,
+    START: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/start`,
+    PAUSE: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/pause`,
+    RESUME: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/resume`,
+    CANCEL: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/cancel`,
+    RETRY_FAILED: (id) =>
+      `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/retry-failed`,
+    RECIPIENTS: (id) =>
+      `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/recipients`,
+    ANALYTICS: (id) =>
+      `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/analytics`,
+  },
   ANALYTICS: {
     BASE: `${API_BASE_URL}/analytics`,
     TODAY: `${API_BASE_URL}/analytics/today`,

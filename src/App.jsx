@@ -23,6 +23,10 @@ import FollowUpReport from "./pages/FollowUpReport.jsx";
 import SalesPersonDetails from "./pages/SalesPersonDetails.jsx";
 import SalesPersonReports from "./pages/SalesPersonReports.jsx";
 import WhatsAppChat from "./pages/WhatsAppChat.jsx";
+import WhatsAppCampaigns from "./pages/WhatsAppCampaigns.jsx";
+import CreateCampaign from "./pages/CreateCampaign.jsx";
+import CampaignDetails from "./pages/CampaignDetails.jsx";
+import WhatsAppTemplates from "./pages/WhatsAppTemplates.jsx";
 import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
@@ -117,6 +121,10 @@ export default function App() {
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/ai-followups" element={<AIFollowUps />} />
             <Route path="/whatsapp" element={<WhatsAppChat />} />
+            <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
+            <Route path="/whatsapp/campaigns/create" element={<CreateCampaign />} />
+            <Route path="/whatsapp/campaigns/:id" element={<CampaignDetails />} />
+            <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
