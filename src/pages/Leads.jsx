@@ -152,6 +152,7 @@ export default function Leads() {
     "WhatsApp",
     "Meta Ads",
     "Website Form",
+    "Website Chat",
     "Call",
     "Manual Entry",
     "Mobile App",
@@ -502,7 +503,7 @@ export default function Leads() {
                     className="hover:bg-brand-secondary/30/50 transition-colors border-b-1 border-b-brand-secondary"
                   >
                     <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => navigate(`/lead-details/${lead.id}`)}
@@ -511,6 +512,11 @@ export default function Leads() {
                             {lead.name?.substring(0, 25)}
                           </button>
                         </div>
+                        {lead.company && (
+                          <span className="text-xs text-brand-primary/60 font-medium truncate max-w-[180px]">
+                            {lead.company}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-brand-primary">
@@ -518,8 +524,11 @@ export default function Leads() {
                     </td>
                     <td className="px-4 py-3">
                       <Badge
-                        colorClass="bg-brand-secondary/30 text-brand-primary border border-brand-secondary"
-                        className="font-medium"
+                        colorClass={
+                          lead.source === "Website Chat"
+                            ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-semibold"
+                            : "bg-brand-secondary/30 text-brand-primary border border-brand-secondary font-medium"
+                        }
                       >
                         {lead.source}
                       </Badge>

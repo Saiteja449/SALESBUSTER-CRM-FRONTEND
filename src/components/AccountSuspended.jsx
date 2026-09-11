@@ -100,7 +100,7 @@ export default function AccountSuspended() {
     }
   };
 
-  const supportEmailHref = `mailto:support@mysalespilot.ai?subject=${encodeURIComponent(
+  const supportEmailHref = `mailto:support@salesbuster.ai?subject=${encodeURIComponent(
     `Reactivate Workspace - ${orgName}`
   )}&body=${encodeURIComponent(
     `Hello MySalesPilot Support Team,\n\nI would like assistance in reactivating our workspace access for:\nOrganization: ${orgName}\nRegistered Email: ${orgEmail}\nPlan: ${plan} (${seats} Seats)\n\nThank you!`

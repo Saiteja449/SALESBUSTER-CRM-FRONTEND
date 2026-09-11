@@ -12,7 +12,7 @@ import {
 import { useSupportModal } from "../context/SupportModalContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const CALENDLY_BASE_URL = "https://calendly.com/saiteja-infasta/30min";
+const CALENDLY_BASE_URL = "https://calendly.com/team-salesbuster/30min";
 
 export default function CalendlySupportModal() {
   const { isOpen, closeSupportModal, meetingContext } = useSupportModal();
@@ -24,7 +24,10 @@ export default function CalendlySupportModal() {
   const personalizedUrl = useMemo(() => {
     try {
       const url = new URL(CALENDLY_BASE_URL);
-      url.searchParams.set("embed_domain", window.location.host || "salesbuster.ai");
+      url.searchParams.set(
+        "embed_domain",
+        window.location.host || "salesbuster.ai",
+      );
       url.searchParams.set("embed_type", "Inline");
       url.searchParams.set("hide_event_type_details", "1");
       url.searchParams.set("hide_gdpr_banner", "1");
@@ -39,7 +42,12 @@ export default function CalendlySupportModal() {
     } catch {
       return `${CALENDLY_BASE_URL}?hide_event_type_details=1&hide_gdpr_banner=1`;
     }
-  }, [currentUser?.name, currentUser?.email, organization?.name, organization?.email]);
+  }, [
+    currentUser?.name,
+    currentUser?.email,
+    organization?.name,
+    organization?.email,
+  ]);
 
   const prefillName = currentUser?.name || organization?.name || "";
   const prefillEmail = currentUser?.email || organization?.email || "";
@@ -155,7 +163,9 @@ export default function CalendlySupportModal() {
 
           {prefillName && (
             <span className="hidden md:inline-block text-[11px] text-text-secondary/80">
-              Booking as: <strong className="text-text-primary">{prefillName}</strong> ({prefillEmail})
+              Booking as:{" "}
+              <strong className="text-text-primary">{prefillName}</strong> (
+              {prefillEmail})
             </span>
           )}
         </div>
@@ -165,7 +175,8 @@ export default function CalendlySupportModal() {
           <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-5 py-2.5 flex items-center gap-3 text-emerald-600 dark:text-emerald-400 shrink-0">
             <CheckCircle2 className="w-5 h-5 shrink-0" />
             <div className="text-xs sm:text-sm font-semibold flex-1">
-              Your meeting has been booked! Calendar invitation and video link have been sent to your email.
+              Your meeting has been booked! Calendar invitation and video link
+              have been sent to your email.
             </div>
           </div>
         )}
@@ -196,12 +207,12 @@ export default function CalendlySupportModal() {
         <div className="px-5 py-2.5 border-t border-border-main bg-bg-card flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-text-secondary shrink-0">
           <span>
             Need urgent assistance? Reach our team directly at{" "}
-            {/* <a
+            <a
               href="mailto:support@salesbuster.ai"
               className="text-purple-500 hover:underline font-medium"
             >
               support@salesbuster.ai
-            </a> */}
+            </a>
           </span>
           <div className="flex items-center gap-2">
             <button
