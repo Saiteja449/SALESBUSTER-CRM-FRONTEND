@@ -81,6 +81,30 @@ export default function WhatsAppChat() {
     notes: "",
   });
 
+  // Ticker for live countdowns
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const isLeadAiPaused = (lead) => {
+    if (!lead || !lead.aiEnabled || !lead.aiPausedUntil) return false;
+    return new Date(lead.aiPausedUntil).getTime() > now;
+  };
+
+  const getRemainingPauseTime = (aiPausedUntil) => {
+    if (!aiPausedUntil) return "";
+    const diff = new Date(aiPausedUntil).getTime() - now;
+    if (diff <= 0) return "";
+    const totalSecs = Math.floor(diff / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}m ${secs < 10 ? "0" : ""}${secs}s`;
+  };
+
   // Load Status on mount
   useEffect(() => {
     fetchSessionStatus();
@@ -112,22 +136,61 @@ export default function WhatsAppChat() {
       fetchConversations();
     });
 
+    socket.on("ai_status_updated", (data) => {
+      if (!data?.leadId) return;
+      setConversations((prev) =>
+        prev.map((c) => {
+          const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+          if (String(lId) === String(data.leadId)) {
+            return {
+              ...c,
+              leadId: {
+                ...c.leadId,
+                aiPausedUntil: data.aiPausedUntil,
+              },
+            };
+          }
+          return c;
+        })
+      );
+
+      setSelectedConv((prev) => {
+        if (!prev) return prev;
+        const lId = prev.leadId?._id || prev.leadId?.id || prev.leadId;
+        if (String(lId) === String(data.leadId)) {
+          return {
+            ...prev,
+            leadId: {
+              ...prev.leadId,
+              aiPausedUntil: data.aiPausedUntil,
+            },
+          };
+        }
+        return prev;
+      });
+    });
+
     return () => {
       socket.off("whatsapp_status");
       socket.off("conversation_updated");
+      socket.off("ai_status_updated");
     };
   }, [orgId]);
 
   // Set up socket subscription for selected chat
   useEffect(() => {
     if (!selectedConv) return;
+    const currentLeadId = selectedConv.leadId?.id || selectedConv.leadId?._id;
 
     // Join room
-    socket.emit("join_lead_chat", selectedConv.leadId?.id);
+    if (currentLeadId) {
+      socket.emit("join_lead_chat", currentLeadId);
+    }
 
     // Listen to new message logs
     socket.on("new_message", (msg) => {
-      if (msg.leadId === selectedConv.leadId?.id) {
+      const msgLeadId = msg.leadId?._id || msg.leadId?.id || msg.leadId;
+      if (String(msgLeadId) === String(currentLeadId)) {
         setMessages((prev) => {
           // Prevent duplicates
           if (prev.some((m) => m.messageId === msg.messageId)) return prev;
@@ -139,20 +202,25 @@ export default function WhatsAppChat() {
 
     // Listen to typing status
     socket.on("typing_status", (data) => {
-      if (data.leadId === selectedConv.leadId?.id) {
+      if (String(data.leadId) === String(currentLeadId)) {
         setIsTyping(data.isTyping);
       }
     });
 
     // Reset unread count locally when active chat changes
     setConversations((prev) =>
-      prev.map((c) =>
-        c.leadId?.id === selectedConv.leadId?.id ? { ...c, unreadCount: 0 } : c,
-      ),
+      prev.map((c) => {
+        const cLeadId = c.leadId?._id || c.leadId?.id || c.leadId;
+        return String(cLeadId) === String(currentLeadId)
+          ? { ...c, unreadCount: 0 }
+          : c;
+      }),
     );
 
     return () => {
-      socket.emit("leave_lead_chat", selectedConv.leadId?.id);
+      if (currentLeadId) {
+        socket.emit("leave_lead_chat", currentLeadId);
+      }
       socket.off("new_message");
       socket.off("typing_status");
     };
@@ -297,10 +365,11 @@ export default function WhatsAppChat() {
   // Toggle AI on/off for lead
   const handleToggleAI = async () => {
     if (!selectedConv) return;
+    const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
     const nextState = !selectedConv.leadId?.aiEnabled;
     try {
       const res = await axios.post(API_ENDPOINTS.WHATSAPP.AI_TOGGLE, {
-        leadId: selectedConv.leadId?.id,
+        leadId,
         aiEnabled: nextState,
       });
 
@@ -311,24 +380,66 @@ export default function WhatsAppChat() {
         leadId: {
           ...prev.leadId,
           aiEnabled: updatedLead.aiEnabled,
+          aiPausedUntil: updatedLead.aiPausedUntil || null,
         },
       }));
       setConversations((prev) =>
-        prev.map((c) =>
-          c.leadId?.id === selectedConv.leadId?.id
+        prev.map((c) => {
+          const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+          return String(lId) === String(leadId)
             ? {
                 ...c,
-                leadId: { ...c.leadId, aiEnabled: updatedLead.aiEnabled },
+                leadId: {
+                  ...c.leadId,
+                  aiEnabled: updatedLead.aiEnabled,
+                  aiPausedUntil: updatedLead.aiPausedUntil || null,
+                },
               }
-            : c,
-        ),
+            : c;
+        }),
       );
     } catch (err) {
       alert("Failed to toggle AI state.");
     }
   };
 
-
+  // Instant Resume AI (clears active 5-minute pause)
+  const handleResumeAI = async () => {
+    if (!selectedConv) return;
+    const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
+    try {
+      const res = await axios.post(API_ENDPOINTS.WHATSAPP.AI_TOGGLE, {
+        leadId,
+        aiEnabled: true,
+      });
+      const updatedLead = res.data.lead;
+      setSelectedConv((prev) => ({
+        ...prev,
+        leadId: {
+          ...prev.leadId,
+          aiEnabled: updatedLead?.aiEnabled ?? true,
+          aiPausedUntil: null,
+        },
+      }));
+      setConversations((prev) =>
+        prev.map((c) => {
+          const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+          return String(lId) === String(leadId)
+            ? {
+                ...c,
+                leadId: {
+                  ...c.leadId,
+                  aiEnabled: updatedLead?.aiEnabled ?? true,
+                  aiPausedUntil: null,
+                },
+              }
+            : c;
+        }),
+      );
+    } catch (err) {
+      alert("Failed to resume AI.");
+    }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -336,11 +447,38 @@ export default function WhatsAppChat() {
     if (!inputValue.trim()) return;
 
     const messageText = inputValue.trim();
+    const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
     setInputValue("");
+
+    // Optimistically snooze AI for 5 minutes if AI is enabled for this lead
+    if (selectedConv.leadId?.aiEnabled) {
+      const optimisticPausedUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      setSelectedConv((prev) => ({
+        ...prev,
+        leadId: {
+          ...prev.leadId,
+          aiPausedUntil: optimisticPausedUntil,
+        },
+      }));
+      setConversations((prev) =>
+        prev.map((c) => {
+          const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+          return String(lId) === String(leadId)
+            ? {
+                ...c,
+                leadId: {
+                  ...c.leadId,
+                  aiPausedUntil: optimisticPausedUntil,
+                },
+              }
+            : c;
+        }),
+      );
+    }
 
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.SEND_MESSAGE, {
-        leadId: selectedConv.leadId?.id,
+        leadId,
         text: messageText,
         senderName: currentUser?.name || "System",
       });
@@ -638,9 +776,15 @@ export default function WhatsAppChat() {
                             <div className="flex items-center gap-2">
                               {/* AI State badge */}
                               {lead?.aiEnabled ? (
-                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 text-[9px] rounded-md font-bold">
-                                  <Brain className="w-2.5 h-2.5" /> AI Active
-                                </span>
+                                isLeadAiPaused(lead) ? (
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/15 text-amber-400 text-[9px] rounded-md font-bold border border-amber-500/30">
+                                    <Clock className="w-2.5 h-2.5 animate-pulse" /> Snoozed ({getRemainingPauseTime(lead.aiPausedUntil)})
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 text-[9px] rounded-md font-bold">
+                                    <Brain className="w-2.5 h-2.5" /> AI Active
+                                  </span>
+                                )
                               ) : (
                                 <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/10 text-amber-400 text-[9px] rounded-md font-bold">
                                   <User className="w-2.5 h-2.5" /> Human
@@ -721,6 +865,27 @@ export default function WhatsAppChat() {
                   </button>
                 </div>
               </div>
+
+              {/* AI 5-Minute Pause / Snooze Banner */}
+              {selectedConv.leadId?.aiEnabled && isLeadAiPaused(selectedConv.leadId) && (
+                <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-[#1a0c35] border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2.5 text-xs text-amber-300">
+                    <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                    <span>
+                      <strong className="text-amber-200">AI Snoozed (5 min):</strong> Manual message sent. Auto-resumes in{" "}
+                      <span className="font-mono font-bold text-amber-100 bg-amber-500/25 px-1.5 py-0.5 rounded">
+                        {getRemainingPauseTime(selectedConv.leadId.aiPausedUntil)}
+                      </span>
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleResumeAI}
+                    className="flex items-center gap-1.5 text-xs font-bold text-amber-200 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-3 py-1 rounded-md transition-all shadow-sm active:scale-95"
+                  >
+                    <Play className="w-3 h-3 fill-current" /> Resume AI Now
+                  </button>
+                </div>
+              )}
 
               {/* Chat Timeline body */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
