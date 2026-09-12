@@ -271,6 +271,9 @@ export default function CloudSettingsModal({ isOpen, onClose, onUpdated }) {
                 }
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
               />
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                Found in Meta Developer Dashboard → WhatsApp → API Setup (under Step 1). <span className="text-amber-500 font-medium">Do not use the &quot;App ID&quot; from the top bar.</span>
+              </span>
             </div>
 
             <div>
@@ -321,36 +324,24 @@ export default function CloudSettingsModal({ isOpen, onClose, onUpdated }) {
               </span>
             </div>
 
-            {/* Rate Limiter Slider */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-500" />
-                  Sending Rate Limit (Messages / Second)
-                </label>
-                <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md">
-                  {formData.messagesPerSecond} msg/s
-                </span>
+            {/* Fixed Rate Limiter Note (Default 5 msg/s) */}
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                  <Zap className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                    Sending Rate Limit
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Locked to standard safe dispatch speed to protect your Meta phone quality rating.
+                  </span>
+                </div>
               </div>
-              <input
-                type="range"
-                min="1"
-                max="80"
-                step="1"
-                value={formData.messagesPerSecond}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    messagesPerSecond: parseInt(e.target.value) || 5,
-                  })
-                }
-                className="w-full accent-purple-600 cursor-pointer"
-              />
-              <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                <span>1 msg/s (Slow)</span>
-                <span>5 msg/s (Recommended)</span>
-                <span>80 msg/s (High Throughput)</span>
-              </div>
+              <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-lg shrink-0">
+                5 msg/s (Default)
+              </span>
             </div>
 
             {/* Buttons */}

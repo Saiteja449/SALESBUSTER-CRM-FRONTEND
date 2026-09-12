@@ -13,6 +13,7 @@ export const API_ENDPOINTS = {
   },
   LEADS: {
     BASE: `${API_BASE_URL}/leads`,
+    IMPORT_EXCEL: `${API_BASE_URL}/leads/import-excel`,
   },
   ACTIVITIES: {
     BASE: `${API_BASE_URL}/activities`,

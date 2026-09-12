@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
+import CloudSettingsModal from "../components/whatsapp/CloudSettingsModal.jsx";
 
 const STEPS = [
   { id: 1, title: "Campaign Info", icon: Layers },
@@ -38,6 +39,8 @@ export default function CreateCampaign() {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [cloudStatus, setCloudStatus] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Step 1: Campaign details
   const [campaignName, setCampaignName] = useState("");
@@ -45,6 +48,7 @@ export default function CreateCampaign() {
   // Step 2: Audience criteria
   const [audienceCriteria, setAudienceCriteria] = useState({
     filterType: "filtered",
+    leadType: "all",
     leadStatus: [],
     services: [],
     cities: [],
@@ -65,12 +69,27 @@ export default function CreateCampaign() {
   const [headerMediaUrl, setHeaderMediaUrl] = useState("");
   const [headerMediaName, setHeaderMediaName] = useState("");
 
-  // Step 5: Rate & Launch
-  const [messagesPerSecond, setMessagesPerSecond] = useState(5);
+  // Step 5: Rate & Launch (fixed at default 5 msg/sec)
+  const messagesPerSecond = 5;
 
   useEffect(() => {
+    checkCloudStatus();
     fetchTemplates();
   }, []);
+
+  const checkCloudStatus = async () => {
+    try {
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.STATUS);
+      if (res.data.success) {
+        setCloudStatus(res.data.data);
+        if (!res.data.data?.isConfigured) {
+          setSettingsOpen(true);
+        }
+      }
+    } catch (err) {
+      console.error("Error checking Cloud API status:", err);
+    }
+  };
 
   useEffect(() => {
     if (templates.length > 0 && preselectedTemplateId) {
@@ -260,6 +279,30 @@ export default function CreateCampaign() {
         </span>
       </div>
 
+      {/* Cloud API Not Configured Banner */}
+      {cloudStatus && !cloudStatus.isConfigured && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start gap-3">
+            <Radio className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 animate-pulse" />
+            <div>
+              <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                WhatsApp Cloud API is not connected
+              </h4>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                Connect your Meta Business Account credentials to ensure templates load and campaigns can be dispatched.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs shrink-0 self-start sm:self-auto"
+          >
+            Setup Cloud API
+          </button>
+        </div>
+      )}
+
       {/* Stepper Wizard Bar */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <div className="flex items-center justify-between relative">
@@ -381,6 +424,41 @@ export default function CreateCampaign() {
               </div>
             </div>
 
+            {/* Lead Segment: All, Old Leads, New Leads */}
+            <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                Audience Lead Segment
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "all", label: "All Leads (Full Database)" },
+                  { id: "old_leads_only", label: "Old Leads Only (Excel Imports)" },
+                  { id: "new_leads_only", label: "New Leads Only" },
+                ].map((seg) => {
+                  const active = (audienceCriteria.leadType || "all") === seg.id;
+                  return (
+                    <button
+                      key={seg.id}
+                      type="button"
+                      onClick={() =>
+                        setAudienceCriteria((prev) => ({
+                          ...prev,
+                          leadType: seg.id,
+                        }))
+                      }
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                        active
+                          ? "bg-purple-600 text-white shadow-xs font-bold"
+                          : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-purple-500/40"
+                      }`}
+                    >
+                      {seg.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Filter Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
               {/* Status filter */}
@@ -429,18 +507,24 @@ export default function CreateCampaign() {
                   Service / Product
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {(activeServices || ["General Enquiry"]).map((service) => {
-                    const active = audienceCriteria.services.includes(service);
+                  {(activeServices || ["General Enquiry"]).map((service, idx) => {
+                    const serviceName =
+                      typeof service === "string" ? service : (service.name || service.code || "General Enquiry");
+                    const serviceKey =
+                      typeof service === "string"
+                        ? service
+                        : (service.id || service._id || `svc_${idx}`);
+                    const active = audienceCriteria.services.includes(serviceName);
                     return (
                       <button
-                        key={service}
+                        key={serviceKey}
                         type="button"
                         onClick={() => {
                           setAudienceCriteria((prev) => ({
                             ...prev,
                             services: active
-                              ? prev.services.filter((s) => s !== service)
-                              : [...prev.services, service],
+                              ? prev.services.filter((s) => s !== serviceName)
+                              : [...prev.services, serviceName],
                           }));
                         }}
                         className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
@@ -449,7 +533,7 @@ export default function CreateCampaign() {
                             : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                         }`}
                       >
-                        {service}
+                        {serviceName}
                       </button>
                     );
                   })}
@@ -519,13 +603,15 @@ export default function CreateCampaign() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {templates.map((template) => {
-                  const isSelected = selectedTemplate?._id === template._id;
+                {templates.map((template, idx) => {
+                  const tId = template._id || template.id || template.metaTemplateId || `tpl_${idx}`;
+                  const selectedId = selectedTemplate?._id || selectedTemplate?.id || selectedTemplate?.metaTemplateId;
+                  const isSelected = selectedId === tId;
                   const body = template.components?.find((c) => c.type === "BODY")?.text || "";
 
                   return (
                     <div
-                      key={template._id}
+                      key={tId}
                       onClick={() => handleSelectTemplate(template)}
                       className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
                         isSelected
@@ -536,7 +622,7 @@ export default function CreateCampaign() {
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                            {template.category}
+                            {typeof template.category === "object" ? template.category?.name : (template.category || "UTILITY")}
                           </span>
                           <span className="text-[10px] text-slate-400 font-medium">
                             {template.variableCount || 0} variables
@@ -767,7 +853,7 @@ export default function CreateCampaign() {
                   Immediate Queue Dispatch
                 </h4>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Launching will immediately queue recipients and dispatch messages at your configured rate ({messagesPerSecond} msg/sec). You can pause or cancel anytime from the campaign dashboard.
+                  Launching will immediately queue recipients and dispatch messages at the standard safe rate (5 msg/sec). You can pause or cancel anytime from the campaign dashboard.
                 </p>
               </div>
             </div>
@@ -795,7 +881,7 @@ export default function CreateCampaign() {
               <div className="flex justify-between">
                 <span className="text-slate-400">Sending Speed:</span>
                 <span className="font-medium text-slate-700 dark:text-slate-300">
-                  {messagesPerSecond} messages / sec
+                  5 messages / sec (Default)
                 </span>
               </div>
               <div className="flex justify-between">
@@ -868,6 +954,15 @@ export default function CreateCampaign() {
           )}
         </div>
       </div>
+      {/* Cloud Settings Modal */}
+      <CloudSettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onUpdated={async () => {
+          await checkCloudStatus();
+          fetchTemplates();
+        }}
+      />
     </div>
   );
 }

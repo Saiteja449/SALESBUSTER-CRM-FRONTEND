@@ -15,11 +15,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import ImportLeadsModal from "../components/leads/ImportLeadsModal.jsx";
 import {
   formatDate,
   getStageColor,
@@ -95,6 +97,7 @@ export default function Leads() {
   const [triggerFetch, setTriggerFetch] = useState(0);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   // const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -243,6 +246,12 @@ export default function Leads() {
     }
   };
 
+  const handleImportSuccess = () => {
+    setTriggerFetch((prev) => prev + 1);
+    setPage(0);
+    navigate("/leads/oldleads");
+  };
+
   const handleOpenEdit = (lead) => {
     setSelectedLead(lead);
     let currentAssignee = lead.assignedTo || "Unassigned";
@@ -342,6 +351,12 @@ export default function Leads() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+          <button
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-colors shadow-xs"
+          >
+            <FileSpreadsheet className="w-4 h-4" /> Import Excel
+          </button>
           <button
             onClick={handleOpenAdd}
             className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-brand-primary text-sm font-bold rounded-lg transition-colors"
@@ -954,6 +969,13 @@ export default function Leads() {
           </div>
         </div>
       )}
+
+      {/* Bulk Import Leads Modal */}
+      <ImportLeadsModal
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImportSuccess={handleImportSuccess}
+      />
     </div>
   );
 }

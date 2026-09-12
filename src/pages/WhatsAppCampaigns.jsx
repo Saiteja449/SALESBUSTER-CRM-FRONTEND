@@ -35,8 +35,11 @@ export default function WhatsAppCampaigns() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState(null);
+  const [checkingCloudStatus, setCheckingCloudStatus] = useState(true);
 
   useEffect(() => {
+    checkCloudStatus(true);
     fetchCampaigns();
 
     if (orgId) {
@@ -92,6 +95,26 @@ export default function WhatsAppCampaigns() {
     };
   }, [orgId]);
 
+  const checkCloudStatus = async (autoPrompt = true) => {
+    setCheckingCloudStatus(true);
+    try {
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.STATUS);
+      if (res.data.success) {
+        const data = res.data.data;
+        setCloudStatus(data);
+        if (!data.isConfigured && autoPrompt) {
+          setSettingsOpen(true);
+        }
+        return data;
+      }
+    } catch (err) {
+      console.error("Error checking Cloud API status:", err);
+    } finally {
+      setCheckingCloudStatus(false);
+    }
+    return null;
+  };
+
   const fetchCampaigns = async () => {
     try {
       const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.CAMPAIGNS);
@@ -103,6 +126,14 @@ export default function WhatsAppCampaigns() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleNewCampaign = () => {
+    if (!cloudStatus?.isConfigured) {
+      setSettingsOpen(true);
+      return;
+    }
+    navigate("/whatsapp/campaigns/create");
   };
 
   const handleStart = async (e, id) => {
@@ -173,13 +204,34 @@ export default function WhatsAppCampaigns() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          {/* Cloud API Connection Indicator */}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-1.5"
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2 ${
+              checkingCloudStatus
+                ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500"
+                : cloudStatus?.isConfigured
+                ? "border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100/60"
+                : "border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100/60 animate-pulse"
+            }`}
           >
-            <Radio className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Cloud API Settings</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                checkingCloudStatus
+                  ? "bg-slate-400"
+                  : cloudStatus?.isConfigured
+                  ? "bg-emerald-500"
+                  : "bg-amber-500"
+              }`}
+            />
+            <span>
+              {checkingCloudStatus
+                ? "Checking API..."
+                : cloudStatus?.isConfigured
+                ? `Cloud API Connected (${cloudStatus.messagingLimitTier || "Active"})`
+                : "API Not Configured (Setup)"}
+            </span>
           </button>
 
           <button
@@ -193,7 +245,7 @@ export default function WhatsAppCampaigns() {
 
           <button
             type="button"
-            onClick={() => navigate("/whatsapp/campaigns/create")}
+            onClick={handleNewCampaign}
             className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -201,6 +253,38 @@ export default function WhatsAppCampaigns() {
           </button>
         </div>
       </div>
+
+      {/* Setup Required Banner if Cloud API is not configured */}
+      {!checkingCloudStatus && !cloudStatus?.isConfigured && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/10 to-transparent border border-amber-500/30 dark:border-amber-500/20 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+              <Radio className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  WhatsApp Cloud API Not Configured
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  Action Required
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                Your organization has not connected its official Meta WhatsApp Business Account (WABA). Connect your credentials to send bulk campaigns, broadcast templates, and track delivery rates.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span>Setup Cloud API Now</span>
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -305,24 +389,48 @@ export default function WhatsAppCampaigns() {
         </div>
       ) : filteredCampaigns.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8">
-          <div className="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 mx-auto flex items-center justify-center mb-3">
-            <Send className="w-7 h-7" />
-          </div>
-          <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
-            No Campaigns Found
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4">
-            Start a new broadcast campaign to reach your leads using approved
-            WhatsApp templates.
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate("/whatsapp/campaigns/create")}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Create First Campaign</span>
-          </button>
+          {!cloudStatus?.isConfigured ? (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center mb-3">
+                <Radio className="w-7 h-7 animate-pulse" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
+                WhatsApp Cloud API Setup Required
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4 leading-relaxed">
+                Connect your Meta WhatsApp Business Account ID, Phone Number ID, and Access Token to start broadcasting campaigns to your leads.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5 shadow-sm"
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>Setup WhatsApp Cloud API</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 mx-auto flex items-center justify-center mb-3">
+                <Send className="w-7 h-7" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">
+                No Campaigns Found
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4">
+                Start a new broadcast campaign to reach your leads using approved
+                WhatsApp templates.
+              </p>
+              <button
+                type="button"
+                onClick={handleNewCampaign}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create First Campaign</span>
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -446,7 +554,10 @@ export default function WhatsAppCampaigns() {
       <CloudSettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        onUpdated={fetchCampaigns}
+        onUpdated={async () => {
+          await checkCloudStatus(false);
+          fetchCampaigns();
+        }}
       />
     </div>
   );

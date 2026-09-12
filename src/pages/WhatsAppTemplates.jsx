@@ -191,15 +191,17 @@ export default function WhatsAppTemplates() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredTemplates.map((template) => {
+          {filteredTemplates.map((template, idx) => {
+            const tKey = template._id || template.id || template.metaTemplateId || `${template.name}_${template.language}_${idx}`;
             const headerComp = template.components?.find((c) => c.type === "HEADER");
             const bodyComp = template.components?.find((c) => c.type === "BODY");
             const footerComp = template.components?.find((c) => c.type === "FOOTER");
             const buttonsComp = template.components?.find((c) => c.type === "BUTTONS");
+            const categoryStr = typeof template.category === "object" ? (template.category?.name || "UTILITY") : (template.category || "UTILITY");
 
             return (
               <div
-                key={template._id}
+                key={tKey}
                 className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
               >
                 {/* Card Header */}
@@ -207,12 +209,12 @@ export default function WhatsAppTemplates() {
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <span
                       className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                        template.category === "MARKETING"
+                        categoryStr === "MARKETING"
                           ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
                           : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
                       }`}
                     >
-                      {template.category}
+                      {categoryStr}
                     </span>
 
                     <span
@@ -225,7 +227,7 @@ export default function WhatsAppTemplates() {
                       }`}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      {template.status}
+                      {template.status || "APPROVED"}
                     </span>
                   </div>
 
@@ -236,7 +238,7 @@ export default function WhatsAppTemplates() {
                     {template.name}
                   </h3>
                   <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                    <span>Lang: {template.language}</span>
+                    <span>Lang: {template.language || "en_US"}</span>
                     <span>•</span>
                     <span>{template.variableCount || 0} Variables</span>
                   </div>
@@ -271,9 +273,9 @@ export default function WhatsAppTemplates() {
                     {/* Buttons */}
                     {buttonsComp?.buttons && buttonsComp.buttons.length > 0 && (
                       <div className="pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1">
-                        {buttonsComp.buttons.map((btn, idx) => (
+                        {buttonsComp.buttons.map((btn, bIdx) => (
                           <div
-                            key={idx}
+                            key={btn.id || `${btn.text || "btn"}_${bIdx}`}
                             className="w-full text-center py-1.5 rounded-lg bg-slate-50 dark:bg-slate-700/50 text-purple-600 dark:text-purple-400 text-xs font-semibold"
                           >
                             {btn.text || "Action"}
@@ -289,7 +291,11 @@ export default function WhatsAppTemplates() {
                   <button
                     type="button"
                     onClick={() =>
-                      navigate(`/whatsapp/campaigns/create?templateId=${template._id}`)
+                      navigate(
+                        `/whatsapp/campaigns/create?templateId=${
+                          template._id || template.id || template.metaTemplateId || ""
+                        }`
+                      )
                     }
                     className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white dark:hover:bg-purple-600 transition-all cursor-pointer"
                   >
