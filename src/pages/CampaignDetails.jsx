@@ -18,6 +18,9 @@ import {
   AlertTriangle,
   RefreshCw,
   Users,
+  Repeat,
+  CalendarCheck,
+  Calendar,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
@@ -167,6 +170,32 @@ export default function CampaignDetails() {
     }
   };
 
+  const handleTriggerRun = async () => {
+    setActionLoading(true);
+    try {
+      await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.TRIGGER_RUN(id));
+      fetchCampaign();
+      fetchAnalytics();
+      fetchRecipients(page);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to trigger run.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleToggleSchedule = async () => {
+    setActionLoading(true);
+    try {
+      await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.TOGGLE_SCHEDULE(id));
+      fetchCampaign();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update schedule status.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleCancel = async () => {
     if (
       !window.confirm(
@@ -274,6 +303,30 @@ export default function CampaignDetails() {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
+          {campaign.status === "Scheduled" && (
+            <>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={handleTriggerRun}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center gap-1.5 shadow-xs"
+                title="Trigger an immediate run right now"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Run Now</span>
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={handleToggleSchedule}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5"
+              >
+                <Pause className="w-3.5 h-3.5" />
+                <span>Pause Schedule</span>
+              </button>
+            </>
+          )}
+
           {campaign.status === "Draft" && (
             <button
               type="button"
@@ -302,11 +355,17 @@ export default function CampaignDetails() {
             <button
               type="button"
               disabled={actionLoading}
-              onClick={handleResume}
+              onClick={
+                campaign.campaignType === "automated"
+                  ? handleToggleSchedule
+                  : handleResume
+              }
               className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all flex items-center gap-1.5 shadow-xs"
             >
               <Play className="w-3.5 h-3.5" />
-              <span>Resume</span>
+              <span>
+                {campaign.campaignType === "automated" ? "Resume Schedule" : "Resume"}
+              </span>
             </button>
           )}
 
@@ -335,6 +394,89 @@ export default function CampaignDetails() {
           )}
         </div>
       </div>
+
+      {/* Automation & Schedule Card */}
+      {campaign.campaignType === "automated" && (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent border border-purple-500/30 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Repeat className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Automated Recurring Campaign (node-cron)
+              </h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white uppercase">
+                {campaign.schedule?.frequency || "WEEKLY"}
+              </span>
+            </div>
+            {campaign.schedule?.nextRunAt && campaign.status === "Scheduled" && (
+              <span className="text-xs font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                <CalendarCheck className="w-4 h-4" />
+                Next Run: {new Date(campaign.schedule.nextRunAt).toLocaleString()}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Schedule Rule</div>
+              <div className="font-bold text-slate-900 dark:text-white">
+                {campaign.schedule?.frequency === "weekly"
+                  ? `Every ${(campaign.schedule?.daysOfWeek || [1]).map((d) => ["Sun", "Monday", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")} at ${campaign.schedule?.timeOfDay || "10:00"}`
+                  : campaign.schedule?.frequency === "daily"
+                  ? `Daily at ${campaign.schedule?.timeOfDay || "10:00"}`
+                  : `${campaign.schedule?.frequency || "Automated"}`}
+              </div>
+              {campaign.schedule?.cronExpression && (
+                <div className="text-[10px] text-purple-600 dark:text-purple-400 font-mono mt-0.5">
+                  cron: {campaign.schedule.cronExpression}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Delivery Policy</div>
+              <div className="font-bold text-purple-600 dark:text-purple-400">
+                {campaign.audiencePolicy?.mode === "new_leads_only"
+                  ? "New Leads Only"
+                  : campaign.audiencePolicy?.mode === "cooldown"
+                  ? `Cooldown (${campaign.audiencePolicy?.cooldownDays || 7} Days)`
+                  : "All Matching Leads"}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                {campaign.audiencePolicy?.mode === "new_leads_only"
+                  ? "No duplicate sends to past leads"
+                  : `Protected from frequent sends`}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Target Pipeline</div>
+              <div className="font-semibold text-slate-900 dark:text-white truncate">
+                {campaign.audienceCriteria?.leadStatus?.length > 0
+                  ? campaign.audienceCriteria.leadStatus.join(", ")
+                  : "All Statuses"}
+              </div>
+              <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                {campaign.audienceCriteria?.services?.length > 0
+                  ? campaign.audienceCriteria.services.join(", ")
+                  : "All Services"}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+              <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Execution Runs</div>
+              <div className="font-black text-slate-900 dark:text-white text-base">
+                #{campaign.schedule?.currentRunCount || 0}
+              </div>
+              {campaign.schedule?.lastRunAt && (
+                <div className="text-[10px] text-slate-400 mt-0.5">
+                  Last: {new Date(campaign.schedule.lastRunAt).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress & Funnel Card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">

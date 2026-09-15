@@ -19,6 +19,9 @@ import {
   BarChart2,
   Users,
   ShieldAlert,
+  Repeat,
+  CalendarCheck,
+  Calendar,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
@@ -48,6 +51,8 @@ export default function WhatsAppCampaigns() {
 
     // Real-time Socket.IO updates
     socket.on("campaign_started", () => fetchCampaigns());
+    socket.on("campaign_scheduled", () => fetchCampaigns());
+    socket.on("campaign_automated_trigger", () => fetchCampaigns());
     socket.on("campaign_paused", () => fetchCampaigns());
     socket.on("campaign_resumed", () => fetchCampaigns());
     socket.on("campaign_completed", () => fetchCampaigns());
@@ -86,6 +91,8 @@ export default function WhatsAppCampaigns() {
 
     return () => {
       socket.off("campaign_started");
+      socket.off("campaign_scheduled");
+      socket.off("campaign_automated_trigger");
       socket.off("campaign_paused");
       socket.off("campaign_resumed");
       socket.off("campaign_completed");
@@ -163,6 +170,26 @@ export default function WhatsAppCampaigns() {
       fetchCampaigns();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to resume campaign.");
+    }
+  };
+
+  const handleTriggerRun = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.TRIGGER_RUN(id));
+      fetchCampaigns();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to trigger run.");
+    }
+  };
+
+  const handleToggleSchedule = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.TOGGLE_SCHEDULE(id));
+      fetchCampaigns();
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update schedule status.");
     }
   };
 
@@ -355,6 +382,7 @@ export default function WhatsAppCampaigns() {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
           {[
             "All",
+            "Scheduled",
             "Running",
             "Draft",
             "Completed",
@@ -447,11 +475,13 @@ export default function WhatsAppCampaigns() {
               >
                 {/* Left: Info */}
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
                         campaign.status === "Running"
                           ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                          : campaign.status === "Scheduled"
+                          ? "bg-purple-500/15 text-purple-600 dark:text-purple-400 font-bold"
                           : campaign.status === "Completed"
                           ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                           : campaign.status === "Paused"
@@ -462,8 +492,26 @@ export default function WhatsAppCampaigns() {
                       {campaign.status === "Running" && (
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                       )}
+                      {campaign.status === "Scheduled" && (
+                        <Clock className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                      )}
                       <span>{campaign.status}</span>
                     </span>
+
+                    {campaign.campaignType === "automated" && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                        <Repeat className="w-3 h-3" />
+                        <span>
+                          {campaign.schedule?.frequency === "weekly"
+                            ? `Weekly (${(campaign.schedule?.daysOfWeek || [1])
+                                .map((d) => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d])
+                                .join(", ")}) at ${campaign.schedule?.timeOfDay || "10:00"}`
+                            : campaign.schedule?.frequency === "daily"
+                            ? `Daily at ${campaign.schedule?.timeOfDay || "10:00"}`
+                            : `${campaign.schedule?.frequency || "Automated"}`}
+                        </span>
+                      </span>
+                    )}
 
                     <span className="text-xs text-slate-400 font-medium">
                       Template: {campaign.templateName}
@@ -474,12 +522,48 @@ export default function WhatsAppCampaigns() {
                     {campaign.name}
                   </h3>
 
-                  <div className="flex items-center gap-4 text-xs text-slate-400 mt-1">
-                    <span>
-                      Created: {new Date(campaign.createdAt).toLocaleDateString()}
-                    </span>
+                  {/* Organization targeting tags */}
+                  {(campaign.audienceCriteria?.leadStatus?.length > 0 ||
+                    campaign.audienceCriteria?.services?.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                      {campaign.audienceCriteria.leadStatus?.slice(0, 3).map((st) => (
+                        <span
+                          key={st}
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                        >
+                          {st}
+                        </span>
+                      ))}
+                      {campaign.audienceCriteria.services?.slice(0, 2).map((sv) => (
+                        <span
+                          key={sv}
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300"
+                        >
+                          {sv}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 mt-1.5">
+                    {campaign.schedule?.nextRunAt && campaign.status === "Scheduled" ? (
+                      <span className="text-purple-600 dark:text-purple-400 font-semibold flex items-center gap-1">
+                        <CalendarCheck className="w-3 h-3" />
+                        Next Run: {new Date(campaign.schedule.nextRunAt).toLocaleString()}
+                      </span>
+                    ) : (
+                      <span>Created: {new Date(campaign.createdAt).toLocaleDateString()}</span>
+                    )}
                     <span>•</span>
                     <span>By: {campaign.createdByName || "Agent"}</span>
+                    {campaign.schedule?.currentRunCount > 0 && (
+                      <>
+                        <span>•</span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          Runs: #{campaign.schedule.currentRunCount}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -518,6 +602,29 @@ export default function WhatsAppCampaigns() {
                     </button>
                   )}
 
+                  {campaign.status === "Scheduled" && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(e) => handleTriggerRun(e, campaign._id)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1 shadow-xs"
+                        title="Trigger an immediate run right now"
+                      >
+                        <Play className="w-3 h-3" />
+                        <span>Run Now</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleToggleSchedule(e, campaign._id)}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1"
+                        title="Pause this recurring schedule"
+                      >
+                        <Pause className="w-3 h-3" />
+                        <span>Pause</span>
+                      </button>
+                    </>
+                  )}
+
                   {campaign.status === "Running" && (
                     <button
                       type="button"
@@ -532,11 +639,15 @@ export default function WhatsAppCampaigns() {
                   {campaign.status === "Paused" && (
                     <button
                       type="button"
-                      onClick={(e) => handleResume(e, campaign._id)}
+                      onClick={(e) =>
+                        campaign.campaignType === "automated"
+                          ? handleToggleSchedule(e, campaign._id)
+                          : handleResume(e, campaign._id)
+                      }
                       className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1 shadow-xs"
                     >
                       <Play className="w-3 h-3" />
-                      <span>Resume</span>
+                      <span>{campaign.campaignType === "automated" ? "Resume Schedule" : "Resume"}</span>
                     </button>
                   )}
 

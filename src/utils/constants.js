@@ -53,6 +53,10 @@ export const API_ENDPOINTS = {
       `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/recipients`,
     ANALYTICS: (id) =>
       `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/analytics`,
+    TRIGGER_RUN: (id) =>
+      `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/trigger-run`,
+    TOGGLE_SCHEDULE: (id) =>
+      `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/toggle-schedule`,
   },
   ANALYTICS: {
     BASE: `${API_BASE_URL}/analytics`,
