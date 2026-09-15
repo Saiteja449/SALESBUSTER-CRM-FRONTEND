@@ -93,7 +93,12 @@ export default function CreateCampaign() {
 
   useEffect(() => {
     if (templates.length > 0 && preselectedTemplateId) {
-      const found = templates.find((t) => t._id === preselectedTemplateId);
+      const found = templates.find(
+        (t) =>
+          t.id === preselectedTemplateId ||
+          t._id === preselectedTemplateId ||
+          t.metaTemplateId === preselectedTemplateId
+      );
       if (found) {
         handleSelectTemplate(found);
       }
@@ -217,6 +222,17 @@ export default function CreateCampaign() {
       return;
     }
 
+    const resolvedTemplateId =
+      selectedTemplate.id ||
+      selectedTemplate._id ||
+      selectedTemplate.metaTemplateId;
+
+    if (!resolvedTemplateId) {
+      setError("Selected template ID could not be determined. Please re-select the template.");
+      setCurrentStep(3);
+      return;
+    }
+
     if (audienceEstimate && audienceEstimate.eligibleCount === 0) {
       setError("Target audience has 0 eligible recipients.");
       setCurrentStep(2);
@@ -227,7 +243,8 @@ export default function CreateCampaign() {
     try {
       const payload = {
         name: campaignName.trim(),
-        templateId: selectedTemplate._id,
+        templateId: resolvedTemplateId,
+        template: selectedTemplate,
         variableMappings,
         audienceCriteria,
         headerMedia: headerMediaUrl
@@ -248,7 +265,9 @@ export default function CreateCampaign() {
 
       if (res.data.success) {
         const newCampaign = res.data.campaign;
-        navigate(`/whatsapp/campaigns/${newCampaign._id}`);
+        navigate(
+          `/whatsapp/campaigns/${newCampaign?.id || newCampaign?._id || ""}`
+        );
       }
     } catch (err) {
       console.error("Create campaign error:", err);

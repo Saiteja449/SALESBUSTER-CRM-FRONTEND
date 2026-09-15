@@ -27,6 +27,7 @@ import WhatsAppCampaigns from "./pages/WhatsAppCampaigns.jsx";
 import CreateCampaign from "./pages/CreateCampaign.jsx";
 import CampaignDetails from "./pages/CampaignDetails.jsx";
 import WhatsAppTemplates from "./pages/WhatsAppTemplates.jsx";
+import CreateWhatsAppTemplate from "./pages/CreateWhatsAppTemplate.jsx";
 import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
@@ -125,6 +126,7 @@ export default function App() {
             <Route path="/whatsapp/campaigns/create" element={<CreateCampaign />} />
             <Route path="/whatsapp/campaigns/:id" element={<CampaignDetails />} />
             <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
+            <Route path="/whatsapp/templates/create" element={<CreateWhatsAppTemplate />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

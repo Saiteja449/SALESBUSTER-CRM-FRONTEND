@@ -918,13 +918,28 @@ export default function WhatsAppChat() {
                               </span>
                             )}
 
-                            {/* Human Agent badge */}
+                            {/* Campaign or Human Agent badge */}
                             {!isIncoming &&
                               !msg.aiGenerated &&
                               msg.senderName && (
-                                <span className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-[#130a28]/20 text-white text-[9px] rounded font-semibold mb-1">
-                                  <User className="w-2.5 h-2.5" />{" "}
-                                  {msg.senderName}
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold mb-1 ${
+                                    msg.source === "cloud_api_campaign"
+                                      ? "bg-purple-500/20 text-purple-200 border border-purple-400/20"
+                                      : "bg-[#130a28]/20 text-white"
+                                  }`}
+                                >
+                                  {msg.source === "cloud_api_campaign" ? (
+                                    <>
+                                      <Send className="w-2.5 h-2.5 text-purple-300" />
+                                      <span>Campaign: {msg.senderName}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <User className="w-2.5 h-2.5" />
+                                      <span>{msg.senderName}</span>
+                                    </>
+                                  )}
                                 </span>
                               )}
 

@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Search,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import CloudSettingsModal from "../components/whatsapp/CloudSettingsModal.jsx";
@@ -64,6 +65,31 @@ export default function WhatsAppTemplates() {
     }
   };
 
+  const handleDeleteTemplate = async (id, name) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete template "${name}" from Meta and your CRM? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await axios.delete(
+        API_ENDPOINTS.WHATSAPP_CLOUD.DELETE_TEMPLATE(id)
+      );
+      if (res.data.success) {
+        setToastMessage(`Template "${name}" deleted successfully.`);
+        fetchTemplates();
+      }
+    } catch (err) {
+      alert(
+        err.response?.data?.message ||
+          "Failed to delete template from Meta WhatsApp Cloud API."
+      );
+    }
+  };
+
   const filteredTemplates = templates.filter((t) => {
     const matchSearch =
       !search ||
@@ -104,10 +130,19 @@ export default function WhatsAppTemplates() {
             type="button"
             onClick={handleSync}
             disabled={syncing}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all flex items-center gap-1.5 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
             <span>{syncing ? "Syncing..." : "Sync from Meta"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/whatsapp/templates/create")}
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Create Template</span>
           </button>
         </div>
       </div>
@@ -176,18 +211,28 @@ export default function WhatsAppTemplates() {
             No Message Templates Found
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4">
-            Connect your WhatsApp Cloud API account and click &quot;Sync from Meta&quot; to
-            load your approved templates.
+            Create a new official Meta-approved template directly, or sync existing approved templates from Meta.
           </p>
-          <button
-            type="button"
-            onClick={handleSync}
-            disabled={syncing}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-            <span>Sync Templates</span>
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate("/whatsapp/templates/create")}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Create Template</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSync}
+              disabled={syncing}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 transition-all inline-flex items-center gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              <span>Sync from Meta</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -287,7 +332,7 @@ export default function WhatsAppTemplates() {
                 </div>
 
                 {/* Action Footer */}
-                <div className="p-3.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div className="p-3.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() =>
@@ -297,10 +342,24 @@ export default function WhatsAppTemplates() {
                         }`
                       )
                     }
-                    className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white dark:hover:bg-purple-600 transition-all cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 hover:bg-purple-600 hover:text-white dark:hover:bg-purple-600 transition-all cursor-pointer"
                   >
                     <span>Use in Campaign</span>
                     <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDeleteTemplate(
+                        template._id || template.id,
+                        template.name
+                      )
+                    }
+                    className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors border border-transparent hover:border-rose-200 dark:hover:border-rose-900 cursor-pointer"
+                    title="Delete template from Meta"
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
