@@ -23,6 +23,7 @@ export default function WhatsAppConnectModal({
   onRefresh,
   loadingSessions = {},
   organizationName = "",
+  whatsappLineLimit = 1,
 }) {
   const [copiedSessionId, setCopiedSessionId] = useState(null);
 
@@ -39,18 +40,20 @@ export default function WhatsAppConnectModal({
     isPrimary: true,
   };
 
-  const secondarySession = sessions.find((s) => !s.isPrimary && s.sessionId?.includes("device_2")) || {
-    sessionId: "device_2",
-    status: "disconnected",
-    qrCode: "",
-    connectedPhone: "",
-    connectedName: "",
-    label: "Device 2 (Secondary)",
-    isPrimary: false,
-  };
+  const secondarySession = whatsappLineLimit >= 2
+    ? (sessions.find((s) => !s.isPrimary && s.sessionId?.includes("device_2")) || {
+        sessionId: "device_2",
+        status: "disconnected",
+        qrCode: "",
+        connectedPhone: "",
+        connectedName: "",
+        label: "Device 2 (Secondary)",
+        isPrimary: false,
+      })
+    : null;
 
   const isPrimaryLoading = !!loadingSessions[primarySession.sessionId];
-  const isSecondaryLoading = !!loadingSessions[secondarySession.sessionId];
+  const isSecondaryLoading = secondarySession ? !!loadingSessions[secondarySession.sessionId] : false;
 
   const handleCopy = (text, sId) => {
     if (!text) return;
@@ -63,7 +66,7 @@ export default function WhatsAppConnectModal({
     if (primarySession.status === "disconnected" && onConnect) {
       onConnect(primarySession.sessionId, 1);
     }
-    if (secondarySession.status === "disconnected" && onConnect) {
+    if (whatsappLineLimit >= 2 && secondarySession && secondarySession.status === "disconnected" && onConnect) {
       onConnect(secondarySession.sessionId, 2);
     }
   };
@@ -287,8 +290,8 @@ export default function WhatsAppConnectModal({
     );
   };
 
-  const hasDisconnected =
-    primarySession.status === "disconnected" || secondarySession.status === "disconnected";
+  const hasDisconnected = primarySession.status === "disconnected" ||
+    (whatsappLineLimit >= 2 && secondarySession && secondarySession.status === "disconnected");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs animate-fadeIn">
@@ -305,7 +308,7 @@ export default function WhatsAppConnectModal({
                   Connect WhatsApp Channels
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                  2 Lines Allowed
+                  {whatsappLineLimit >= 2 ? "2 Lines Allowed" : "1 Line"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -339,7 +342,7 @@ export default function WhatsAppConnectModal({
         </div>
 
         {/* Global Action Banner */}
-        {hasDisconnected && (
+        {whatsappLineLimit >= 2 && hasDisconnected && (
           <div className="bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-transparent p-3.5 px-5 border-b border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
               <Zap className="w-4 h-4 text-purple-500 shrink-0" />
@@ -363,17 +366,22 @@ export default function WhatsAppConnectModal({
 
         {/* Main Content Area: 2 Device Cards Grid */}
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className={`grid grid-cols-1 ${whatsappLineLimit >= 2 ? 'md:grid-cols-2' : ''} gap-5`}>
             {renderDeviceCard(primarySession, 1, isPrimaryLoading)}
-            {renderDeviceCard(secondarySession, 2, isSecondaryLoading)}
+            {whatsappLineLimit >= 2 && secondarySession && renderDeviceCard(secondarySession, 2, isSecondaryLoading)}
           </div>
 
           {/* Educational Callout */}
           <div className="mt-5 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/60 flex items-start gap-3">
             <Info className="w-5 h-5 text-purple-500 shrink-0 mt-0.5" />
             <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              <strong className="text-slate-800 dark:text-slate-200">How Dual Lines Work:</strong>{" "}
-              Both WhatsApp numbers run concurrently. Messages arriving on either device will automatically populate your CRM conversations, trigger AI lead qualification, and alert assigned sales reps. You can switch or reply seamlessly.
+              {whatsappLineLimit >= 2 ? (
+                <><strong className="text-slate-800 dark:text-slate-200">How Dual Lines Work:</strong>{" "}
+                Both WhatsApp numbers run concurrently. Messages arriving on either device will automatically populate your CRM conversations, trigger AI lead qualification, and alert assigned sales reps. You can switch or reply seamlessly.</>
+              ) : (
+                <><strong className="text-slate-800 dark:text-slate-200">Single Line Mode:</strong>{" "}
+                Your organization is set up with a single WhatsApp line. Messages arriving on this device will automatically populate your CRM conversations, trigger AI lead qualification, and alert assigned sales reps. Contact your admin to upgrade to dual lines.</>
+              )}
             </div>
           </div>
         </div>

@@ -48,6 +48,7 @@ export default function WhatsAppChat() {
 
   // Connection & Session States
   const [sessions, setSessions] = useState([]);
+  const [whatsappLineLimit, setWhatsappLineLimit] = useState(1);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionLoadingMap, setSessionLoadingMap] = useState({});
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -175,10 +176,18 @@ export default function WhatsAppChat() {
       });
     });
 
+    socket.on("organization_updated", (data) => {
+      if (data?.whatsappLineLimit) {
+        setWhatsappLineLimit(data.whatsappLineLimit);
+        fetchSessionStatus();
+      }
+    });
+
     return () => {
       socket.off("whatsapp_status");
       socket.off("conversation_updated");
       socket.off("ai_status_updated");
+      socket.off("organization_updated");
     };
   }, [orgId]);
 
@@ -241,7 +250,16 @@ export default function WhatsAppChat() {
   const fetchSessionStatus = async () => {
     try {
       const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
-      setSessions(Array.isArray(res.data) ? res.data : []);
+      // Handle new { sessions, whatsappLineLimit } response shape
+      if (res.data && res.data.sessions) {
+        setSessions(Array.isArray(res.data.sessions) ? res.data.sessions : []);
+        if (res.data.whatsappLineLimit) {
+          setWhatsappLineLimit(res.data.whatsappLineLimit);
+        }
+      } else {
+        // Fallback for legacy array response
+        setSessions(Array.isArray(res.data) ? res.data : []);
+      }
     } catch (err) {
       console.error("Failed to fetch WhatsApp connection status", err);
     }
@@ -660,7 +678,7 @@ export default function WhatsAppChat() {
                 WhatsApp AI Lead Hub
               </h1>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                2 Channels
+                {whatsappLineLimit >= 2 ? "2 Channels" : "1 Channel"}
               </span>
             </div>
 
@@ -707,7 +725,8 @@ export default function WhatsAppChat() {
                 </span>
               </div>
 
-              {/* Line 2 Badge */}
+              {/* Line 2 Badge — only show if org has dual-line enabled */}
+              {whatsappLineLimit >= 2 && (
               <div
                 onClick={() => setConnectModalOpen(true)}
                 className="flex items-center gap-1.5 bg-[#251347] hover:bg-[#2e1757] px-2.5 py-1 rounded-lg border border-[#3e206c] text-xs cursor-pointer transition-colors"
@@ -747,6 +766,7 @@ export default function WhatsAppChat() {
                       : secondarySession.status}
                 </span>
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -754,7 +774,7 @@ export default function WhatsAppChat() {
         {/* Setup actions */}
         <div className="flex items-center gap-3">
           {/* Glowing button if any QR is waiting for scan */}
-          {(primarySession.status === "qr" || secondarySession.status === "qr") && (
+          {(primarySession.status === "qr" || (whatsappLineLimit >= 2 && secondarySession.status === "qr")) && (
             <button
               onClick={() => setConnectModalOpen(true)}
               className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
@@ -762,7 +782,7 @@ export default function WhatsAppChat() {
               <QrCode className="w-4 h-4" />
               <span>
                 Scan QR Code (
-                {primarySession.status === "qr" && secondarySession.status === "qr"
+                {whatsappLineLimit >= 2 && primarySession.status === "qr" && secondarySession.status === "qr"
                   ? "2 Lines Ready"
                   : primarySession.status === "qr"
                     ? "Line 1 Ready"
@@ -778,7 +798,7 @@ export default function WhatsAppChat() {
             className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
           >
             <QrCode className="w-4 h-4" />
-            <span>Connect Channels (2 QRs)</span>
+            <span>Connect {whatsappLineLimit >= 2 ? "Channels (2 QRs)" : "Channel"}</span>
           </button>
         </div>
       </div>
@@ -1686,16 +1706,17 @@ export default function WhatsAppChat() {
         </div>
       )}
 
-      {/* Dual WhatsApp QR Connection Modal */}
+      {/* WhatsApp QR Connection Modal — adapts to single or dual line */}
       <WhatsAppConnectModal
         isOpen={connectModalOpen}
         onClose={() => setConnectModalOpen(false)}
-        sessions={[primarySession, secondarySession]}
+        sessions={whatsappLineLimit >= 2 ? [primarySession, secondarySession] : [primarySession]}
         onConnect={handleConnect}
         onDisconnect={handleLogout}
         onRefresh={fetchSessionStatus}
         loadingSessions={sessionLoadingMap}
         organizationName={organization?.name || currentUser?.organizationName || ""}
+        whatsappLineLimit={whatsappLineLimit}
       />
     </div>
   );
