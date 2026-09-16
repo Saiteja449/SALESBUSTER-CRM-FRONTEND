@@ -4901,6 +4901,51 @@ export default function OrganizationProfile() {
                 </div>
               </div>
             </div>
+
+            {/* WhatsApp Connection Mode */}
+            <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border-main">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-emerald-500" />
+                  <h3 className="font-bold text-xs text-text-primary">
+                    WhatsApp Connection
+                  </h3>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                  (org.whatsappLineLimit || 1) >= 2
+                    ? "bg-emerald-500/10 text-emerald-600"
+                    : "bg-slate-500/10 text-slate-600"
+                }`}>
+                  {(org.whatsappLineLimit || 1) >= 2 ? "DUAL LINE" : "SINGLE LINE"}
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-between py-1.5 border-b border-border-main/50">
+                  <span className="text-text-secondary">
+                    Connection Mode:
+                  </span>
+                  <span className="font-bold text-text-primary">
+                    {(org.whatsappLineLimit || 1) >= 2 ? "Dual Lines (2 Devices)" : "Single Line (1 Device)"}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1.5">
+                  <span className="text-text-secondary">
+                    Max Devices:
+                  </span>
+                  <span className="font-bold text-text-primary">
+                    {org.whatsappLineLimit || 1}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-secondary/50 border border-border-main">
+                <Info className="w-3.5 h-3.5 text-text-secondary shrink-0 mt-0.5" />
+                <p className="text-[10px] text-text-secondary leading-relaxed">
+                  WhatsApp connection mode is managed by your system administrator. Contact support to upgrade or change your connection plan.
+                </p>
+              </div>
+            </div>
           </div>
 
           {renderDailyAiUsageCard(false)}

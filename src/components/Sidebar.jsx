@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -20,6 +20,7 @@ import {
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
+import LogoutConfirmModal from "./LogoutConfirmModal.jsx";
 import crmLogo from "../assets/images/Logo.png";
 
 const sidebarDrawerWidth = 260;
@@ -38,6 +39,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   } = useAuth();
   const { unreadCount } = useNotifications();
   const { openSupportModal } = useSupportModal();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const isOrgOwner =
     isManager || currentUser?.role === "Sales Manager" || currentUser?.isOrgOwner;
@@ -310,8 +312,8 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       <div className="p-3">
         <button
           type="button"
-          onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+          onClick={() => setShowLogoutModal(true)}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer"
         >
           <LogOut className="w-5 h-5 shrink-0" />
           <span className="text-sm font-semibold text-left">Logout</span>
@@ -339,6 +341,18 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       >
         {drawerContent}
       </aside>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={() => {
+          setShowLogoutModal(false);
+          logout();
+        }}
+        currentUser={currentUser}
+        organization={organization}
+      />
     </>
   );
 }
