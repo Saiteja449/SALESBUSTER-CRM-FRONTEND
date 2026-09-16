@@ -17,13 +17,15 @@ import {
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
+import LogoutConfirmModal from "./LogoutConfirmModal.jsx";
 import crmLogo from "../assets/images/Logo.png";
 
 export default function AccountSuspended() {
-  const { organization, logout, fetchOrganization, isSubscriptionExpired, isManager } = useAuth();
+  const { organization, logout, fetchOrganization, isSubscriptionExpired, isManager, currentUser } = useAuth();
   const { openSupportModal } = useSupportModal();
   const [checking, setChecking] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const orgName = organization?.name || "Workspace";
   const orgEmail = organization?.email || "N/A";
@@ -309,7 +311,7 @@ export default function AccountSuspended() {
           {/* Polite Sign Out Button */}
           <button
             type="button"
-            onClick={logout}
+            onClick={() => setShowLogoutModal(true)}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 border border-slate-200 dark:border-slate-700 hover:border-red-200 dark:hover:border-red-800 active:scale-[0.98] transition-all cursor-pointer"
             title="Sign out of your account"
           >
@@ -348,6 +350,18 @@ export default function AccountSuspended() {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={() => {
+          setShowLogoutModal(false);
+          logout();
+        }}
+        currentUser={currentUser}
+        organization={organization}
+      />
     </div>
   );
 }

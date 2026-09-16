@@ -27,11 +27,14 @@ import {
   Calendar,
   X,
   UserPlus,
+  QrCode,
+  Smartphone,
 } from "lucide-react";
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLeads } from "../context/LeadsContext.jsx";
+import WhatsAppConnectModal from "../components/whatsapp/WhatsAppConnectModal.jsx";
 
 export default function WhatsAppChat() {
   const { currentUser, organization } = useAuth();
@@ -46,6 +49,8 @@ export default function WhatsAppChat() {
   // Connection & Session States
   const [sessions, setSessions] = useState([]);
   const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionLoadingMap, setSessionLoadingMap] = useState({});
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
 
   // Conversations List
   const [conversations, setConversations] = useState([]);
@@ -120,10 +125,10 @@ export default function WhatsAppChat() {
         return;
       }
       setSessions((prev) => {
-        const existingIndex = prev.findIndex(s => s.sessionId === data.sessionId);
+        const existingIndex = prev.findIndex((s) => s.sessionId === data.sessionId);
         if (existingIndex >= 0) {
           const newSessions = [...prev];
-          newSessions[existingIndex] = data;
+          newSessions[existingIndex] = { ...newSessions[existingIndex], ...data };
           return newSessions;
         } else {
           return [...prev, data];
@@ -302,30 +307,71 @@ export default function WhatsAppChat() {
     }
   };
 
-  const handleConnect = async () => {
+  const primarySessionId = orgId ? `org_${orgId}` : "device_1";
+  const secondarySessionId = orgId ? `org_${orgId}_device_2` : "device_2";
+
+  const primarySession = sessions.find(
+    (s) => s.sessionId === primarySessionId || s.isPrimary,
+  ) || {
+    sessionId: primarySessionId,
+    status: "disconnected",
+    qrCode: "",
+    connectedPhone: "",
+    connectedName: "",
+    label: "Line 1 (Primary)",
+    isPrimary: true,
+  };
+
+  const secondarySession = sessions.find(
+    (s) =>
+      s.sessionId === secondarySessionId ||
+      (!s.isPrimary && s.sessionId?.includes("device_2")),
+  ) || {
+    sessionId: secondarySessionId,
+    status: "disconnected",
+    qrCode: "",
+    connectedPhone: "",
+    connectedName: "",
+    label: "Line 2 (Secondary)",
+    isPrimary: false,
+  };
+
+  const handleConnect = async (targetSessionId, deviceNum = 1) => {
+    const sId = targetSessionId || (deviceNum === 2 ? secondarySessionId : primarySessionId);
+    setSessionLoadingMap((prev) => ({ ...prev, [sId]: true }));
     setSessionLoading(true);
+    setConnectModalOpen(true);
     try {
-      await axios.post(API_ENDPOINTS.WHATSAPP.CONNECT, { sessionId: currentOrgSessionId });
-      setTimeout(fetchSessionStatus, 2000);
+      await axios.post(API_ENDPOINTS.WHATSAPP.CONNECT, {
+        sessionId: sId,
+        device: deviceNum,
+      });
+      setTimeout(fetchSessionStatus, 1500);
     } catch (err) {
+      console.error("Failed to connect WhatsApp session:", err);
       alert("Failed to send connect command.");
     } finally {
+      setSessionLoadingMap((prev) => ({ ...prev, [sId]: false }));
       setSessionLoading(false);
     }
   };
 
   const handleLogout = async (sessionId) => {
+    if (!sessionId) return;
     if (
-      !window.confirm("Are you sure you want to disconnect WhatsApp session?")
+      !window.confirm("Are you sure you want to disconnect this WhatsApp session?")
     )
       return;
+    setSessionLoadingMap((prev) => ({ ...prev, [sessionId]: true }));
     setSessionLoading(true);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.LOGOUT, { sessionId });
       fetchSessionStatus();
     } catch (err) {
+      console.error("Failed to logout WhatsApp session:", err);
       alert("Failed to send logout command.");
     } finally {
+      setSessionLoadingMap((prev) => ({ ...prev, [sessionId]: false }));
       setSessionLoading(false);
     }
   };
@@ -600,14 +646,6 @@ export default function WhatsAppChat() {
     );
   });
 
-  const activeSessions = sessions.filter(
-    (s) =>
-      (s.sessionId === currentOrgSessionId ||
-        (orgId && (s.organizationId === orgId || s.sessionId === `org_${orgId}`)) ||
-        (!orgId && s.sessionId === "device_1")) &&
-      s.status !== "disconnected",
-  );
-
   return (
     <div className="flex flex-col h-[calc(100vh-70px)] relative overflow-hidden bg-[#130a28] text-white">
       {/* Top Header Connection Status Bar */}
@@ -617,88 +655,131 @@ export default function WhatsAppChat() {
             <MessageSquare className="w-6 h-6 text-purple-400" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight">
-              WhatsApp AI Lead Hub
-            </h1>
-            <div className="flex flex-col gap-1 mt-1">
-              {activeSessions.map((session) => (
-                <div key={session.sessionId} className="flex items-center gap-2">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      session.status === "connected"
-                        ? "bg-emerald-500 animate-pulse"
-                        : session.status === "qr"
-                          ? "bg-amber-400"
-                          : session.status === "connecting"
-                            ? "bg-blue-400 animate-spin border-t-transparent"
-                            : "bg-red-500"
-                    }`}
-                  />
-                  <span className="text-xs font-semibold capitalize text-brand-secondary/80">
-                    WhatsApp: {session.status === "qr" ? "Scan QR Code" : session.status}
-                  </span>
-                  {session.status === "connected" && session.connectedPhone && (
-                    <span className="text-xs text-emerald-400 font-bold ml-1">
-                      ({session.connectedPhone})
-                    </span>
-                  )}
-                </div>
-              ))}
-              {activeSessions.length === 0 && (
-                <span className="text-xs font-semibold text-red-400">
-                  No device connected
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold tracking-tight">
+                WhatsApp AI Lead Hub
+              </h1>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                2 Channels
+              </span>
+            </div>
+
+            {/* Dual Channel Status Badges */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
+              {/* Line 1 Badge */}
+              <div
+                onClick={() => setConnectModalOpen(true)}
+                className="flex items-center gap-1.5 bg-[#251347] hover:bg-[#2e1757] px-2.5 py-1 rounded-lg border border-[#3e206c] text-xs cursor-pointer transition-colors"
+                title="Click to manage Line 1"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    primarySession.status === "connected"
+                      ? "bg-emerald-500 animate-pulse"
+                      : primarySession.status === "qr"
+                        ? "bg-amber-400 animate-pulse"
+                        : primarySession.status === "connecting"
+                          ? "bg-blue-400 animate-spin"
+                          : "bg-slate-500"
+                  }`}
+                />
+                <span className="font-semibold text-purple-200">
+                  Line 1:
                 </span>
-              )}
+                <span
+                  className={`capitalize font-bold ${
+                    primarySession.status === "connected"
+                      ? "text-emerald-400"
+                      : primarySession.status === "qr"
+                        ? "text-amber-300"
+                        : primarySession.status === "connecting"
+                          ? "text-blue-300"
+                          : "text-slate-400"
+                  }`}
+                >
+                  {primarySession.status === "connected"
+                    ? primarySession.connectedPhone
+                      ? `+${primarySession.connectedPhone}`
+                      : "Connected"
+                    : primarySession.status === "qr"
+                      ? "QR Ready"
+                      : primarySession.status}
+                </span>
+              </div>
+
+              {/* Line 2 Badge */}
+              <div
+                onClick={() => setConnectModalOpen(true)}
+                className="flex items-center gap-1.5 bg-[#251347] hover:bg-[#2e1757] px-2.5 py-1 rounded-lg border border-[#3e206c] text-xs cursor-pointer transition-colors"
+                title="Click to manage Line 2"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    secondarySession.status === "connected"
+                      ? "bg-emerald-500 animate-pulse"
+                      : secondarySession.status === "qr"
+                        ? "bg-amber-400 animate-pulse"
+                        : secondarySession.status === "connecting"
+                          ? "bg-blue-400 animate-spin"
+                          : "bg-slate-500"
+                  }`}
+                />
+                <span className="font-semibold text-indigo-200">
+                  Line 2:
+                </span>
+                <span
+                  className={`capitalize font-bold ${
+                    secondarySession.status === "connected"
+                      ? "text-emerald-400"
+                      : secondarySession.status === "qr"
+                        ? "text-amber-300"
+                        : secondarySession.status === "connecting"
+                          ? "text-blue-300"
+                          : "text-slate-400"
+                  }`}
+                >
+                  {secondarySession.status === "connected"
+                    ? secondarySession.connectedPhone
+                      ? `+${secondarySession.connectedPhone}`
+                      : "Connected"
+                    : secondarySession.status === "qr"
+                      ? "QR Ready"
+                      : secondarySession.status}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Setup actions */}
-        <div className="flex items-center gap-4">
-          <div className="flex gap-2">
-            {activeSessions.map((session) => (
-              <div key={session.sessionId} className="flex items-center gap-2">
-                {session.status === "qr" && session.qrCode && (
-                  <div className="relative group">
-                    <button className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-xl text-sm">
-                      Scan QR Code
-                    </button>
-                    {/* QR Popup */}
-                    <div className="hidden group-hover:flex absolute right-0 top-12 z-50 p-4 bg-white text-black border border-gray-200 rounded-2xl shadow-2xl flex-col items-center">
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(session.qrCode)}`}
-                        alt="WhatsApp QR Code"
-                        className="w-48 h-48"
-                      />
-                      <p className="text-xs font-bold text-center mt-2 text-gray-600">
-                        Scan via WhatsApp Link Device
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {session.status === "connected" && (
-                  <button
-                    onClick={() => handleLogout(session.sessionId)}
-                    disabled={sessionLoading}
-                    className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold py-2 px-3 rounded-xl transition-all border border-red-500/30 text-sm"
-                  >
-                    Disconnect WhatsApp
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {activeSessions.length === 0 && (
+        <div className="flex items-center gap-3">
+          {/* Glowing button if any QR is waiting for scan */}
+          {(primarySession.status === "qr" || secondarySession.status === "qr") && (
             <button
-              onClick={handleConnect}
-              disabled={sessionLoading}
-              className="flex items-center gap-2 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-bold py-2 px-4 rounded-xl transition-all text-sm"
+              onClick={() => setConnectModalOpen(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
             >
-              <RefreshCw className={`w-4 h-4 ${sessionLoading ? "animate-spin" : ""}`} />
-              Link WhatsApp
+              <QrCode className="w-4 h-4" />
+              <span>
+                Scan QR Code (
+                {primarySession.status === "qr" && secondarySession.status === "qr"
+                  ? "2 Lines Ready"
+                  : primarySession.status === "qr"
+                    ? "Line 1 Ready"
+                    : "Line 2 Ready"}
+                )
+              </span>
             </button>
           )}
+
+          {/* Connect / Manage 2 QRs Button */}
+          <button
+            onClick={() => setConnectModalOpen(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>Connect Channels (2 QRs)</span>
+          </button>
         </div>
       </div>
 
@@ -1063,14 +1144,37 @@ export default function WhatsAppChat() {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-brand-secondary/45">
-              <MessageSquare className="w-16 h-16 mb-4 text-[#381d5a]" />
-              <h2 className="text-xl font-bold text-white mb-1">
-                Select a Conversation
-              </h2>
-              <p className="text-sm max-w-xs text-brand-secondary/70">
-                Pick a chat thread from the left panel to begin managing
-                customer inquiries or review AI actions.
-              </p>
+              {primarySession.status === "disconnected" && secondarySession.status === "disconnected" ? (
+                <div className="max-w-md p-6 rounded-2xl bg-[#1e0e3c] border border-[#3e206c] flex flex-col items-center shadow-xl animate-fadeIn">
+                  <div className="w-14 h-14 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mb-4 border border-purple-500/20">
+                    <QrCode className="w-7 h-7" />
+                  </div>
+                  <h2 className="text-lg font-bold text-white mb-1.5">
+                    Connect WhatsApp Channels
+                  </h2>
+                  <p className="text-xs text-brand-secondary/80 mb-5 leading-relaxed max-w-xs">
+                    Your organization supports 2 simultaneous WhatsApp connections. Click below to generate and scan both QR codes.
+                  </p>
+                  <button
+                    onClick={() => setConnectModalOpen(true)}
+                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-lg shadow-purple-500/25 transition-all cursor-pointer"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>View &amp; Scan 2 QR Codes</span>
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <MessageSquare className="w-16 h-16 mb-4 text-[#381d5a]" />
+                  <h2 className="text-xl font-bold text-white mb-1">
+                    Select a Conversation
+                  </h2>
+                  <p className="text-sm max-w-xs text-brand-secondary/70">
+                    Pick a chat thread from the left panel to begin managing
+                    customer inquiries or review AI actions.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -1581,6 +1685,18 @@ export default function WhatsAppChat() {
           </div>
         </div>
       )}
+
+      {/* Dual WhatsApp QR Connection Modal */}
+      <WhatsAppConnectModal
+        isOpen={connectModalOpen}
+        onClose={() => setConnectModalOpen(false)}
+        sessions={[primarySession, secondarySession]}
+        onConnect={handleConnect}
+        onDisconnect={handleLogout}
+        onRefresh={fetchSessionStatus}
+        loadingSessions={sessionLoadingMap}
+        organizationName={organization?.name || currentUser?.organizationName || ""}
+      />
     </div>
   );
 }
