@@ -664,7 +664,7 @@ export default function WhatsAppChat() {
                       Scan QR Code
                     </button>
                     {/* QR Popup */}
-                    <div className="absolute right-0 top-12 z-50 p-4 bg-white text-black border border-gray-200 rounded-2xl shadow-2xl flex flex-col items-center">
+                    <div className="hidden group-hover:flex absolute right-0 top-12 z-50 p-4 bg-white text-black border border-gray-200 rounded-2xl shadow-2xl flex-col items-center">
                       <img
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(session.qrCode)}`}
                         alt="WhatsApp QR Code"
