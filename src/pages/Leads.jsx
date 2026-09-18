@@ -6,6 +6,7 @@ import {
   Edit2,
   Eye,
   X,
+  Mic,
   Info,
   User,
   Phone,
@@ -22,6 +23,7 @@ import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import ImportLeadsModal from "../components/leads/ImportLeadsModal.jsx";
+import RecordingsSidebar from "../components/leads/RecordingsSidebar.jsx";
 import {
   formatDate,
   getStageColor,
@@ -97,6 +99,7 @@ export default function Leads() {
   const [triggerFetch, setTriggerFetch] = useState(0);
 
   const [addOpen, setAddOpen] = useState(false);
+  const [activeRecordingsLead, setActiveRecordingsLead] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   // const [drawerOpen, setDrawerOpen] = useState(false);
@@ -594,6 +597,16 @@ export default function Leads() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
+                          onClick={() => setActiveRecordingsLead(lead)}
+                          className="p-1.5 text-brand-primary/70 hover:text-violet-500 hover:bg-brand-secondary/30 rounded transition-colors relative"
+                          title="Recordings & AI Analysis"
+                        >
+                          <Mic className="w-4 h-4" />
+                          {lead.recordings && lead.recordings.length > 0 && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full border border-brand-light"></span>
+                          )}
+                        </button>
+                        <button
                           onClick={() => handleOpenEdit(lead)}
                           className="p-1.5 text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/30 rounded transition-colors"
                           title="Edit"
@@ -969,6 +982,12 @@ export default function Leads() {
           </div>
         </div>
       )}
+
+      <RecordingsSidebar 
+        isOpen={!!activeRecordingsLead} 
+        onClose={() => setActiveRecordingsLead(null)} 
+        lead={activeRecordingsLead} 
+      />
 
       {/* Bulk Import Leads Modal */}
       <ImportLeadsModal
