@@ -37,6 +37,22 @@ import Header from "./components/Header.jsx";
 import AccountSuspended from "./components/AccountSuspended.jsx";
 import CalendlySupportModal from "./components/CalendlySupportModal.jsx";
 
+function PublicRoute({ children }) {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  if (isAuthenticated) {
+    const from =
+      location.state?.from?.pathname &&
+      location.state?.from?.pathname !== "/login"
+        ? location.state.from.pathname
+        : "/dashboard";
+    return <Navigate to={from} replace />;
+  }
+
+  return children ? children : <Outlet />;
+}
+
 function AppLayout() {
   const { isAuthenticated, isOrganizationBlocked } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -57,7 +73,7 @@ function AppLayout() {
   };
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   if (isOrganizationBlocked) {
@@ -94,7 +110,14 @@ export default function App() {
     <BrowserRouter basename="/">
       <RootProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            }
+          />
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route

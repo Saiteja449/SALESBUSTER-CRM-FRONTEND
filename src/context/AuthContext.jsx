@@ -11,10 +11,48 @@ const getStoredUser = () =>
 const getStoredOrg = () =>
   localStorage.getItem("salesbuster_session_org") || localStorage.getItem("kranthi_session_org");
 
+export const isTokenValid = (token) => {
+  if (!token || typeof token !== "string" || token === "null" || token === "undefined") {
+    return false;
+  }
+  try {
+    const parts = token.split(".");
+    if (parts.length === 3) {
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join("")
+      );
+      const decoded = JSON.parse(jsonPayload);
+      if (decoded.exp && decoded.exp * 1000 < Date.now()) {
+        return false;
+      }
+    }
+    return true;
+  } catch (e) {
+    return Boolean(token && token.length > 10);
+  }
+};
+
+export const clearStoredAuth = () => {
+  delete axios.defaults.headers.common["Authorization"];
+  localStorage.removeItem("salesbuster_session_user");
+  localStorage.removeItem("salesbuster_session_org");
+  localStorage.removeItem("salesbuster_token");
+  localStorage.removeItem("kranthi_session_user");
+  localStorage.removeItem("kranthi_session_org");
+  localStorage.removeItem("kranthi_token");
+};
+
 // Initialize default axios authorization header from stored token
 const initialToken = getStoredToken();
-if (initialToken) {
+if (initialToken && isTokenValid(initialToken)) {
   axios.defaults.headers.common["Authorization"] = `Bearer ${initialToken}`;
+} else if (initialToken && !isTokenValid(initialToken)) {
+  clearStoredAuth();
 }
 
 const AuthContext = createContext(null);
@@ -23,8 +61,10 @@ export function AuthProvider({ children }) {
   const [allUsers, setAllUsers] = useState([]);
 
   const [currentUser, setCurrentUser] = useState(() => {
+    const token = getStoredToken();
+    if (!isTokenValid(token)) return null;
     const savedSession = getStoredUser();
-    if (savedSession) {
+    if (savedSession && savedSession !== "null" && savedSession !== "undefined") {
       try {
         return JSON.parse(savedSession);
       } catch (e) {
@@ -35,8 +75,10 @@ export function AuthProvider({ children }) {
   });
 
   const [organization, setOrganization] = useState(() => {
+    const token = getStoredToken();
+    if (!isTokenValid(token)) return null;
     const savedOrg = getStoredOrg();
-    if (savedOrg) {
+    if (savedOrg && savedOrg !== "null" && savedOrg !== "undefined") {
       try {
         return JSON.parse(savedOrg);
       } catch (e) {
@@ -47,8 +89,18 @@ export function AuthProvider({ children }) {
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const token = getStoredToken();
+    if (!isTokenValid(token)) return false;
     const savedSession = getStoredUser();
-    return !!savedSession;
+    if (!savedSession || savedSession === "null" || savedSession === "undefined") {
+      return false;
+    }
+    try {
+      const parsed = JSON.parse(savedSession);
+      return Boolean(parsed && (parsed.id || parsed._id || parsed.email));
+    } catch {
+      return false;
+    }
   });
 
   const logout = useCallback(() => {
@@ -61,13 +113,7 @@ export function AuthProvider({ children }) {
     setCurrentUser(null);
     setOrganization(null);
     setIsAuthenticated(false);
-    delete axios.defaults.headers.common["Authorization"];
-    localStorage.removeItem("salesbuster_session_user");
-    localStorage.removeItem("salesbuster_session_org");
-    localStorage.removeItem("salesbuster_token");
-    localStorage.removeItem("kranthi_session_user");
-    localStorage.removeItem("kranthi_session_org");
-    localStorage.removeItem("kranthi_token");
+    clearStoredAuth();
   }, [organization?.id, organization?._id, currentUser?.organizationId]);
 
   // Fetch users from backend
