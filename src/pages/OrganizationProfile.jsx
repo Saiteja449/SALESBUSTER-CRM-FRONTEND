@@ -1897,7 +1897,7 @@ export default function OrganizationProfile() {
         </div>
 
         {/* Breakdown Cards for Specific Purposes */}
-        <div className="grid grid-cols-1 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Purpose 1: WhatsApp AI Chats */}
           <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-pilot-blue/30 transition-all space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
@@ -1936,7 +1936,7 @@ export default function OrganizationProfile() {
             </div>
           </div>
 
-          {/* Purpose 2: Audio & Voice Calls - Temporarily hidden
+          {/* Purpose 2: Audio & Voice Calls */}
           <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-violet-500/30 transition-all space-y-3 shadow-2xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1973,7 +1973,6 @@ export default function OrganizationProfile() {
               </span>
             </div>
           </div>
-          */}
         </div>
 
         {/* Footer Guarantee Info */}

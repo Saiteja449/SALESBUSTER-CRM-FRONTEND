@@ -15,11 +15,22 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
+  Upload,
+  Mic,
+  FileAudio,
+  RotateCcw,
+  Copy,
+  Check,
+  Loader2,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
-import { API_BASE_URL, BACKEND_URL } from "../utils/constants.js";
+import axios from "axios";
+import { API_BASE_URL, BACKEND_URL, ENABLE_AI_AUDIO_ANALYSIS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { formatDate, getServiceColor, getRepName } from "../utils/helpers.js";
+import { socket } from "../utils/socket.js";
 import DatePicker from "../components/DatePicker.jsx";
 
 export default function LeadDetails() {
@@ -28,6 +39,7 @@ export default function LeadDetails() {
   const navigate = useNavigate();
   const {
     leads,
+    setLeads,
     updateLead,
     followups,
     addFollowup,
@@ -96,6 +108,16 @@ export default function LeadDetails() {
     setExpandedRecordings((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  // Audio Upload & Transcription Action States
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [recordingTitle, setRecordingTitle] = useState("");
+  const [isUploadingRecording, setIsUploadingRecording] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [analyzingRecordingIds, setAnalyzingRecordingIds] = useState({});
+  const [copiedTranscriptId, setCopiedTranscriptId] = useState(null);
+
+  // Audio URL resolver
   const getAudioUrl = (url) => {
     if (!url) return "";
 
@@ -113,6 +135,170 @@ export default function LeadDetails() {
 
     // Encode it exactly once
     return `${BACKEND_URL}/uploads/${encodeURIComponent(filename)}`;
+  };
+
+  // Socket.IO real-time listener for transcription and audio upload events
+  useEffect(() => {
+    const handleRecordingAnalyzed = (data) => {
+      if (data.leadId === id || data.leadId === currentLead?._id) {
+        setLeads((prev) =>
+          prev.map((l) => {
+            if (l.id === id || l._id === id) {
+              const updatedRecs = (l.recordings || []).map((r) => {
+                if ((r._id || r.id) === data.recordingId) {
+                  return {
+                    ...r,
+                    transcription: data.transcription,
+                    analysis: data.analysis,
+                    analysisStatus: data.analysisStatus,
+                    analysisError: data.analysisError,
+                  };
+                }
+                return r;
+              });
+              return { ...l, recordings: updatedRecs };
+            }
+            return l;
+          }),
+        );
+      }
+    };
+
+    const handleRecordingUploaded = (data) => {
+      if (data.leadId === id || data.leadId === currentLead?._id) {
+        setLeads((prev) =>
+          prev.map((l) => {
+            if (l.id === id || l._id === id) {
+              const existing = l.recordings || [];
+              const exists = existing.some(
+                (r) =>
+                  (r._id || r.id) ===
+                  (data.recording._id || data.recording.id),
+              );
+              return {
+                ...l,
+                recordings: exists ? existing : [...existing, data.recording],
+              };
+            }
+            return l;
+          }),
+        );
+      }
+    };
+
+    socket.on("recording_analyzed", handleRecordingAnalyzed);
+    socket.on("recording_uploaded", handleRecordingUploaded);
+
+    return () => {
+      socket.off("recording_analyzed", handleRecordingAnalyzed);
+      socket.off("recording_uploaded", handleRecordingUploaded);
+    };
+  }, [id, currentLead?._id, setLeads]);
+
+  // Handle file picker selection
+  const handleAudioFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadFile(file);
+      if (!recordingTitle) {
+        setRecordingTitle(file.name.replace(/\.[^/.]+$/, ""));
+      }
+      setUploadError("");
+    }
+  };
+
+  // Submit audio upload to POST /api/leads/:id/recordings
+  const handleUploadRecordingSubmit = async (e) => {
+    e.preventDefault();
+    if (!uploadFile) {
+      setUploadError("Please select an audio file to upload.");
+      return;
+    }
+    setIsUploadingRecording(true);
+    setUploadError("");
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append("recording", uploadFile);
+      if (recordingTitle.trim()) {
+        uploadFormData.append("recordingName", recordingTitle.trim());
+      }
+
+      const response = await axios.post(
+        `${API_BASE_URL}/leads/${id}/recordings`,
+        uploadFormData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+
+      const newRec = response.data?.data;
+      if (newRec) {
+        setExpandedRecordings((prev) => ({
+          ...prev,
+          [newRec._id || newRec.id]: true,
+        }));
+      }
+
+      setUploadFile(null);
+      setRecordingTitle("");
+      setShowUploadModal(false);
+    } catch (err) {
+      console.error("Error uploading recording:", err);
+      setUploadError(
+        err.response?.data?.message ||
+          "Failed to upload audio recording. Please try again.",
+      );
+    } finally {
+      setIsUploadingRecording(false);
+    }
+  };
+
+  // Trigger re-transcription / analysis for a recording
+  const handleTriggerAnalysis = async (recId) => {
+    setAnalyzingRecordingIds((prev) => ({ ...prev, [recId]: true }));
+    try {
+      setLeads((prev) =>
+        prev.map((l) => {
+          if (l.id === id || l._id === id) {
+            const updated = (l.recordings || []).map((r) => {
+              if ((r._id || r.id) === recId) {
+                return { ...r, analysisStatus: "pending" };
+              }
+              return r;
+            });
+            return { ...l, recordings: updated };
+          }
+          return l;
+        }),
+      );
+
+      await axios.post(
+        `${API_BASE_URL}/leads/${id}/analyze-recording/${recId}`,
+      );
+    } catch (err) {
+      console.error("Error triggering analysis:", err);
+    } finally {
+      setAnalyzingRecordingIds((prev) => ({ ...prev, [recId]: false }));
+    }
+  };
+
+  // Copy transcript text to clipboard
+  const handleCopyTranscript = (recId, text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedTranscriptId(recId);
+    setTimeout(() => {
+      setCopiedTranscriptId(null);
+    }, 2500);
+  };
+
+  // Helper to render markdown sections nicely
+  const formatMarkdownToHtml = (content) => {
+    if (!content) return "";
+    return content
+      .replace(/\n/g, "<br/>")
+      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.*?)\*/g, "<em>$1</em>");
   };
 
   if (!currentLead) {
@@ -732,83 +918,360 @@ export default function LeadDetails() {
           </div>
         )}
 
-        {/* 2.5 Call Recordings & Analysis - Temporarily hidden */}
-        {false && currentLead.recordings && currentLead.recordings.length > 0 && (
-          <div className="bg-brand-light border border-brand-secondary rounded-xl shadow-sm mb-6">
-            <div className="p-4 border-b border-brand-secondary bg-brand-light/50 rounded-t-xl">
-              <h3 className="font-bold text-brand-primary flex items-center gap-2">
-                <Phone size={18} />
-                Call Recordings
-              </h3>
-            </div>
-            <div className="p-5 space-y-4">
-              {currentLead.recordings.map((rec, index) => {
-                const recId = rec._id || index;
-                const isExpanded = expandedRecordings[recId];
-                return (
-                  <div
-                    key={recId}
-                    className="bg-brand-secondary/10 p-4 rounded-lg border border-brand-secondary/30"
-                  >
-                    <div
-                      className="flex justify-between items-center cursor-pointer"
-                      onClick={() => toggleRecording(recId)}
-                    >
-                      <div className="flex items-center gap-2">
-                        {isExpanded ? (
-                          <ChevronUp size={18} className="text-brand-primary" />
-                        ) : (
-                          <ChevronDown
-                            size={18}
-                            className="text-brand-primary"
-                          />
-                        )}
-                        <span className="font-semibold text-brand-primary">
-                          {rec.name || `Recording ${index + 1}`}
-                        </span>
-                      </div>
-                      <span className="text-xs text-brand-primary/60">
-                        {new Date(rec.uploadedAt).toLocaleString()}
+        {/* 2.5 Call Recordings & AI Transcription Section */}
+        {ENABLE_AI_AUDIO_ANALYSIS && (
+          <div className="bg-brand-light border border-brand-secondary rounded-xl shadow-sm mb-6 overflow-hidden">
+            <div className="p-4 border-b border-brand-secondary bg-brand-light/50 rounded-t-xl flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
+                  <Phone size={16} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-brand-primary flex items-center gap-2 text-sm">
+                    Call Recordings & AI Transcription
+                    {currentLead.recordings && currentLead.recordings.length > 0 && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-500 border border-violet-500/20">
+                        {currentLead.recordings.length}{" "}
+                        {currentLead.recordings.length === 1
+                          ? "recording"
+                          : "recordings"}
                       </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-brand-primary/60">
+                    Audio recordings, speech-to-text transcriptions, and sales intelligence analysis
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(!showUploadModal)}
+                className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                {showUploadModal ? (
+                  <>
+                    <X size={14} /> Close
+                  </>
+                ) : (
+                  <>
+                    <Upload size={14} /> Upload Call Audio
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Audio Upload Form Drawer */}
+            {showUploadModal && (
+              <div className="p-4 bg-violet-500/5 border-b border-brand-secondary/40 animate-fadeIn">
+                <form
+                  onSubmit={handleUploadRecordingSubmit}
+                  className="space-y-3 max-w-xl"
+                >
+                  <div className="flex items-center gap-2 text-xs font-bold text-violet-700">
+                    <FileAudio size={16} />
+                    Attach Call Recording for AI Transcription
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-brand-primary/70 mb-1">
+                        Audio File (.mp3, .wav, .m4a, .aac, .ogg)
+                      </label>
+                      <input
+                        type="file"
+                        accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"
+                        onChange={handleAudioFileChange}
+                        className="w-full text-xs text-brand-primary file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-violet-600 file:text-white hover:file:bg-violet-700 file:cursor-pointer cursor-pointer border border-brand-secondary rounded-lg p-1 bg-brand-light"
+                      />
                     </div>
 
-                    {isExpanded && (
-                      <div className="mt-4">
-                        <audio
-                          controls
-                          src={getAudioUrl(rec.url)}
-                          className="w-full h-10 mb-2"
-                        />
+                    <div>
+                      <label className="block text-[11px] font-medium text-brand-primary/70 mb-1">
+                        Call Label / Title (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Initial Discovery Call"
+                        value={recordingTitle}
+                        onChange={(e) => setRecordingTitle(e.target.value)}
+                        className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-xs rounded-lg px-2.5 py-1.5 outline-none focus:border-violet-500"
+                      />
+                    </div>
+                  </div>
 
-                        {rec.analysis && (
-                          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mt-3">
-                            <h4 className="text-sm font-bold text-brand-primary mb-2 flex items-center gap-2">
-                              <MessageSquare
-                                size={16}
-                                className="text-brand-accent"
-                              />
-                              AI Analysis Summary
-                            </h4>
-                            <div className="prose prose-sm max-w-none text-brand-primary/80">
-                              <div
-                                dangerouslySetInnerHTML={{
-                                  __html: rec.analysis
-                                    .replace(/\n/g, "<br/>")
-                                    .replace(
-                                      /\*\*(.*?)\*\*/g,
-                                      "<strong>$1</strong>",
-                                    )
-                                    .replace(/\*(.*?)\*/g, "<em>$1</em>"),
+                  {uploadError && (
+                    <div className="text-xs text-red-500 bg-red-500/10 p-2 rounded-md flex items-center gap-1.5">
+                      <AlertCircle size={13} />
+                      {uploadError}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="submit"
+                      disabled={isUploadingRecording || !uploadFile}
+                      className="px-4 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {isUploadingRecording ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" /> Uploading & Queuing AI...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={13} /> Upload & Start Transcription
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUploadModal(false);
+                        setUploadFile(null);
+                        setUploadError("");
+                      }}
+                      className="px-3 py-1.5 text-xs text-brand-primary/70 hover:text-brand-primary border border-brand-secondary rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Recordings List */}
+            <div className="p-4 space-y-3.5">
+              {(!currentLead.recordings || currentLead.recordings.length === 0) && (
+                <div className="text-center py-7 border border-dashed border-brand-secondary/60 rounded-xl bg-brand-secondary/5">
+                  <div className="w-10 h-10 rounded-full bg-violet-500/10 text-violet-500 flex items-center justify-center mx-auto mb-2">
+                    <Mic size={18} />
+                  </div>
+                  <p className="text-xs font-semibold text-brand-primary">
+                    No call recordings attached yet
+                  </p>
+                  <p className="text-[11px] text-brand-primary/60 max-w-sm mx-auto mt-0.5 mb-3">
+                    Upload an audio recording from your customer conversations to automatically transcribe dialogue and extract sales coaching suggestions.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowUploadModal(true)}
+                    className="px-3 py-1.5 bg-violet-600/10 hover:bg-violet-600/20 text-violet-600 border border-violet-500/30 rounded-lg text-xs font-bold transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Upload size={13} /> Upload First Recording
+                  </button>
+                </div>
+              )}
+
+              {currentLead.recordings &&
+                currentLead.recordings.map((rec, index) => {
+                  const recId = rec._id || rec.id || index;
+                  const isExpanded = expandedRecordings[recId];
+                  const isAnalyzing = analyzingRecordingIds[recId];
+                  const isPending =
+                    rec.analysisStatus === "pending" || isAnalyzing;
+                  const isFailed = rec.analysisStatus === "failed";
+                  const isCompleted = rec.analysisStatus === "completed";
+
+                  // Extract transcription from rec.transcription or analysis text fallback
+                  let transcriptText = rec.transcription || "";
+                  if (!transcriptText && rec.analysis) {
+                    const match = rec.analysis.match(
+                      /## (?:Call )?Transcription\s*([\s\S]*?)(?=\n## Short Summary|\n## Customer Requirements|\n## |$)/i,
+                    );
+                    if (match && match[1]) {
+                      transcriptText = match[1].trim();
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={recId}
+                      className="bg-brand-secondary/10 rounded-xl border border-brand-secondary/30 overflow-hidden transition-all shadow-2xs"
+                    >
+                      {/* Recording Card Header */}
+                      <div
+                        className="p-3.5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-brand-secondary/15 transition-colors"
+                        onClick={() => toggleRecording(recId)}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {isExpanded ? (
+                            <ChevronUp
+                              size={16}
+                              className="text-brand-primary shrink-0"
+                            />
+                          ) : (
+                            <ChevronDown
+                              size={16}
+                              className="text-brand-primary shrink-0"
+                            />
+                          )}
+                          <div className="w-7 h-7 rounded-md bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
+                            <FileAudio size={14} />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-brand-primary block truncate">
+                              {rec.name || `Call Recording ${index + 1}`}
+                            </span>
+                            <span className="text-[10px] text-brand-primary/60 block">
+                              {rec.uploadedAt
+                                ? new Date(rec.uploadedAt).toLocaleString()
+                                : "Uploaded"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Status Badges */}
+                        <div className="flex items-center gap-2">
+                          {isPending && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30 flex items-center gap-1 animate-pulse">
+                              <Loader2 size={11} className="animate-spin" />
+                              Transcribing & Analyzing...
+                            </span>
+                          )}
+                          {isCompleted && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 flex items-center gap-1">
+                              <CheckCircle size={11} />
+                              Transcribed & Analyzed
+                            </span>
+                          )}
+                          {isFailed && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-500 border border-red-500/30 flex items-center gap-1">
+                              <AlertCircle size={11} />
+                              Analysis Failed
+                            </span>
+                          )}
+                          {rec.analysisStatus === "paused" && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-500/15 text-gray-500 border border-gray-500/30">
+                              Paused
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded Recording Content */}
+                      {isExpanded && (
+                        <div className="p-4 pt-1 border-t border-brand-secondary/20 space-y-3.5 bg-brand-light/40">
+                          {/* Audio Player & Quick Actions */}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+                            <audio
+                              controls
+                              src={getAudioUrl(rec.url)}
+                              className="w-full sm:flex-1 h-9 rounded-lg"
+                            />
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {transcriptText && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopyTranscript(recId, transcriptText);
+                                  }}
+                                  className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-brand-secondary/20 hover:bg-brand-secondary/30 text-brand-primary border border-brand-secondary/40 transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Copy conversation transcript"
+                                >
+                                  {copiedTranscriptId === recId ? (
+                                    <>
+                                      <Check size={13} className="text-emerald-500" />
+                                      <span className="text-emerald-500">Copied!</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={13} />
+                                      <span>Copy Transcript</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTriggerAnalysis(recId);
                                 }}
-                              />
+                                className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-violet-600/10 hover:bg-violet-600/20 text-violet-600 border border-violet-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                                title="Re-run AI audio transcription and analysis"
+                              >
+                                <RotateCcw
+                                  size={13}
+                                  className={isPending ? "animate-spin" : ""}
+                                />
+                                <span>
+                                  {isPending
+                                    ? "Processing..."
+                                    : rec.analysis || transcriptText
+                                      ? "Re-Analyze"
+                                      : "Start AI Transcription"}
+                                </span>
+                              </button>
                             </div>
                           </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                          {/* Progress Notification */}
+                          {isPending && (
+                            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 flex items-center gap-2">
+                              <Loader2 size={14} className="animate-spin shrink-0 text-amber-600" />
+                              <span>
+                                Google Gemini is currently processing and transcribing this audio recording. The transcript and evaluation will appear automatically when ready.
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Error Notification */}
+                          {isFailed && (
+                            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 flex items-start gap-2">
+                              <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-500" />
+                              <div className="flex-1">
+                                <span className="font-bold block">Transcription / Analysis failed</span>
+                                <span className="text-[11px] opacity-80">
+                                  {rec.analysisError ||
+                                    "Audio could not be processed. Verify your Google Gemini API key or click Re-Analyze above."}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tab 1: Verbatim Call Transcription */}
+                          {transcriptText && (
+                            <div className="bg-white p-4 rounded-xl shadow-2xs border border-brand-secondary/40">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-xs font-bold text-violet-600 flex items-center gap-1.5 uppercase tracking-wider">
+                                  <Mic size={14} className="text-violet-500" />
+                                  Verbatim Call Transcription
+                                </h4>
+                                <span className="text-[10px] text-brand-primary/50 font-mono">
+                                  Speech-to-Text
+                                </span>
+                              </div>
+                              <div className="bg-brand-secondary/5 rounded-lg p-3 max-h-60 overflow-y-auto font-mono text-xs leading-relaxed text-brand-primary whitespace-pre-wrap select-text border border-brand-secondary/20">
+                                {transcriptText}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Tab 2: AI Intelligence & Coaching Analysis */}
+                          {rec.analysis && (
+                            <div className="bg-white p-4 rounded-xl shadow-2xs border border-brand-secondary/40">
+                              <h4 className="text-xs font-bold text-violet-600 mb-2 flex items-center gap-1.5 uppercase tracking-wider">
+                                <Sparkles size={14} className="text-amber-500" />
+                                AI Sales Intelligence & Coaching
+                              </h4>
+                              <div className="prose prose-xs max-w-none text-brand-primary/85 leading-relaxed text-xs">
+                                <div
+                                  dangerouslySetInnerHTML={{
+                                    __html: formatMarkdownToHtml(rec.analysis),
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}
