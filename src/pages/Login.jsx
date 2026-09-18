@@ -1,18 +1,29 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import crmLogo from "../assets/images/Logo.png";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const location = useLocation();
+  const { login, isAuthenticated } = useAuth();
+
+  const from =
+    location.state?.from?.pathname &&
+    location.state?.from?.pathname !== "/login"
+      ? location.state.from.pathname
+      : "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  if (isAuthenticated) {
+    return <Navigate to={from} replace />;
+  }
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -26,7 +37,7 @@ export default function Login() {
     try {
       const res = await login(email, password);
       if (res && res.success) {
-        navigate("/dashboard");
+        navigate(from, { replace: true });
       } else {
         setError(
           res?.message || "Invalid email or password. Please try again.",
