@@ -24,6 +24,8 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
   const { allUsers } = useAuth();
   const fileInputRef = useRef(null);
 
+  const MAX_LEADS_LIMIT = 300;
+
   const [file, setFile] = useState(null);
   const [parsedRows, setParsedRows] = useState([]);
   const [detectedColumns, setDetectedColumns] = useState([]);
@@ -133,7 +135,6 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
   const processFile = (fileObj) => {
     setError("");
     setImportResult(null);
-    setFile(fileObj);
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -146,9 +147,22 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
 
         if (rows.length === 0) {
           setError("The selected file contains no data rows.");
+          if (fileInputRef.current) fileInputRef.current.value = "";
           return;
         }
 
+        if (rows.length > MAX_LEADS_LIMIT) {
+          setError(
+            `Limit Exceeded: The selected file contains ${rows.length} leads. A maximum of ${MAX_LEADS_LIMIT} leads can be added at once. Please split your file or keep up to ${MAX_LEADS_LIMIT} leads.`
+          );
+          setFile(null);
+          setParsedRows([]);
+          setDetectedColumns([]);
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          return;
+        }
+
+        setFile(fileObj);
         const headers = Object.keys(rows[0] || {});
         setDetectedColumns(headers);
         autoDetectColumns(headers);
@@ -156,6 +170,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
       } catch (err) {
         console.error("Error parsing spreadsheet:", err);
         setError("Failed to parse spreadsheet. Please ensure it is a valid Excel or CSV file.");
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     };
     reader.readAsArrayBuffer(fileObj);
@@ -203,6 +218,11 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
   const handleImport = async () => {
     if (!file || parsedRows.length === 0) {
       setError("Please select and upload a valid Excel or CSV file.");
+      return;
+    }
+
+    if (parsedRows.length > MAX_LEADS_LIMIT) {
+      setError(`Cannot import more than ${MAX_LEADS_LIMIT} leads at once. Found ${parsedRows.length} rows.`);
       return;
     }
 
@@ -258,6 +278,9 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
     setDetectedColumns([]);
     setImportResult(null);
     setError("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -270,9 +293,14 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                Import Leads from Excel / CSV
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Import Leads from Excel / CSV
+                </h2>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                  Max 300 leads
+                </span>
+              </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Bulk upload contacts into <span className="font-semibold text-purple-600 dark:text-purple-400">Old Leads</span> for WhatsApp Campaigns
               </p>
@@ -418,9 +446,12 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
                     Click to browse or drag & drop spreadsheet
                   </h3>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto mb-2">
                     Supports Microsoft Excel (.xlsx, .xls) and CSV (.csv) files
                   </p>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-800/70 text-[11px] font-medium text-purple-700 dark:text-purple-300 mb-4">
+                    <span>Maximum 300 leads per import batch</span>
+                  </div>
 
                   <button
                     type="button"
@@ -443,8 +474,14 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
                     <div>
                       <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <span>{file.name}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-600 dark:text-purple-400">
-                          {parsedRows.length} Rows Detected
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                            parsedRows.length > MAX_LEADS_LIMIT
+                              ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                              : "bg-purple-500/15 text-purple-600 dark:text-purple-400"
+                          }`}
+                        >
+                          {parsedRows.length} / {MAX_LEADS_LIMIT} Leads
                         </span>
                       </div>
                       <span className="text-[11px] text-slate-400 mt-0.5 block">
@@ -616,7 +653,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
                         First 3 Rows Preview
                       </span>
                       <span className="text-[10px] text-slate-400">
-                        Total {parsedRows.length} records ready to import
+                        Total {parsedRows.length} of max {MAX_LEADS_LIMIT} records ready to import
                       </span>
                     </div>
 
@@ -751,7 +788,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
             {file && parsedRows.length > 0 && (
               <button
                 type="button"
-                disabled={loading || !columnMapping.phone}
+                disabled={loading || !columnMapping.phone || parsedRows.length > MAX_LEADS_LIMIT}
                 onClick={handleImport}
                 className="px-6 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
               >
