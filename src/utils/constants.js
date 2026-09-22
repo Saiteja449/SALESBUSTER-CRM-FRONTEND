@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://api.salesbuster.ai/api";
+  import.meta.env.VITE_API_BASE_URL || "https://betaapi.salesbuster.ai/api";
 
 export const API_ENDPOINTS = {
   AUTH: {

@@ -222,22 +222,47 @@ export default function WhatsAppConnectModal({
     </div>
   );
 
-  // Render Connecting / Initializing State
+  // Render Connecting / Initializing State with Activity Steps
   const renderConnectingView = (deviceNum) => (
-    <div className="flex flex-col items-center text-center py-10 w-full max-w-sm mx-auto">
-      <div className="relative mb-5">
+    <div className="flex flex-col items-center text-center py-8 w-full max-w-sm mx-auto animate-fadeIn">
+      {/* Animated Orbit Loader */}
+      <div className="relative mb-6">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-500/20 via-emerald-500/20 to-sky-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-inner">
           <RefreshCw className="w-8 h-8 animate-spin text-emerald-500" />
         </div>
-        <div className="absolute -inset-1 rounded-2xl border border-emerald-500/30 animate-ping opacity-30 pointer-events-none" />
+        <div className="absolute -inset-1.5 rounded-2xl border-2 border-emerald-500/30 animate-ping opacity-40 pointer-events-none" />
       </div>
-      <h4 className="text-base font-bold text-slate-900 dark:text-white mb-1.5">
-        Initializing WhatsApp Line {deviceNum}...
+
+      <h4 className="text-base font-bold text-slate-900 dark:text-white mb-1">
+        Connecting Line {deviceNum}...
       </h4>
-      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">
-        Establishing secure multi-device Baileys handshake and generating live
-        encryption keys.
+      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed mb-5">
+        Establishing a secure WebSocket handshake with WhatsApp servers.
       </p>
+
+      {/* Activity Status Timeline */}
+      <div className="w-full bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-700/60 text-left space-y-2.5 shadow-xs">
+        <div className="flex items-center gap-2.5 text-xs">
+          <span className="w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-[11px] shrink-0">
+            ✓
+          </span>
+          <span className="text-slate-700 dark:text-slate-200 font-medium">
+            Core Engine &amp; Cryptographic Keys Initialized
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5 text-xs">
+          <RefreshCw className="w-5 h-5 p-0.5 text-sky-500 animate-spin shrink-0" />
+          <span className="text-sky-600 dark:text-sky-400 font-medium">
+            Exchanging WhatsApp Auth Handshake...
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5 text-xs text-slate-400 dark:text-slate-500">
+          <span className="w-5 h-5 rounded-full border border-slate-300 dark:border-slate-600 flex items-center justify-center text-[10px] shrink-0">
+            3
+          </span>
+          <span>Awaiting QR stream for device pairing</span>
+        </div>
+      </div>
     </div>
   );
 
@@ -651,11 +676,12 @@ export default function WhatsAppConnectModal({
               </div>
             )}
 
-            {/* STATE: Connecting */}
-            {session.status === "connecting" && renderConnectingView(deviceNum)}
+            {/* STATE: Connecting or Initializing */}
+            {(session.status === "connecting" || (isLoading && session.status === "disconnected")) &&
+              renderConnectingView(deviceNum)}
 
-            {/* STATE: Disconnected */}
-            {session.status === "disconnected" &&
+            {/* STATE: Disconnected and not loading */}
+            {session.status === "disconnected" && !isLoading &&
               renderDisconnectedView(session, deviceNum, isPrimary, isLoading)}
           </div>
         </div>
