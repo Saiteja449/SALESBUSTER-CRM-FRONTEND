@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   BrowserRouter,
   Routes,
@@ -48,6 +48,22 @@ function PublicRoute({ children }) {
         ? location.state.from.pathname
         : "/dashboard";
     return <Navigate to={from} replace />;
+  }
+
+  return children ? children : <Outlet />;
+}
+
+function CampaignsRoute({ children }) {
+  const { isSalesPerson, isManager, currentUser } = useAuth();
+  const isAuthorized =
+    !isSalesPerson &&
+    (isManager ||
+      currentUser?.role === "Sales Manager" ||
+      currentUser?.role === "Super Admin" ||
+      currentUser?.isOrgOwner);
+
+  if (!isAuthorized) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children ? children : <Outlet />;
@@ -145,11 +161,46 @@ export default function App() {
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/ai-followups" element={<AIFollowUps />} />
             <Route path="/whatsapp" element={<WhatsAppChat />} />
-            <Route path="/whatsapp/campaigns" element={<WhatsAppCampaigns />} />
-            <Route path="/whatsapp/campaigns/create" element={<CreateCampaign />} />
-            <Route path="/whatsapp/campaigns/:id" element={<CampaignDetails />} />
-            <Route path="/whatsapp/templates" element={<WhatsAppTemplates />} />
-            <Route path="/whatsapp/templates/create" element={<CreateWhatsAppTemplate />} />
+            <Route
+              path="/whatsapp/campaigns"
+              element={
+                <CampaignsRoute>
+                  <WhatsAppCampaigns />
+                </CampaignsRoute>
+              }
+            />
+            <Route
+              path="/whatsapp/campaigns/create"
+              element={
+                <CampaignsRoute>
+                  <CreateCampaign />
+                </CampaignsRoute>
+              }
+            />
+            <Route
+              path="/whatsapp/campaigns/:id"
+              element={
+                <CampaignsRoute>
+                  <CampaignDetails />
+                </CampaignsRoute>
+              }
+            />
+            <Route
+              path="/whatsapp/templates"
+              element={
+                <CampaignsRoute>
+                  <WhatsAppTemplates />
+                </CampaignsRoute>
+              }
+            />
+            <Route
+              path="/whatsapp/templates/create"
+              element={
+                <CampaignsRoute>
+                  <CreateWhatsAppTemplate />
+                </CampaignsRoute>
+              }
+            />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

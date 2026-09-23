@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -6,12 +6,8 @@ import {
   RefreshCw,
   Plus,
   CheckCircle2,
-  AlertCircle,
-  Clock,
-  Sparkles,
   ArrowRight,
   Search,
-  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
@@ -28,12 +24,7 @@ export default function WhatsAppTemplates() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
-  useEffect(() => {
-    fetchTemplates();
-  }, []);
-
-  const fetchTemplates = async () => {
-    setLoading(true);
+  const fetchTemplates = useCallback(async () => {
     try {
       const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.TEMPLATES);
       if (res.data.success) {
@@ -44,7 +35,27 @@ export default function WhatsAppTemplates() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    const load = async () => {
+      try {
+        const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.TEMPLATES);
+        if (!ignore && res.data.success) {
+          setTemplates(res.data.data || []);
+        }
+      } catch (err) {
+        if (!ignore) console.error("Error fetching templates:", err);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);

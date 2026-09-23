@@ -36,6 +36,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
     usedSeats,
     isSubscriptionExpired,
     isManager,
+    isSalesPerson,
   } = useAuth();
   const { unreadCount } = useNotifications();
   const { openSupportModal } = useSupportModal();
@@ -81,11 +82,15 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       icon: <MessageSquare className="w-5 h-5" />,
       path: "/whatsapp",
     },
-    {
-      text: "WhatsApp Campaigns",
-      icon: <Send className="w-5 h-5" />,
-      path: "/whatsapp/campaigns",
-    },
+    ...(!isSalesPerson && isOrgOwner
+      ? [
+          {
+            text: "WhatsApp Campaigns",
+            icon: <Send className="w-5 h-5" />,
+            path: "/whatsapp/campaigns",
+          },
+        ]
+      : []),
     // ...(isOrgOwner
     //   ? [
     //       {

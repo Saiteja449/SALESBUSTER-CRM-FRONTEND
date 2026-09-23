@@ -31,6 +31,10 @@ export const API_ENDPOINTS = {
     SEND_MESSAGE: `${API_BASE_URL}/whatsapp/message/send`,
     AI_TOGGLE: `${API_BASE_URL}/whatsapp/ai/toggle`,
     SETTINGS: `${API_BASE_URL}/whatsapp/settings`,
+    // AI Chat Summarization — POST with optional { forceRefresh: true } body
+    SUMMARIZE_CONVERSATION: (leadId) => `${API_BASE_URL}/whatsapp/conversation/${leadId}/summarize`,
+    // Admin team WhatsApp status overview
+    TEAM_STATUS: `${API_BASE_URL}/whatsapp/team-status`,
   },
   WHATSAPP_CLOUD: {
     STATUS: `${API_BASE_URL}/whatsapp/cloud/status`,

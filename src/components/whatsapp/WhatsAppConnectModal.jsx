@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   X,
   QrCode,
@@ -12,15 +12,9 @@ import {
   Check,
   Info,
   ShieldCheck,
-  Bot,
-  Sparkles,
-  Wifi,
   Activity,
   MessageSquare,
-  Users,
   CheckCheck,
-  PhoneCall,
-  Lock,
 } from "lucide-react";
 
 export default function WhatsAppConnectModal({
@@ -33,11 +27,162 @@ export default function WhatsAppConnectModal({
   loadingSessions = {},
   organizationName = "",
   whatsappLineLimit = 1,
+  currentUser = null,      // NEW: passed from parent for role detection
+  repSessionError = "",    // NEW: phone_mismatch error string from whatsapp_status socket event
 }) {
   const [copiedSessionId, setCopiedSessionId] = useState(null);
   const [confirmDisconnectId, setConfirmDisconnectId] = useState(null);
 
   if (!isOpen) return null;
+
+  // ============================================================
+  // SALES REP MODE: Show personal session panel instead of admin device list
+  // ============================================================
+  const isRepMode = currentUser?.role === "sales person";
+
+  if (isRepMode) {
+    const repSession = sessions.find((s) => s.isRepSession) || sessions[0] || {
+      status: "disconnected",
+      qrCode: "",
+      connectedPhone: "",
+      connectedName: "",
+    };
+    const repSessionId = repSession.sessionId || `rep_session`;
+    const isRepLoading = !!loadingSessions[repSessionId];
+    const repPhone = currentUser?.phone || repSession.expectedPhone || "";
+    const formattedRepPhone = formatPhoneNumber(repPhone);
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 pb-4 px-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div className="relative w-full max-w-md bg-white dark:bg-[#0f0a1f] border border-slate-200 dark:border-purple-800/40 rounded-3xl shadow-2xl flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-purple-800/30">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
+                <Smartphone className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">My WhatsApp Connection</h2>
+                <p className="text-xs text-slate-500 dark:text-purple-300">Your personal sales line</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* Authorized Phone Banner */}
+            {repPhone && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-3">
+                <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">Your Authorized Number</p>
+                  <p className="text-sm font-bold text-emerald-900 dark:text-emerald-100 mt-0.5">{formattedRepPhone}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Phone Mismatch Error Banner */}
+            {repSessionError && (
+              <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/40 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-bold text-red-700 dark:text-red-400 mb-0.5">Connection Failed</p>
+                  <p className="text-xs text-red-600 dark:text-red-300">{repSessionError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Status */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-600 dark:text-purple-200">Status</span>
+              {renderStatusPill(repSession.status)}
+            </div>
+
+            {/* Connected Info */}
+            {repSession.status === "connected" && repSession.connectedPhone && (
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-purple-700/30">
+                <p className="text-xs text-slate-500 dark:text-purple-400 mb-0.5">Connected as</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                  {repSession.connectedName || "WhatsApp User"} · {formatPhoneNumber(repSession.connectedPhone)}
+                </p>
+              </div>
+            )}
+
+            {/* QR Code */}
+            {repSession.status === "qr" && repSession.qrCode && (
+              <>
+                {repPhone && (
+                  <p className="text-xs text-center text-amber-600 dark:text-amber-400 font-medium">
+                    📱 Scan using the WhatsApp account for <strong>{formattedRepPhone}</strong>
+                  </p>
+                )}
+                {renderQRCodeView(repSession, 1, isRepLoading)}
+              </>
+            )}
+
+            {/* Connecting State Notice */}
+            {repSession.status === "connecting" && (
+              <div className="py-6 flex flex-col items-center justify-center text-center animate-fadeIn">
+                <RefreshCw className="w-8 h-8 animate-spin text-emerald-500 mb-2" />
+                <p className="text-sm font-semibold text-slate-800 dark:text-white">
+                  Connecting to WhatsApp...
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+                  Initializing WhatsApp worker. If this takes more than a few seconds, you can retry below.
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-1">
+              {(repSession.status === "disconnected" || repSession.status === "qr" || repSession.status === "connecting") && (
+                <button
+                  onClick={() => onConnect && onConnect(repSessionId, 1)}
+                  disabled={isRepLoading}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-semibold shadow-md hover:shadow-lg hover:opacity-90 transition-all disabled:opacity-50"
+                >
+                  {isRepLoading ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <QrCode className="w-4 h-4" />
+                  )}
+                  {isRepLoading
+                    ? "Starting..."
+                    : repSession.status === "qr"
+                    ? "Refresh QR"
+                    : repSession.status === "connecting"
+                    ? "Reconnect / Retry"
+                    : "Connect WhatsApp"}
+                </button>
+              )}
+              {repSession.status === "connected" && (
+                <button
+                  onClick={() => onDisconnect && onDisconnect(repSessionId)}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 text-sm font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-all"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Disconnect
+                </button>
+              )}
+              {onRefresh && (
+                <button
+                  onClick={() => onRefresh()}
+                  className="p-2.5 rounded-xl border border-slate-200 dark:border-purple-700/40 text-slate-500 dark:text-purple-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ============================================================
+  // END REP MODE — Admin/Manager sees existing dual-device view below
+  // ============================================================
 
   // Extract or default Primary & Secondary session data
   const primarySession = sessions.find(

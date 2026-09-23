@@ -26,6 +26,9 @@ import {
   Lock,
   Settings,
   RotateCcw,
+  Smartphone,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -82,6 +85,34 @@ export default function Dashboard() {
 
   const [aiLimits, setAiLimits] = useState(null);
   const [aiLimitsLoading, setAiLimitsLoading] = useState(true);
+
+  // ── WhatsApp Dashboard Widget State ─────────────────────────────────
+  const [repWaStatus, setRepWaStatus] = useState(null);       // Sales rep's own session status
+  const [teamWaStatuses, setTeamWaStatuses] = useState([]);   // Admin team overview
+  const [waWidgetLoading, setWaWidgetLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchWaWidget = async () => {
+      setWaWidgetLoading(true);
+      try {
+        if (currentUser?.role === "sales person") {
+          const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
+          const sessions = res.data?.sessions || [];
+          setRepWaStatus(sessions[0] || null);
+        } else if (currentUser?.role === "sales manager" || currentUser?.role === "super_admin") {
+          const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS);
+          setTeamWaStatuses(res.data?.data || []);
+        }
+      } catch (err) {
+        // Non-fatal — widget just won't show data
+      } finally {
+        setWaWidgetLoading(false);
+      }
+    };
+    if (currentUser) fetchWaWidget();
+  }, [currentUser]);
+
+  const connectedTeamCount = teamWaStatuses.filter((r) => r.status === "connected").length;
 
   // Quick Add Sales Person Modal State
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -476,6 +507,93 @@ export default function Dashboard() {
           </div>
         </div>
       ) : null}
+
+      {/* WhatsApp Connection Widget */}
+      {currentUser?.role === "sales person" && (
+        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
+                repWaStatus?.status === "connected"
+                  ? "bg-green-500/10 border-green-500/30 text-green-500"
+                  : "bg-purple-500/10 border-purple-500/30 text-purple-400"
+              }`}>
+                <Smartphone className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-brand-primary">My WhatsApp Line</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    repWaStatus?.status === "connected" ? "bg-green-500 animate-pulse" :
+                    repWaStatus?.status === "qr" ? "bg-amber-400 animate-pulse" :
+                    repWaStatus?.status === "connecting" ? "bg-blue-400" : "bg-slate-400"
+                  }`} />
+                  <span className="text-xs text-brand-primary/70 capitalize">
+                    {repWaStatus?.status === "connected"
+                      ? `Connected · +${repWaStatus.connectedPhone}`
+                      : repWaStatus?.status === "qr"
+                        ? "QR Code Ready to Scan"
+                        : repWaStatus?.status === "connecting"
+                          ? "Connecting..."
+                          : "Not Connected"}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate("/whatsapp")}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+            >
+              {repWaStatus?.status === "connected" ? "Manage" : "Connect"}
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(currentUser?.role === "sales manager" || currentUser?.role === "super_admin") && teamWaStatuses.length > 0 && (
+        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
+                <Smartphone className="w-4 h-4 text-purple-400" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-brand-primary">Team WhatsApp Lines</p>
+                <p className="text-xs text-brand-primary/70 mt-0.5">
+                  <span className="font-bold text-green-500">{connectedTeamCount}</span> of{" "}
+                  <span className="font-bold">{teamWaStatuses.length}</span> reps connected
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Rep status mini-pills */}
+              <div className="flex items-center gap-1">
+                {teamWaStatuses.slice(0, 5).map((rep) => (
+                  <div
+                    key={rep.userId}
+                    title={`${rep.name}: ${rep.status}`}
+                    className={`w-2 h-2 rounded-full ${
+                      rep.status === "connected" ? "bg-green-500" :
+                      rep.status === "qr" ? "bg-amber-400" :
+                      "bg-slate-400"
+                    }`}
+                  />
+                ))}
+                {teamWaStatuses.length > 5 && (
+                  <span className="text-[10px] text-brand-primary/60 ml-1">+{teamWaStatuses.length - 5}</span>
+                )}
+              </div>
+              <button
+                onClick={() => navigate("/whatsapp")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+              >
+                View All <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI & Automation Master Control Card */}
       <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 shadow-sm">

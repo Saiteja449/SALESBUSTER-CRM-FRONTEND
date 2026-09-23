@@ -29,6 +29,10 @@ import {
   UserPlus,
   QrCode,
   Smartphone,
+  Eye,
+  ShieldCheck,
+  Copy,
+  CheckCircle2,
 } from "lucide-react";
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
@@ -52,6 +56,16 @@ export default function WhatsAppChat() {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionLoadingMap, setSessionLoadingMap] = useState({});
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+
+  // Multi-user feature states
+  const isManager = currentUser?.role === "sales manager" || currentUser?.role === "super_admin";
+  const isSalesRep = currentUser?.role === "sales person";
+  const [repSessionError, setRepSessionError] = useState("");        // phone_mismatch error
+  const [repFilterUserId, setRepFilterUserId] = useState("all");     // Admin conv filter
+  const [teamStatuses, setTeamStatuses] = useState([]);              // Admin team overview
+  const [summaryModal, setSummaryModal] = useState(false);           // AI summary modal
+  const [chatSummary, setChatSummary] = useState(null);              // AI summary data
+  const [summaryLoading, setSummaryLoading] = useState(false);       // Summarize loading
 
   // Conversations List
   const [conversations, setConversations] = useState([]);
@@ -125,6 +139,11 @@ export default function WhatsAppChat() {
       if (data.organizationId && orgId && String(data.organizationId) !== String(orgId)) {
         return;
       }
+      // ===== PHONE MISMATCH ERROR DETECTION =====
+      if (data.error === "phone_mismatch" && data.sessionId?.includes("_user_")) {
+        setRepSessionError(data.errorMessage || "Phone number mismatch. Please scan using your registered WhatsApp number.");
+      }
+      // ==========================================
       setSessions((prev) => {
         const existingIndex = prev.findIndex((s) => s.sessionId === data.sessionId);
         if (existingIndex >= 0) {
@@ -551,6 +570,27 @@ export default function WhatsAppChat() {
     }
   };
 
+  // AI Chat Summarization
+  const handleSummarizeChat = async (forceRefresh = false) => {
+    if (!selectedConv) return;
+    const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
+    if (!leadId) return;
+    setSummaryLoading(true);
+    setSummaryModal(true);
+    if (forceRefresh) setChatSummary(null);
+    try {
+      const res = await axios.post(
+        API_ENDPOINTS.WHATSAPP.SUMMARIZE_CONVERSATION(leadId),
+        forceRefresh ? { forceRefresh: true } : {}
+      );
+      setChatSummary(res.data.data);
+    } catch (err) {
+      setChatSummary({ error: err.response?.data?.message || "Failed to generate summary. Please try again." });
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   // Update lead qualification parameters in DB
   const handleUpdateQualification = async (e) => {
     e.preventDefault();
@@ -654,14 +694,23 @@ export default function WhatsAppChat() {
     }
   };
 
-  // Filter conversations
+  // Filter conversations — supports admin rep-filter dropdown
   const filteredConversations = conversations.filter((c) => {
     const name = c.leadId?.name || "Unknown";
     const phone = c.leadId?.phone || "";
     const cleanQuery = searchQuery.toLowerCase();
-    return (
-      name.toLowerCase().includes(cleanQuery) || phone.includes(cleanQuery)
-    );
+    const matchesSearch =
+      name.toLowerCase().includes(cleanQuery) || phone.includes(cleanQuery);
+
+    if (!isManager || repFilterUserId === "all") return matchesSearch;
+    if (repFilterUserId === "admin") {
+      // Admin org lines: sessions that are NOT _user_ sessions
+      const msgSessionId = c.leadId?.lastSessionId || "";
+      return matchesSearch && !msgSessionId.includes("_user_");
+    }
+    // Filter by assigned rep
+    const assignedTo = c.leadId?.assignedTo?._id || c.leadId?.assignedTo;
+    return matchesSearch && String(assignedTo) === repFilterUserId;
   });
 
   return (
@@ -933,6 +982,22 @@ export default function WhatsAppChat() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                  {/* Summarize Chat Button */}
+                  {selectedConv && (
+                    <button
+                      id="summarize-chat-btn"
+                      onClick={() => handleSummarizeChat(false)}
+                      disabled={summaryLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-600/30 transition-all disabled:opacity-50"
+                      title="Summarize conversation with AI"
+                    >
+                      {summaryLoading
+                        ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        : <Sparkles className="w-3.5 h-3.5" />}
+                      <span>{summaryLoading ? "Analyzing..." : "Summarize"}</span>
+                    </button>
+                  )}
+
                   {/* AI toggle slider */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-brand-secondary/80 font-bold">
@@ -1139,28 +1204,42 @@ export default function WhatsAppChat() {
                 )}
               </div>
 
-              {/* Chat Input footer */}
-              <form
-                onSubmit={handleSend}
-                className="p-3 border-t border-[#361c5a] bg-[#1a0c35] flex items-center gap-2"
-              >
-                <div className="flex-1 relative flex items-center bg-[#21103f] border border-[#3e206c] rounded-xl px-4 py-2.5">
-                  <input
-                    type="text"
-                    placeholder="Type message..."
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    className="w-full bg-transparent outline-none text-white text-sm"
-                  />
+              {/* Chat Input footer — Admin sees view-only banner; reps get send input */}
+              {isManager ? (
+                <div className="p-3.5 border-t border-[#361c5a] bg-[#1a0c35] flex items-center justify-center gap-2 text-xs font-semibold text-purple-200">
+                  <Eye className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <span>
+                    <span className="font-bold text-purple-300">Admin Oversight Mode:</span>{" "}
+                    View-only access. Only{" "}
+                    <span className="text-purple-100 font-bold">
+                      {selectedConv?.leadId?.assignedTo?.name || "the assigned representative"}
+                    </span>{" "}
+                    can send messages.
+                  </span>
                 </div>
-
-                <button
-                  type="submit"
-                  className="p-2.5 bg-purple-500 hover:bg-purple-600 rounded-xl text-white transition-all shrink-0 shadow-lg"
+              ) : (
+                <form
+                  onSubmit={handleSend}
+                  className="p-3 border-t border-[#361c5a] bg-[#1a0c35] flex items-center gap-2"
                 >
-                  <Send className="w-5 h-5" />
-                </button>
-              </form>
+                  <div className="flex-1 relative flex items-center bg-[#21103f] border border-[#3e206c] rounded-xl px-4 py-2.5">
+                    <input
+                      type="text"
+                      placeholder="Type message..."
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                      className="w-full bg-transparent outline-none text-white text-sm"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="p-2.5 bg-purple-500 hover:bg-purple-600 rounded-xl text-white transition-all shrink-0 shadow-lg"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </form>
+              )}
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-brand-secondary/45">
@@ -1717,7 +1796,137 @@ export default function WhatsAppChat() {
         loadingSessions={sessionLoadingMap}
         organizationName={organization?.name || currentUser?.organizationName || ""}
         whatsappLineLimit={whatsappLineLimit}
+        currentUser={currentUser}
+        repSessionError={repSessionError}
       />
+
+      {/* ===== AI CHAT SUMMARY MODAL ===== */}
+      {summaryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#1a0c35] border border-purple-500/30 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-purple-700/30 shrink-0">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                <h2 className="text-white font-bold text-base">AI Chat Summary</h2>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSummarizeChat(true)}
+                  title="Re-analyze conversation"
+                  className="p-1.5 rounded-lg text-purple-400 hover:text-purple-200 hover:bg-purple-500/10 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setSummaryModal(false)}
+                  className="p-1.5 rounded-lg text-purple-400 hover:text-white hover:bg-purple-500/10 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* Loading */}
+              {summaryLoading && (
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <RefreshCw className="w-7 h-7 text-purple-400 animate-spin" />
+                  <p className="text-purple-300 text-sm font-medium">Analyzing conversation with AI...</p>
+                </div>
+              )}
+
+              {/* Error */}
+              {chatSummary?.error && !summaryLoading && (
+                <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-300 text-sm flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  {chatSummary.error}
+                </div>
+              )}
+
+              {/* Results */}
+              {chatSummary && !chatSummary.error && !summaryLoading && (
+                <>
+                  {/* Executive Summary */}
+                  <div className="p-4 bg-purple-900/20 border border-purple-500/20 rounded-xl">
+                    <p className="text-[10px] text-purple-400 font-bold mb-1.5 uppercase tracking-wider">Executive Overview</p>
+                    <p className="text-sm text-white leading-relaxed">{chatSummary.summary}</p>
+                  </div>
+
+                  {/* Sentiment */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-purple-400 font-semibold">Customer Sentiment:</span>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                      chatSummary.sentiment === "High Intent" ? "bg-green-500/20 border-green-500/40 text-green-300" :
+                      chatSummary.sentiment === "Warm" ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" :
+                      chatSummary.sentiment === "Cold" || chatSummary.sentiment === "Hesitant" ? "bg-red-500/20 border-red-500/40 text-red-300" :
+                      chatSummary.sentiment === "Price Sensitive" ? "bg-amber-500/20 border-amber-500/40 text-amber-300" :
+                      "bg-purple-600/30 border-purple-500/40 text-purple-200"
+                    }`}>
+                      {chatSummary.sentiment || "Neutral"}
+                    </span>
+                  </div>
+
+                  {/* Key Points */}
+                  {chatSummary.keyPoints?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-purple-400 font-bold mb-2 uppercase tracking-wider">Key Discussion Points</p>
+                      <ul className="space-y-1.5">
+                        {chatSummary.keyPoints.map((pt, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-purple-100">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" />
+                            {pt}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Next Steps */}
+                  {chatSummary.nextSteps?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-purple-400 font-bold mb-2 uppercase tracking-wider">Recommended Next Steps</p>
+                      <ul className="space-y-1.5">
+                        {chatSummary.nextSteps.map((step, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-purple-100">
+                            <span className="w-4 h-4 flex-shrink-0 bg-purple-600 rounded-full flex items-center justify-center text-[9px] font-bold text-white mt-0.5">{i + 1}</span>
+                            {step}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Metadata & Copy */}
+                  <div className="flex items-center justify-between pt-2 border-t border-purple-700/30">
+                    <span className="text-xs text-purple-500">
+                      {chatSummary.messagesAnalyzed} messages analyzed
+                      {chatSummary.generatedAt ? ` · ${new Date(chatSummary.generatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}` : ""}
+                    </span>
+                    <button
+                      id="copy-summary-btn"
+                      onClick={() => {
+                        const text = [
+                          `Summary: ${chatSummary.summary}`,
+                          `\nSentiment: ${chatSummary.sentiment}`,
+                          chatSummary.keyPoints?.length ? `\nKey Points:\n${chatSummary.keyPoints.map((p) => `• ${p}`).join("\n")}` : "",
+                          chatSummary.nextSteps?.length ? `\nNext Steps:\n${chatSummary.nextSteps.map((s, i) => `${i + 1}. ${s}`).join("\n")}` : "",
+                        ].join("");
+                        navigator.clipboard.writeText(text);
+                      }}
+                      className="text-xs text-purple-400 hover:text-purple-200 flex items-center gap-1 transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5" /> Copy
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ===== END AI CHAT SUMMARY MODAL ===== */}
     </div>
   );
 }
