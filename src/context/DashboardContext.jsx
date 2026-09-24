@@ -19,6 +19,13 @@ export function DashboardProvider({ children }) {
   const [todayAnalytics, setTodayAnalytics] = useState([]);
 
   useEffect(() => {
+    const role = String(currentUser?.role || "").toLowerCase().trim();
+    const isSalesRep = ["sales person", "sales representative", "sales_person"].includes(role);
+    if (!currentUser || isSalesRep) {
+      setTodayAnalytics([]);
+      return undefined;
+    }
+
     const fetchAnalytics = async () => {
       try {
         const res = await axios.get(API_ENDPOINTS.ANALYTICS.TODAY);
@@ -30,7 +37,7 @@ export function DashboardProvider({ children }) {
     fetchAnalytics();
     const interval = setInterval(fetchAnalytics, 60000); // refresh every minute
     return () => clearInterval(interval);
-  }, []);
+  }, [currentUser?.id, currentUser?._id, currentUser?.role]);
 
   // Filter based on user role: if Sales Representative, only show their assigned leads for simple dashboard KPIs
   const leads = useMemo(() => {

@@ -136,8 +136,8 @@ export default function Dashboard() {
     }
 
     const digitsOnly = newUser.mobile.replace(/\D/g, "");
-    if (digitsOnly.length < 7 || digitsOnly.length > 15) {
-      setAddUserError("Please enter a valid mobile number (7 to 15 digits).");
+    if (digitsOnly.length !== 10) {
+      setAddUserError("Enter a valid 10-digit Indian mobile number.");
       return;
     }
 
@@ -146,7 +146,7 @@ export default function Dashboard() {
       await addSalesPerson(
         newUser.name.trim(),
         newUser.email.trim(),
-        newUser.mobile.trim(),
+        `+91${digitsOnly}`,
       );
       setAddUserSuccess("Sales representative added! Login credentials sent via email.");
       setNewUser({ name: "", email: "", mobile: "" });
@@ -1210,16 +1210,19 @@ export default function Dashboard() {
                 <label className="text-xs font-bold text-text-primary block mb-1">
                   Mobile Number
                 </label>
-                <input
-                  type="tel"
-                  placeholder="+91 98765 43210"
-                  value={newUser.mobile}
-                  onChange={(e) =>
-                    setNewUser({ ...newUser, mobile: e.target.value })
-                  }
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
-                />
+                <div className="flex rounded-xl bg-bg-secondary border border-border-main focus-within:border-pilot-blue">
+                  <span className="px-3.5 py-2.5 text-xs font-semibold text-text-secondary border-r border-border-main">+91</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="98765 43210"
+                    value={newUser.mobile}
+                    onChange={(e) => setNewUser({ ...newUser, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    required
+                    className="w-full min-w-0 px-3.5 py-2.5 rounded-r-xl bg-transparent text-xs text-text-primary focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-600 dark:text-blue-400 flex items-start gap-2">

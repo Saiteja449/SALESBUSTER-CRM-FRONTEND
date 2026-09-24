@@ -71,8 +71,8 @@ export default function TeamPerformance() {
     }
 
     const digits = newMobile.replace(/\D/g, "");
-    if (digits.length < 7 || digits.length > 15) {
-      setCreateError("Please enter a valid mobile number (7 to 15 digits).");
+    if (digits.length !== 10) {
+      setCreateError("Enter a valid 10-digit Indian mobile number.");
       return;
     }
 
@@ -81,7 +81,7 @@ export default function TeamPerformance() {
       await addSalesPerson(
         newName.trim(),
         newEmail.trim(),
-        newMobile.trim()
+        `+91${digits}`
       );
       setCreateOpen(false);
       setNewName("");
@@ -579,14 +579,19 @@ export default function TeamPerformance() {
                 <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
                   Mobile Number
                 </label>
-                <input
-                  type="tel"
-                  value={newMobile}
-                  onChange={(e) => setNewMobile(e.target.value)}
-                  placeholder="e.g. +91 98765 43210"
-                  className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
-                  required
-                />
+                <div className="flex rounded-lg bg-brand-light border border-brand-secondary focus-within:border-blue-500">
+                  <span className="px-3 py-2.5 text-sm font-medium text-brand-primary/70 border-r border-brand-secondary">+91</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={newMobile}
+                    onChange={(e) => setNewMobile(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="98765 43210"
+                    className="w-full min-w-0 bg-transparent text-brand-primary text-sm rounded-r-lg block p-2.5 outline-none"
+                    required
+                  />
+                </div>
               </div>
 
               <div className="bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 p-3 rounded-xl text-xs flex items-start gap-2">

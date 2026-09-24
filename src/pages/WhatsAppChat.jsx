@@ -58,9 +58,14 @@ export default function WhatsAppChat() {
   const [connectModalOpen, setConnectModalOpen] = useState(false);
 
   // Multi-user feature states
-  const isManager = currentUser?.role === "sales manager" || currentUser?.role === "super_admin";
-  const isSalesRep = currentUser?.role === "sales person";
+  const normalizedRole = String(currentUser?.role || "").toLowerCase().trim();
+  const isManager =
+    ["sales manager", "super_admin", "super admin"].includes(normalizedRole) ||
+    Boolean(currentUser?.isOrgOwner);
+  const isSalesRep =
+    ["sales person", "sales representative", "sales_person"].includes(normalizedRole);
   const [repSessionError, setRepSessionError] = useState("");        // phone_mismatch error
+  const [pairingCodeData, setPairingCodeData] = useState(null);       // { sessionId, pairingCode }
   const [repFilterUserId, setRepFilterUserId] = useState("all");     // Admin conv filter
   const [teamStatuses, setTeamStatuses] = useState([]);              // Admin team overview
   const [summaryModal, setSummaryModal] = useState(false);           // AI summary modal
@@ -130,6 +135,13 @@ export default function WhatsAppChat() {
     fetchSessionStatus();
     fetchConversations();
 
+    if (isManager) {
+      axios
+        .get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS)
+        .then((res) => setTeamStatuses(Array.isArray(res.data?.data) ? res.data.data : []))
+        .catch((err) => console.error("Failed to fetch WhatsApp team statuses", err));
+    }
+
     if (orgId) {
       socket.emit("join_organization", orgId);
     }
@@ -140,8 +152,18 @@ export default function WhatsAppChat() {
         return;
       }
       // ===== PHONE MISMATCH ERROR DETECTION =====
-      if (data.error === "phone_mismatch" && data.sessionId?.includes("_user_")) {
+      const currentUserId = currentUser?.id || currentUser?._id;
+      const ownRepSessionId = orgId
+        ? `org_${orgId}_user_${currentUserId}`
+        : `user_${currentUserId}`;
+      if (isSalesRep && data.error === "phone_mismatch" && data.sessionId === ownRepSessionId) {
         setRepSessionError(data.errorMessage || "Phone number mismatch. Please scan using your registered WhatsApp number.");
+      } else if (
+        isSalesRep &&
+        data.sessionId === ownRepSessionId &&
+        (data.status === "connected" || data.status === "qr" || data.status === "connecting")
+      ) {
+        setRepSessionError("");
       }
       // ==========================================
       setSessions((prev) => {
@@ -202,13 +224,22 @@ export default function WhatsAppChat() {
       }
     });
 
+    // Pairing code received from backend via Socket.IO
+    socket.on("whatsapp_pairing_code", (data) => {
+      if (data.organizationId && orgId && String(data.organizationId) !== String(orgId)) {
+        return;
+      }
+      setPairingCodeData({ sessionId: data.sessionId, pairingCode: data.pairingCode });
+    });
+
     return () => {
       socket.off("whatsapp_status");
       socket.off("conversation_updated");
       socket.off("ai_status_updated");
       socket.off("organization_updated");
+      socket.off("whatsapp_pairing_code");
     };
-  }, [orgId]);
+  }, [orgId, isManager, isSalesRep, currentUser?.id, currentUser?._id]);
 
   // Set up socket subscription for selected chat
   useEffect(() => {
@@ -271,28 +302,61 @@ export default function WhatsAppChat() {
       const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
       // Handle new { sessions, whatsappLineLimit } response shape
       if (res.data && res.data.sessions) {
-        setSessions(Array.isArray(res.data.sessions) ? res.data.sessions : []);
+        const nextSessions = Array.isArray(res.data.sessions) ? res.data.sessions : [];
+        setSessions(nextSessions);
+        if (isSalesRep) {
+          const repSession = nextSessions.find((session) => session.isRepSession);
+          if (
+            repSession?.status === "connected" ||
+            repSession?.status === "qr" ||
+            repSession?.status === "connecting"
+          ) {
+            setRepSessionError("");
+          } else if (repSession?.errorMessage) {
+            setRepSessionError(repSession.errorMessage);
+          } else {
+            setRepSessionError("");
+          }
+        }
         if (res.data.whatsappLineLimit) {
           setWhatsappLineLimit(res.data.whatsappLineLimit);
         }
       } else {
         // Fallback for legacy array response
-        setSessions(Array.isArray(res.data) ? res.data : []);
+        const nextSessions = Array.isArray(res.data) ? res.data : [];
+        setSessions(nextSessions);
+        if (isSalesRep) {
+          const repSession = nextSessions.find((session) => session.isRepSession);
+          if (
+            repSession?.status === "connected" ||
+            repSession?.status === "qr" ||
+            repSession?.status === "connecting"
+          ) {
+            setRepSessionError("");
+          } else if (repSession?.errorMessage) {
+            setRepSessionError(repSession.errorMessage);
+          } else {
+            setRepSessionError("");
+          }
+        }
       }
     } catch (err) {
       console.error("Failed to fetch WhatsApp connection status", err);
     }
   };
 
+  // Keep the open connection dialog synchronized while WhatsApp is pairing.
+  useEffect(() => {
+    if (!connectModalOpen) return undefined;
+    const timer = window.setInterval(fetchSessionStatus, 1500);
+    return () => window.clearInterval(timer);
+  }, [connectModalOpen, isSalesRep]);
+
   const fetchConversations = async () => {
     try {
-      const res = await axios.get(API_ENDPOINTS.WHATSAPP.CONVERSATIONS, {
-        params: {
-          role: currentUser?.role,
-          name: currentUser?.name,
-          userId: currentUser?.id || currentUser?._id,
-        },
-      });
+      // The API scopes sales reps from their authenticated identity. Managers
+      // should receive all organization conversations and use the local rep filter.
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP.CONVERSATIONS);
       const data = res.data;
       setConversations(data);
       setConversationsLoading(false);
@@ -348,7 +412,7 @@ export default function WhatsAppChat() {
   const secondarySessionId = orgId ? `org_${orgId}_device_2` : "device_2";
 
   const primarySession = sessions.find(
-    (s) => s.sessionId === primarySessionId || s.isPrimary,
+    (s) => (isSalesRep && s.isRepSession) || s.sessionId === primarySessionId || s.isPrimary,
   ) || {
     sessionId: primarySessionId,
     status: "disconnected",
@@ -378,6 +442,9 @@ export default function WhatsAppChat() {
     setSessionLoadingMap((prev) => ({ ...prev, [sId]: true }));
     setSessionLoading(true);
     setConnectModalOpen(true);
+    if (isSalesRep) setRepSessionError("");
+    // Clear pairing code when starting a fresh QR connection
+    setPairingCodeData(null);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.CONNECT, {
         sessionId: sId,
@@ -387,6 +454,34 @@ export default function WhatsAppChat() {
     } catch (err) {
       console.error("Failed to connect WhatsApp session:", err);
       alert("Failed to send connect command.");
+    } finally {
+      setSessionLoadingMap((prev) => ({ ...prev, [sId]: false }));
+      setSessionLoading(false);
+    }
+  };
+
+  const handlePairingCodeRequest = async (targetSessionId, phoneNumber, deviceNum = 1) => {
+    const sId = targetSessionId || (deviceNum === 2 ? secondarySessionId : primarySessionId);
+    setSessionLoadingMap((prev) => ({ ...prev, [sId]: true }));
+    setSessionLoading(true);
+    setConnectModalOpen(true);
+    if (isSalesRep) setRepSessionError("");
+    // Clear any previous pairing code before requesting a fresh one
+    setPairingCodeData(null);
+    try {
+      await axios.post(API_ENDPOINTS.WHATSAPP.PAIRING_CODE, {
+        phoneNumber,
+        sessionId: sId,
+        device: deviceNum,
+        isSecondary: deviceNum === 2,
+      });
+      // Pairing code will arrive via 'whatsapp_pairing_code' socket event
+      setTimeout(fetchSessionStatus, 1500);
+    } catch (err) {
+      const errMsg =
+        err?.response?.data?.message || "Failed to request pairing code. Please try again.";
+      console.error("Failed to request WhatsApp pairing code:", err);
+      alert(errMsg);
     } finally {
       setSessionLoadingMap((prev) => ({ ...prev, [sId]: false }));
       setSessionLoading(false);
@@ -710,7 +805,15 @@ export default function WhatsAppChat() {
     }
     // Filter by assigned rep
     const assignedTo = c.leadId?.assignedTo?._id || c.leadId?.assignedTo;
-    return matchesSearch && String(assignedTo) === repFilterUserId;
+    const selectedRep = teamStatuses.find(
+      (rep) => String(rep.userId) === repFilterUserId,
+    );
+    return (
+      matchesSearch &&
+      (String(assignedTo) === repFilterUserId ||
+        (selectedRep?.name &&
+          String(assignedTo).toLowerCase() === selectedRep.name.toLowerCase()))
+    );
   });
 
   return (
@@ -732,8 +835,7 @@ export default function WhatsAppChat() {
             </div>
 
             {/* Dual Channel Status Badges */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
-              {/* Line 1 Badge */}
+            {/* <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
               <div
                 onClick={() => setConnectModalOpen(true)}
                 className="flex items-center gap-1.5 bg-[#251347] hover:bg-[#2e1757] px-2.5 py-1 rounded-lg border border-[#3e206c] text-xs cursor-pointer transition-colors"
@@ -774,7 +876,6 @@ export default function WhatsAppChat() {
                 </span>
               </div>
 
-              {/* Line 2 Badge — only show if org has dual-line enabled */}
               {whatsappLineLimit >= 2 && (
               <div
                 onClick={() => setConnectModalOpen(true)}
@@ -816,14 +917,16 @@ export default function WhatsAppChat() {
                 </span>
               </div>
               )}
-            </div>
+            </div> */}
           </div>
         </div>
 
-        {/* Setup actions */}
         <div className="flex items-center gap-3">
-          {/* Glowing button if any QR is waiting for scan */}
-          {(primarySession.status === "qr" || (whatsappLineLimit >= 2 && secondarySession.status === "qr")) && (
+          {/* Single WhatsApp Connection Button: shows Scan QR Code if ready, else Connect button */}
+          {primarySession.status === "qr" ||
+          (!isSalesRep &&
+            whatsappLineLimit >= 2 &&
+            secondarySession.status === "qr") ? (
             <button
               onClick={() => setConnectModalOpen(true)}
               className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
@@ -831,24 +934,32 @@ export default function WhatsAppChat() {
               <QrCode className="w-4 h-4" />
               <span>
                 Scan QR Code (
-                {whatsappLineLimit >= 2 && primarySession.status === "qr" && secondarySession.status === "qr"
+                {!isSalesRep &&
+                whatsappLineLimit >= 2 &&
+                primarySession.status === "qr" &&
+                secondarySession.status === "qr"
                   ? "2 Lines Ready"
-                  : primarySession.status === "qr"
-                    ? "Line 1 Ready"
-                    : "Line 2 Ready"}
+                  : isSalesRep || primarySession.status === "qr"
+                  ? "QR Ready"
+                  : "Line 2 Ready"}
                 )
               </span>
             </button>
+          ) : (
+            <button
+              onClick={() => setConnectModalOpen(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>
+                {isSalesRep
+                  ? "WhatsApp Connection"
+                  : whatsappLineLimit >= 2
+                  ? "Connect Channels (2 QRs)"
+                  : "Connect WhatsApp"}
+              </span>
+            </button>
           )}
-
-          {/* Connect / Manage 2 QRs Button */}
-          <button
-            onClick={() => setConnectModalOpen(true)}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
-          >
-            <QrCode className="w-4 h-4" />
-            <span>Connect {whatsappLineLimit >= 2 ? "Channels (2 QRs)" : "Channel"}</span>
-          </button>
         </div>
       </div>
 
@@ -864,6 +975,22 @@ export default function WhatsAppChat() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl px-4 py-2.5 outline-none focus:border-purple-400 text-sm"
             />
+            {isManager && (
+              <select
+                aria-label="Filter WhatsApp conversations by representative"
+                value={repFilterUserId}
+                onChange={(e) => setRepFilterUserId(e.target.value)}
+                className="mt-2 w-full bg-[#21103f] border border-[#3e206c] rounded-xl px-3 py-2.5 outline-none focus:border-purple-400 text-sm text-white"
+              >
+                <option value="all">All conversations</option>
+                <option value="admin">Organization WhatsApp lines</option>
+                {teamStatuses.map((rep) => (
+                  <option key={rep.userId} value={String(rep.userId)}>
+                    {rep.name || "Sales representative"}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -1243,23 +1370,33 @@ export default function WhatsAppChat() {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-brand-secondary/45">
-              {primarySession.status === "disconnected" && secondarySession.status === "disconnected" ? (
-                <div className="max-w-md p-6 rounded-2xl bg-[#1e0e3c] border border-[#3e206c] flex flex-col items-center shadow-xl animate-fadeIn">
+              {primarySession.status === "disconnected" && (isSalesRep || secondarySession.status === "disconnected") ? (
+                <div className="max-w-md p-6 rounded-2xl bg-[#1e0e3c] border border-[#3e206c] flex flex-col items-center shadow-xl animate-fadeIn text-center">
                   <div className="w-14 h-14 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mb-4 border border-purple-500/20">
                     <QrCode className="w-7 h-7" />
                   </div>
                   <h2 className="text-lg font-bold text-white mb-1.5">
-                    Connect WhatsApp Channels
+                    {isSalesRep ? "Connect Your WhatsApp Line" : "Connect WhatsApp Channels"}
                   </h2>
                   <p className="text-xs text-brand-secondary/80 mb-5 leading-relaxed max-w-xs">
-                    Your organization supports 2 simultaneous WhatsApp connections. Click below to generate and scan both QR codes.
+                    {isSalesRep
+                      ? "Connect your authorized WhatsApp account to start chatting with customer leads directly."
+                      : whatsappLineLimit >= 2
+                      ? "Your organization supports 2 simultaneous WhatsApp connections. Click below to view and connect both lines."
+                      : "Connect your organization WhatsApp account to activate automated lead capture and real-time CRM sync."}
                   </p>
                   <button
                     onClick={() => setConnectModalOpen(true)}
                     className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-lg shadow-purple-500/25 transition-all cursor-pointer"
                   >
                     <QrCode className="w-4 h-4" />
-                    <span>View &amp; Scan 2 QR Codes</span>
+                    <span>
+                      {isSalesRep
+                        ? "Connect My WhatsApp"
+                        : whatsappLineLimit >= 2
+                        ? "View & Scan 2 QR Codes"
+                        : "Connect WhatsApp"}
+                    </span>
                   </button>
                 </div>
               ) : (
@@ -1789,16 +1926,27 @@ export default function WhatsAppChat() {
       <WhatsAppConnectModal
         isOpen={connectModalOpen}
         onClose={() => setConnectModalOpen(false)}
-        sessions={whatsappLineLimit >= 2 ? [primarySession, secondarySession] : [primarySession]}
+        sessions={
+          isSalesRep
+            ? [primarySession]
+            : whatsappLineLimit >= 2
+            ? [primarySession, secondarySession]
+            : [primarySession]
+        }
         onConnect={handleConnect}
+        onPairingCodeRequest={handlePairingCodeRequest}
         onDisconnect={handleLogout}
         onRefresh={fetchSessionStatus}
         loadingSessions={sessionLoadingMap}
-        organizationName={organization?.name || currentUser?.organizationName || ""}
-        whatsappLineLimit={whatsappLineLimit}
+        organizationName={
+          organization?.name || currentUser?.organizationName || ""
+        }
+        whatsappLineLimit={isSalesRep ? 1 : whatsappLineLimit}
         currentUser={currentUser}
         repSessionError={repSessionError}
+        pairingCodeData={pairingCodeData}
       />
+
 
       {/* ===== AI CHAT SUMMARY MODAL ===== */}
       {summaryModal && (
