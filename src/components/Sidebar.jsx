@@ -16,6 +16,7 @@ import {
   Headphones,
   Calendar,
   Send,
+  PhoneCall,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
@@ -64,6 +65,15 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
             icon: <BarChart2 className="w-5 h-5" />,
             path: "/performance",
           },
+          ...(organization?.telephony?.isAddonEnabled
+            ? [
+                {
+                  text: "Telephony Analytics",
+                  icon: <PhoneCall className="w-5 h-5" />,
+                  path: "/telephony-analytics",
+                },
+              ]
+            : []),
           // {
           //   text: "Organization Profile",
           //   icon: <Building2 className="w-5 h-5" />,

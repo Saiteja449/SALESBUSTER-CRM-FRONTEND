@@ -18,6 +18,7 @@ import axios from "axios";
 import { socket } from "../../utils/socket.js";
 import { API_BASE_URL } from "../../utils/constants.js";
 import { useLeads } from "../../context/LeadsContext.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const ENABLE_AI_AUDIO_ANALYSIS =
   import.meta.env.VITE_ENABLE_AI_AUDIO_ANALYSIS !== "false";
@@ -48,6 +49,8 @@ const formatMarkdownToHtml = (content) => {
 
 export default function RecordingsSidebar({ lead, isOpen, onClose }) {
   const { setLeads } = useLeads();
+  const { organization } = useAuth();
+  const isTelephonyAddonEnabled = Boolean(organization?.telephony?.isAddonEnabled);
   const id = lead?._id || lead?.id;
 
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -240,24 +243,30 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                     Recordings ({lead.recordings?.length || 0})
                   </h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowUploadModal(!showUploadModal)}
-                  className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  {showUploadModal ? (
-                    <>
-                      <X size={14} /> Close
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={14} /> Upload Audio
-                    </>
-                  )}
-                </button>
+                {isTelephonyAddonEnabled ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 rounded-lg text-xs font-semibold">
+                    <Phone size={13} /> Auto Cloud Recording (TeleCMI)
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowUploadModal(!showUploadModal)}
+                    className="px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    {showUploadModal ? (
+                      <>
+                        <X size={14} /> Close
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={14} /> Upload Audio
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
 
-              {showUploadModal && (
+              {!isTelephonyAddonEnabled && showUploadModal && (
                 <div className="p-4 bg-violet-500/5 border-b border-brand-secondary/40 animate-fadeIn">
                   <form
                     onSubmit={handleUploadRecordingSubmit}

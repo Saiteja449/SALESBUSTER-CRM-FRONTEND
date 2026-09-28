@@ -600,6 +600,15 @@ export default function TeamPerformance() {
                   A temporary login password will be automatically generated and emailed to the representative.
                 </span>
               </div>
+
+              {organization?.telephony?.isAddonEnabled && organization?.telephony?.isConfigured && (
+                <div className="bg-pilot-teal/10 border border-pilot-teal/20 text-pilot-teal p-3 rounded-xl text-xs flex items-start gap-2">
+                  <span className="text-sm shrink-0 mt-0.5">📞</span>
+                  <span className="leading-relaxed">
+                    <strong>TeleCMI Cloud Telephony:</strong> An extension will be automatically provisioned on TeleCMI for this representative so they can immediately make recorded calls on the mobile app.
+                  </span>
+                </div>
+              )}
             </form>
 
             <div className="p-4 border-t border-brand-secondary bg-brand-light flex justify-end gap-3">

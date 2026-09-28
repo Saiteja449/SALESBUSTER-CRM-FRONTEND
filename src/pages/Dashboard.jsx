@@ -1232,6 +1232,15 @@ export default function Dashboard() {
                 </span>
               </div>
 
+              {organization?.telephony?.isAddonEnabled && organization?.telephony?.isConfigured && (
+                <div className="p-3 rounded-xl bg-pilot-teal/10 border border-pilot-teal/20 text-xs text-pilot-teal flex items-start gap-2">
+                  <span className="text-sm shrink-0 mt-0.5">📞</span>
+                  <span className="leading-relaxed">
+                    <strong>TeleCMI Cloud Telephony:</strong> A calling extension will be automatically provisioned on TeleCMI for this representative so they can immediately make recorded calls on the mobile app.
+                  </span>
+                </div>
+              )}
+
               <div className="pt-3 flex justify-end gap-2.5">
                 <button
                   type="button"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   QrCode,
@@ -10,9 +10,6 @@ import {
   Copy,
   Check,
   ShieldCheck,
-  Hash,
-  Phone,
-  Timer,
 } from "lucide-react";
 
 export default function WhatsAppConnectModal({
@@ -33,14 +30,6 @@ export default function WhatsAppConnectModal({
   const [copiedSessionId, setCopiedSessionId] = useState(null);
   const [confirmDisconnectId, setConfirmDisconnectId] = useState(null);
   const [dismissedError, setDismissedError] = useState(false);
-  // "qr" | "pairing" — connection method toggle per session
-  const [connectionMode, setConnectionMode] = useState({});
-  // Phone input value per session (for pairing code mode)
-  const [pairingPhone, setPairingPhone] = useState({});
-  // 60-second countdown after pairing code arrives
-  const [pairingCountdown, setPairingCountdown] = useState(0);
-  const [copiedPairingCode, setCopiedPairingCode] = useState(false);
-  const countdownRef = useRef(null);
 
   const normalizedRole = String(currentUser?.role || "").toLowerCase().trim();
   const isRepMode = [
@@ -98,7 +87,7 @@ export default function WhatsAppConnectModal({
         }
       : null;
 
-  // Auto-connect QR for Sales Rep when modal opens (QR mode only)
+  // Auto-connect QR for Sales Rep when modal opens
   useEffect(() => {
     if (!isOpen || !isRepMode) return;
     if (
@@ -107,29 +96,9 @@ export default function WhatsAppConnectModal({
       repPhone &&
       onConnect
     ) {
-      const currentMode = connectionMode[repSessionId] || "qr";
-      if (currentMode === "qr") {
-        onConnect(repSessionId, 1);
-      }
+      onConnect(repSessionId, 1);
     }
   }, [isOpen, isRepMode, repSession.status, repSessionId, repPhone]);
-
-  // Start 60s countdown when pairing code arrives via socket
-  useEffect(() => {
-    if (!pairingCodeData?.pairingCode) return;
-    setPairingCountdown(60);
-    clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setPairingCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(countdownRef.current);
-  }, [pairingCodeData?.pairingCode]);
 
   // Reset dismissed error state when a new error arrives
   useEffect(() => {
@@ -143,13 +112,6 @@ export default function WhatsAppConnectModal({
     navigator.clipboard.writeText(text);
     setCopiedSessionId(sId);
     setTimeout(() => setCopiedSessionId(null), 2500);
-  };
-
-  const handleCopyPairingCode = (code) => {
-    if (!code) return;
-    navigator.clipboard.writeText(code.replace(/-/g, ""));
-    setCopiedPairingCode(true);
-    setTimeout(() => setCopiedPairingCode(false), 2500);
   };
 
   function formatPhoneNumber(phone) {
@@ -183,13 +145,6 @@ export default function WhatsAppConnectModal({
             Scan QR Code
           </span>
         );
-      case "pairing":
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/30 shadow-xs">
-            <Hash className="w-3 h-3" />
-            Pairing Code
-          </span>
-        );
       case "connecting":
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 shadow-xs">
@@ -201,7 +156,7 @@ export default function WhatsAppConnectModal({
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30">
             <span className="w-2 h-2 rounded-full bg-slate-400" />
-            Offline
+            connecting
           </span>
         );
     }
@@ -216,33 +171,11 @@ export default function WhatsAppConnectModal({
 
     const isConnected = session.status === "connected";
     const isQR = session.status === "qr" && session.qrCode;
-
-    // Pairing code is active if this session has a live code from socket
-    const activePairingCode =
-      pairingCodeData?.sessionId === session.sessionId
-        ? pairingCodeData.pairingCode
-        : null;
-    const isPairing = session.status === "pairing" || !!activePairingCode;
-
     const isConnecting =
       !isQR &&
-      !isPairing &&
       (session.status === "connecting" || (isLoading && !isQR && !isConnected));
-    const isDisconnected = !isConnected && !isQR && !isPairing && !isConnecting;
+    const isDisconnected = !isConnected && !isQR && !isConnecting;
     const isConfirming = confirmDisconnectId === session.sessionId;
-
-    // Per-session connection method toggle
-    const mode = connectionMode[session.sessionId] || "qr";
-
-    const handleModeSwitch = (newMode) => {
-      setConnectionMode((prev) => ({ ...prev, [session.sessionId]: newMode }));
-    };
-
-    const handleGetPairingCode = () => {
-      if (!onPairingCodeRequest) return;
-      const phone = isRepMode ? repPhone : pairingPhone[session.sessionId] || "";
-      onPairingCodeRequest(session.sessionId, phone, deviceNum);
-    };
 
     return (
       <div className="flex flex-col justify-between rounded-2xl border border-slate-200 dark:border-purple-800/30 bg-slate-50/50 dark:bg-white/[0.02] p-4 sm:p-5 transition-all">
@@ -253,8 +186,6 @@ export default function WhatsAppConnectModal({
               className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold shrink-0 ${
                 isConnected
                   ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                  : isPairing
-                  ? "bg-violet-500/15 text-violet-600 dark:text-violet-400"
                   : "bg-purple-500/15 text-purple-600 dark:text-purple-400"
               }`}
             >
@@ -274,13 +205,12 @@ export default function WhatsAppConnectModal({
             </div>
           </div>
           <div className="shrink-0">
-            {renderStatusPill(isPairing ? "pairing" : session.status)}
+            {renderStatusPill(session.status)}
           </div>
         </div>
 
         {/* Card Body */}
         <div className="flex-1 flex flex-col justify-center items-center py-2 min-h-[280px]">
-
           {/* ── STATE: Connected ── */}
           {isConnected && (
             <div className="flex flex-col items-center text-center w-full py-2 animate-fadeIn">
@@ -358,7 +288,7 @@ export default function WhatsAppConnectModal({
           )}
 
           {/* ── STATE: QR Ready ── */}
-          {isQR && !isPairing && (
+          {isQR && (
             <div className="flex flex-col items-center text-center w-full py-1 animate-fadeIn">
               {isRepMode && repPhone && (
                 <div className="mb-3 p-2 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-2">
@@ -369,13 +299,28 @@ export default function WhatsAppConnectModal({
                   </p>
                 </div>
               )}
-              <div className="relative p-3 bg-white rounded-2xl shadow-lg border border-slate-200 inline-block mb-3.5">
+              <div className="relative p-3 bg-white rounded-2xl shadow-lg border border-slate-200 inline-block mb-3">
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(session.qrCode)}`}
                   alt="WhatsApp QR Code"
                   className="w-44 h-44 sm:w-48 sm:h-48 rounded-xl object-contain"
                 />
               </div>
+
+              {/* Refresh QR action */}
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => onConnect && onConnect(session.sessionId, deviceNum)}
+                  disabled={isLoading}
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-600 dark:text-purple-300/80 dark:hover:text-emerald-400 transition-colors cursor-pointer py-1 px-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
+                  title="Reload QR Code"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+                  <span>Reload QR</span>
+                </button>
+              </div>
+
               <div className="w-full max-w-sm bg-white dark:bg-slate-800/60 rounded-xl p-3 text-left border border-slate-200/80 dark:border-purple-800/20 text-xs space-y-1.5 text-slate-600 dark:text-slate-300 mb-3">
                 {[
                   <span key="s1">Open <strong>WhatsApp</strong> on your mobile phone.</span>,
@@ -399,104 +344,6 @@ export default function WhatsAppConnectModal({
             </div>
           )}
 
-          {/* ── STATE: Pairing Code Received ── */}
-          {isPairing && activePairingCode && (
-            <div className="flex flex-col items-center text-center w-full py-1 animate-fadeIn">
-              <div className="w-14 h-14 rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-3 shadow-inner">
-                <Hash className="w-7 h-7" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-0.5">
-                Enter this code in WhatsApp
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-purple-300/80 mb-4">
-                WhatsApp → Linked Devices → Link with phone number
-              </p>
-
-              {/* Big code display */}
-              <div className="relative w-full max-w-xs mb-4">
-                <div className="flex items-center justify-center gap-3 bg-white dark:bg-slate-900 border-2 border-violet-400/60 dark:border-violet-500/50 rounded-2xl px-5 py-4 shadow-lg shadow-violet-500/10">
-                  <span className="text-2xl sm:text-3xl font-black font-mono tracking-[0.25em] text-violet-700 dark:text-violet-300 select-all">
-                    {activePairingCode}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopyPairingCode(activePairingCode)}
-                    title="Copy code"
-                    className="ml-1 p-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/70 transition-colors cursor-pointer shrink-0"
-                  >
-                    {copiedPairingCode ? (
-                      <Check className="w-4 h-4 text-emerald-500" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-
-                {/* Countdown timer */}
-                {pairingCountdown > 0 ? (
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-purple-300/70 mb-1">
-                      <span className="flex items-center gap-1">
-                        <Timer className="w-3 h-3" /> Code expires in
-                      </span>
-                      <span className={`font-bold font-mono ${pairingCountdown <= 15 ? "text-rose-500 dark:text-rose-400" : "text-slate-700 dark:text-slate-300"}`}>
-                        00:{String(pairingCountdown).padStart(2, "0")}
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-1000 ${pairingCountdown <= 15 ? "bg-rose-500" : "bg-violet-500"}`}
-                        style={{ width: `${(pairingCountdown / 60) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-rose-500 dark:text-rose-400 font-medium text-center">
-                    Code expired — switch to Pairing Code tab and request a new one.
-                  </p>
-                )}
-              </div>
-
-              {/* Steps */}
-              <div className="w-full max-w-sm bg-white dark:bg-slate-800/60 rounded-xl p-3 text-left border border-slate-200/80 dark:border-purple-800/20 text-xs space-y-1.5 text-slate-600 dark:text-slate-300 mb-3">
-                {[
-                  <span key="p1">Open <strong>WhatsApp</strong> on your phone.</span>,
-                  <span key="p2">Tap <strong>Menu (⋮)</strong> → <strong>Linked Devices</strong> → <strong>Link a Device</strong>.</span>,
-                  <span key="p3">Tap <strong>"Link with phone number"</strong> and enter the code above.</span>,
-                ].map((step, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="w-4 h-4 rounded-full bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 flex items-center justify-center font-bold text-[10px] shrink-0">
-                      {i + 1}
-                    </span>
-                    {step}
-                  </div>
-                ))}
-              </div>
-
-              <div className="w-full max-w-sm p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-left text-xs text-amber-800 dark:text-amber-300">
-                <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <strong className="font-bold">Important:</strong> Do not close or minimize WhatsApp until the sync is fully completed.
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── STATE: Pairing requested, code not yet received ── */}
-          {isPairing && !activePairingCode && (
-            <div className="flex flex-col items-center text-center py-6 w-full max-w-sm mx-auto animate-fadeIn">
-              <div className="w-14 h-14 rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-3 shadow-inner">
-                <RefreshCw className="w-7 h-7 animate-spin" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                Generating pairing code...
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-4">
-                Your pairing code will appear in a few seconds. Keep WhatsApp open and ready.
-              </p>
-            </div>
-          )}
-
           {/* ── STATE: Connecting / Generating QR ── */}
           {isConnecting && (
             <div className="flex flex-col items-center text-center py-6 w-full max-w-sm mx-auto animate-fadeIn">
@@ -516,7 +363,7 @@ export default function WhatsAppConnectModal({
             </div>
           )}
 
-          {/* ── STATE: Disconnected — show QR / Pairing tabs ── */}
+          {/* ── STATE: Disconnected — scan QR code ── */}
           {isDisconnected && (
             <div className="flex flex-col items-center text-center py-3 w-full max-w-sm mx-auto animate-fadeIn">
               {isRepMode && !repPhone ? (
@@ -530,137 +377,28 @@ export default function WhatsAppConnectModal({
                   </div>
                 </div>
               ) : (
-                <>
-                  {/* ── Connection Method Tabs ── */}
-                  <div className="w-full flex rounded-xl overflow-hidden border border-slate-200 dark:border-purple-800/30 mb-5">
-                    <button
-                      type="button"
-                      onClick={() => handleModeSwitch("qr")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition-all cursor-pointer ${
-                        mode === "qr"
-                          ? "bg-emerald-500 text-white"
-                          : "bg-white dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10"
-                      }`}
-                    >
-                      <QrCode className="w-3.5 h-3.5" />
-                      QR Code
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleModeSwitch("pairing")}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition-all cursor-pointer border-l border-slate-200 dark:border-purple-800/30 ${
-                        mode === "pairing"
-                          ? "bg-violet-600 text-white"
-                          : "bg-white dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/10"
-                      }`}
-                    >
-                      <Hash className="w-3.5 h-3.5" />
-                      Pairing Code
-                    </button>
+                <div className="w-full flex flex-col items-center animate-fadeIn">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center mb-3">
+                    <QrCode className="w-7 h-7" />
                   </div>
-
-                  {/* QR Mode panel */}
-                  {mode === "qr" && (
-                    <div className="w-full flex flex-col items-center animate-fadeIn">
-                      <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center mb-3">
-                        <QrCode className="w-7 h-7" />
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                        {isRepMode ? "WhatsApp Line Offline" : `Line ${deviceNum} is Offline`}
-                      </h4>
-                      <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-5">
-                        {isRepMode
-                          ? "Scan a QR code to connect your WhatsApp account and receive lead inquiries."
-                          : `Connect ${deviceNum === 1 ? "primary" : "secondary"} channel for real-time CRM sync.`}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => onConnect && onConnect(session.sessionId, deviceNum)}
-                        disabled={isLoading}
-                        className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <QrCode className="w-4 h-4" />
-                        <span>Show QR Code</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Pairing Code Mode panel */}
-                  {mode === "pairing" && (
-                    <div className="w-full flex flex-col items-center animate-fadeIn">
-                      <div className="w-14 h-14 rounded-2xl bg-violet-500/15 text-violet-600 dark:text-violet-400 flex items-center justify-center mb-3">
-                        <Hash className="w-7 h-7" />
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                        Link via Phone Number
-                      </h4>
-                      <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-4">
-                        Get an 8-character code to enter in WhatsApp — no camera needed.
-                      </p>
-
-                      <div className="w-full max-w-xs mb-4">
-                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5 text-left">
-                          {isRepMode
-                            ? "Your Registered Phone Number"
-                            : "WhatsApp Phone Number (with country code)"}
-                        </label>
-                        {isRepMode ? (
-                          /* Rep: locked, pre-filled from profile */
-                          <div className="flex items-center gap-2 w-full rounded-xl border border-emerald-300 dark:border-emerald-700/50 bg-emerald-50 dark:bg-emerald-950/20 px-3.5 py-2.5">
-                            <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-                            <span className="text-sm font-bold font-mono text-emerald-700 dark:text-emerald-300">
-                              {formattedRepPhone}
-                            </span>
-                            <span className="ml-auto text-[10px] text-emerald-600 dark:text-emerald-500 font-medium">
-                              Verified
-                            </span>
-                          </div>
-                        ) : (
-                          /* Admin: editable phone input */
-                          <div className="flex items-center gap-2 w-full rounded-xl border border-slate-200 dark:border-purple-800/30 bg-white dark:bg-white/5 px-3.5 py-2.5 focus-within:border-violet-400 dark:focus-within:border-violet-500 transition-colors">
-                            <Phone className="w-4 h-4 text-slate-400 shrink-0" />
-                            <input
-                              type="tel"
-                              inputMode="numeric"
-                              placeholder="e.g. 919876543210"
-                              value={pairingPhone[session.sessionId] || ""}
-                              onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, "");
-                                setPairingPhone((prev) => ({
-                                  ...prev,
-                                  [session.sessionId]: val,
-                                }));
-                              }}
-                              className="flex-1 text-sm font-mono text-slate-900 dark:text-white bg-transparent outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600"
-                            />
-                          </div>
-                        )}
-                        {!isRepMode && (
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 text-left">
-                            Enter digits only with country code (e.g., 91 for India)
-                          </p>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleGetPairingCode}
-                        disabled={
-                          isLoading ||
-                          (!isRepMode && (pairingPhone[session.sessionId] || "").length < 10)
-                        }
-                        className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md shadow-violet-600/25 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isLoading ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Hash className="w-4 h-4" />
-                        )}
-                        <span>{isLoading ? "Requesting..." : "Get Pairing Code"}</span>
-                      </button>
-                    </div>
-                  )}
-                </>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                    {isRepMode ? "WhatsApp Line Offline" : `Line ${deviceNum} is Offline`}
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-5">
+                    {isRepMode
+                      ? "Scan a QR code to connect your WhatsApp account and receive lead inquiries."
+                      : `Connect ${deviceNum === 1 ? "primary" : "secondary"} channel for real-time CRM sync.`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onConnect && onConnect(session.sessionId, deviceNum)}
+                    disabled={isLoading}
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>{isLoading ? "Generating QR Code..." : "Scan QR Code"}</span>
+                  </button>
+                </div>
               )}
             </div>
           )}

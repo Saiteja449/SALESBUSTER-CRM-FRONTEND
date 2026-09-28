@@ -394,6 +394,7 @@ export function AuthProvider({ children }) {
           email: nameOrData.email,
           phone: nameOrData.phone || nameOrData.mobile,
           mobile: nameOrData.mobile || nameOrData.phone,
+          telecmiExtension: nameOrData.telecmiExtension,
         };
       } else {
         payload = {

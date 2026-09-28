@@ -31,6 +31,7 @@ import CreateWhatsAppTemplate from "./pages/CreateWhatsAppTemplate.jsx";
 import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
+import TelephonyAnalytics from "./pages/TelephonyAnalytics.jsx";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
@@ -152,6 +153,7 @@ export default function App() {
             />
             <Route path="/followups" element={<FollowUpReport />} />
             <Route path="/performance" element={<TeamPerformance />} />
+            <Route path="/telephony-analytics" element={<TelephonyAnalytics />} />
             <Route path="/organization" element={<OrganizationProfile />} />
             <Route path="/salesperson/:id" element={<SalesPersonDetails />} />
             <Route
