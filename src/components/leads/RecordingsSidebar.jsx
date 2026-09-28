@@ -46,6 +46,44 @@ const formatMarkdownToHtml = (content) => {
     .replace(/\*(.*?)\*/g, "<em>$1</em>");
 };
 
+const renderFormattedTranscript = (text) => {
+  if (!text) return null;
+  const lines = text.split("\n");
+  return lines.map((line, idx) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return <div key={idx} className="h-1.5" />;
+    }
+    const speakerMatch = trimmed.match(
+      /^(Sales Rep(?:resentative)?|Customer|Client|Speaker \d+|Agent|Lead):\s*(.*)/i,
+    );
+    if (speakerMatch) {
+      const speaker = speakerMatch[1];
+      const speech = speakerMatch[2];
+      const isRep = /sales rep|agent/i.test(speaker);
+      return (
+        <div key={idx} className="mb-2 text-xs leading-relaxed">
+          <span
+            className={`inline-block font-bold text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded mr-1.5 align-middle ${
+              isRep
+                ? "bg-violet-100 text-violet-700 border border-violet-200"
+                : "bg-blue-100 text-blue-700 border border-blue-200"
+            }`}
+          >
+            {speaker}
+          </span>
+          <span className="text-brand-primary">{speech}</span>
+        </div>
+      );
+    }
+    return (
+      <p key={idx} className="text-xs text-brand-primary leading-relaxed mb-1 font-mono whitespace-pre-wrap">
+        {trimmed}
+      </p>
+    );
+  });
+};
+
 export default function RecordingsSidebar({ lead, isOpen, onClose }) {
   const { setLeads } = useLeads();
   const id = lead?._id || lead?.id;
@@ -420,6 +458,7 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                                       handleCopyTranscript(recId, transcriptText);
                                     }}
                                     className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-brand-secondary/20 hover:bg-brand-secondary/30 text-brand-primary transition-all flex items-center gap-1.5 cursor-pointer"
+                                    title="Copy conversation transcript"
                                   >
                                     {copiedTranscriptId === recId ? (
                                       <><Check size={13} className="text-emerald-500" /><span className="text-emerald-500">Copied!</span></>
@@ -436,12 +475,82 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                                     handleTriggerAnalysis(recId);
                                   }}
                                   className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-violet-600/10 hover:bg-violet-600/20 text-violet-600 border border-violet-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                                  title="Run AI audio transcription and analysis"
                                 >
                                   <RotateCcw size={13} className={isPending ? "animate-spin" : ""} />
-                                  <span>{isPending ? "Running..." : "Re-Analyze"}</span>
+                                  <span>
+                                    {isPending
+                                      ? "Processing..."
+                                      : rec.analysis || transcriptText
+                                        ? "Re-Analyze"
+                                        : "Transcribe & Analyze"}
+                                  </span>
                                 </button>
                               </div>
                             </div>
+
+                            {/* Pending State Banner */}
+                            {isPending && (
+                              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 flex items-center gap-2">
+                                <Loader2 size={14} className="animate-spin text-amber-600 shrink-0" />
+                                <span>AI is actively processing, transcribing, and analyzing this call...</span>
+                              </div>
+                            )}
+
+                            {/* Failed State Banner */}
+                            {isFailed && (
+                              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 flex items-start gap-2">
+                                <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-500" />
+                                <div>
+                                  <span className="font-bold block">Transcription & Analysis failed</span>
+                                  <span className="text-[11px] opacity-80">
+                                    {rec.analysisError ||
+                                      "Audio could not be transcribed. Please check your Gemini API key or click Re-Analyze above."}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Verbatim Transcript Section */}
+                            {transcriptText && (
+                              <div className="bg-brand-light p-4 rounded-xl border border-brand-secondary/40 space-y-2.5 shadow-2xs">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-xs font-bold text-violet-700 flex items-center gap-1.5 uppercase tracking-wider">
+                                    <Mic size={14} className="text-violet-600" />
+                                    Verbatim Call Transcription
+                                  </h4>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-semibold text-brand-primary/60 bg-brand-secondary/20 px-2 py-0.5 rounded-full">
+                                      Speech-to-Text
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleCopyTranscript(recId, transcriptText);
+                                      }}
+                                      className="text-[11px] font-semibold text-brand-primary/70 hover:text-brand-primary flex items-center gap-1 px-2 py-0.5 rounded hover:bg-brand-secondary/30 transition-colors cursor-pointer"
+                                      title="Copy conversation transcript"
+                                    >
+                                      {copiedTranscriptId === recId ? (
+                                        <>
+                                          <Check size={12} className="text-emerald-500" />
+                                          <span className="text-emerald-600 font-bold">Copied!</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy size={12} />
+                                          <span>Copy</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="bg-white rounded-lg p-3.5 max-h-64 overflow-y-auto border border-brand-secondary/20 shadow-inner select-text">
+                                  {renderFormattedTranscript(transcriptText)}
+                                </div>
+                              </div>
+                            )}
 
                             {/* Analysis Display */}
                             {rec.analysis && (
@@ -459,18 +568,6 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                                 </div>
                               </div>
                             )}
-
-                            {/* {transcriptText && (
-                              <div className="bg-brand-light p-4 rounded-xl border border-brand-secondary/40">
-                                <h4 className="text-xs font-bold text-brand-primary flex items-center gap-1.5 mb-3 uppercase tracking-wider">
-                                  <Mic size={14} className="text-brand-primary/60" />
-                                  Verbatim Transcript
-                                </h4>
-                                <div className="bg-white rounded-lg p-3 max-h-60 overflow-y-auto font-mono text-xs leading-relaxed text-brand-primary whitespace-pre-wrap select-text border border-brand-secondary/20 shadow-inner">
-                                  {transcriptText}
-                                </div>
-                              </div>
-                            )} */}
                           </div>
                         )}
                       </div>

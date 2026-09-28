@@ -77,4 +77,4 @@ export const API_ENDPOINTS = {
 export const BACKEND_URL = API_BASE_URL.replace(/\/api$/, "");
 
 export const ENABLE_AI_AUDIO_ANALYSIS =
-  import.meta.env.VITE_ENABLE_AI_AUDIO_ANALYSIS === "true";
+  import.meta.env.VITE_ENABLE_AI_AUDIO_ANALYSIS !== "false";
