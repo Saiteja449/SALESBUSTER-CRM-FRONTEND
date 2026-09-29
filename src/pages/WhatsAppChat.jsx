@@ -65,7 +65,7 @@ export default function WhatsAppChat() {
   const isSalesRep =
     ["sales person", "sales representative", "sales_person"].includes(normalizedRole);
   const [repSessionError, setRepSessionError] = useState("");        // phone_mismatch error
-  const [pairingCodeData, setPairingCodeData] = useState(null);       // { sessionId, pairingCode }
+  // const [pairingCodeData, setPairingCodeData] = useState(null);       // { sessionId, pairingCode } (Pairing code disabled)
   const [repFilterUserId, setRepFilterUserId] = useState("all");     // Admin conv filter
   const [teamStatuses, setTeamStatuses] = useState([]);              // Admin team overview
   const [summaryModal, setSummaryModal] = useState(false);           // AI summary modal
@@ -224,20 +224,22 @@ export default function WhatsAppChat() {
       }
     });
 
-    // Pairing code received from backend via Socket.IO
+    /*
+    // Pairing code received from backend via Socket.IO (Currently disabled)
     socket.on("whatsapp_pairing_code", (data) => {
       if (data.organizationId && orgId && String(data.organizationId) !== String(orgId)) {
         return;
       }
       setPairingCodeData({ sessionId: data.sessionId, pairingCode: data.pairingCode });
     });
+    */
 
     return () => {
       socket.off("whatsapp_status");
       socket.off("conversation_updated");
       socket.off("ai_status_updated");
       socket.off("organization_updated");
-      socket.off("whatsapp_pairing_code");
+      // socket.off("whatsapp_pairing_code");
     };
   }, [orgId, isManager, isSalesRep, currentUser?.id, currentUser?._id]);
 
@@ -443,8 +445,8 @@ export default function WhatsAppChat() {
     setSessionLoading(true);
     setConnectModalOpen(true);
     if (isSalesRep) setRepSessionError("");
-    // Clear pairing code when starting a fresh QR connection
-    setPairingCodeData(null);
+    // Clear pairing code when starting a fresh QR connection (disabled)
+    // setPairingCodeData(null);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.CONNECT, {
         sessionId: sId,
@@ -460,6 +462,8 @@ export default function WhatsAppChat() {
     }
   };
 
+  /*
+  // Pairing code request handler (Currently disabled)
   const handlePairingCodeRequest = async (targetSessionId, phoneNumber, deviceNum = 1) => {
     const sId = targetSessionId || (deviceNum === 2 ? secondarySessionId : primarySessionId);
     setSessionLoadingMap((prev) => ({ ...prev, [sId]: true }));
@@ -487,6 +491,7 @@ export default function WhatsAppChat() {
       setSessionLoading(false);
     }
   };
+  */
 
   const handleLogout = async (sessionId) => {
     if (!sessionId) return;
@@ -1934,7 +1939,7 @@ export default function WhatsAppChat() {
             : [primarySession]
         }
         onConnect={handleConnect}
-        onPairingCodeRequest={handlePairingCodeRequest}
+        // onPairingCodeRequest={handlePairingCodeRequest}
         onDisconnect={handleLogout}
         onRefresh={fetchSessionStatus}
         loadingSessions={sessionLoadingMap}
@@ -1944,7 +1949,7 @@ export default function WhatsAppChat() {
         whatsappLineLimit={isSalesRep ? 1 : whatsappLineLimit}
         currentUser={currentUser}
         repSessionError={repSessionError}
-        pairingCodeData={pairingCodeData}
+        // pairingCodeData={pairingCodeData}
       />
 
 
