@@ -450,7 +450,7 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                                 className="w-full sm:flex-1 h-10 rounded-lg"
                               />
                               <div className="flex items-center gap-2 shrink-0">
-                                {transcriptText && (
+                                {/* {transcriptText && (
                                   <button
                                     type="button"
                                     onClick={(e) => {
@@ -466,7 +466,7 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                                       <><Copy size={13} /><span>Copy</span></>
                                     )}
                                   </button>
-                                )}
+                                )} */}
                                 <button
                                   type="button"
                                   disabled={isPending}
@@ -475,15 +475,15 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                                     handleTriggerAnalysis(recId);
                                   }}
                                   className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-violet-600/10 hover:bg-violet-600/20 text-violet-600 border border-violet-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                                  title="Run AI audio transcription and analysis"
+                                  title="Run AI audio analysis"
                                 >
                                   <RotateCcw size={13} className={isPending ? "animate-spin" : ""} />
                                   <span>
                                     {isPending
                                       ? "Processing..."
-                                      : rec.analysis || transcriptText
+                                      : rec.analysis
                                         ? "Re-Analyze"
-                                        : "Transcribe & Analyze"}
+                                        : "Analyze Call"}
                                   </span>
                                 </button>
                               </div>
@@ -493,7 +493,7 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                             {isPending && (
                               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 flex items-center gap-2">
                                 <Loader2 size={14} className="animate-spin text-amber-600 shrink-0" />
-                                <span>AI is actively processing, transcribing, and analyzing this call...</span>
+                                <span>AI is actively processing and analyzing this call...</span>
                               </div>
                             )}
 
@@ -502,17 +502,17 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                               <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 flex items-start gap-2">
                                 <AlertCircle size={14} className="shrink-0 mt-0.5 text-red-500" />
                                 <div>
-                                  <span className="font-bold block">Transcription & Analysis failed</span>
+                                  <span className="font-bold block">Audio Analysis failed</span>
                                   <span className="text-[11px] opacity-80">
                                     {rec.analysisError ||
-                                      "Audio could not be transcribed. Please check your Gemini API key or click Re-Analyze above."}
+                                      "Audio could not be analyzed. Please check your Gemini API key or click Re-Analyze above."}
                                   </span>
                                 </div>
                               </div>
                             )}
 
-                            {/* Verbatim Transcript Section */}
-                            {transcriptText && (
+                            {/* Verbatim Transcript Section (Commented Out) */}
+                            {/* {transcriptText && (
                               <div className="bg-brand-light p-4 rounded-xl border border-brand-secondary/40 space-y-2.5 shadow-2xs">
                                 <div className="flex items-center justify-between">
                                   <h4 className="text-xs font-bold text-violet-700 flex items-center gap-1.5 uppercase tracking-wider">
@@ -550,7 +550,7 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                                   {renderFormattedTranscript(transcriptText)}
                                 </div>
                               </div>
-                            )}
+                            )} */}
 
                             {/* Analysis Display */}
                             {rec.analysis && (

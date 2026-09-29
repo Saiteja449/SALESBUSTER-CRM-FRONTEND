@@ -55,8 +55,6 @@ export default function WhatsAppConnectModal({
       ? `org_${currentUser.organizationId}_user_${currentUser._id}`
       : "rep_session");
   const isRepLoading = !!loadingSessions[repSessionId];
-  const repPhone = currentUser?.phone || repSession.expectedPhone || "";
-  const formattedRepPhone = formatPhoneNumber(repPhone);
 
   const primarySession = sessions.find(
     (s) =>
@@ -92,7 +90,6 @@ export default function WhatsAppConnectModal({
     if (
       repSession.status === "disconnected" &&
       !loadingSessions[repSessionId] &&
-      repPhone &&
       onConnect
     ) {
       const currentMode = connectionMode[repSessionId] || "qr";
@@ -100,7 +97,7 @@ export default function WhatsAppConnectModal({
         onConnect(repSessionId, 1);
       }
     }
-  }, [isOpen, isRepMode, repSession.status, repSessionId, repPhone]);
+  }, [isOpen, isRepMode, repSession.status, repSessionId]);
 
   // Reset dismissed error state when a new error arrives
   useEffect(() => {
@@ -295,12 +292,11 @@ export default function WhatsAppConnectModal({
           {/* ── STATE: QR Ready ── */}
           {isQR && (
             <div className="flex flex-col items-center text-center w-full py-1 animate-fadeIn">
-              {isRepMode && repPhone && (
+              {isRepMode && (
                 <div className="mb-3 p-2 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <p className="text-xs text-emerald-800 dark:text-emerald-300 font-medium">
-                    Scan with your registered account:{" "}
-                    <strong className="font-bold">{formattedRepPhone}</strong>
+                    Scan with your WhatsApp account to link your personal line.
                   </p>
                 </div>
               )}
@@ -356,40 +352,28 @@ export default function WhatsAppConnectModal({
           {/* ── STATE: Disconnected — show QR connect button ── */}
           {isDisconnected && (
             <div className="flex flex-col items-center text-center py-3 w-full max-w-sm mx-auto animate-fadeIn">
-              {isRepMode && !repPhone ? (
-                <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2.5 text-left mb-2">
-                  <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="font-bold">No Authorized Number:</strong>
-                    <p className="mt-0.5">
-                      Your profile does not have a phone number registered. Please contact your manager to add your WhatsApp number.
-                    </p>
-                  </div>
+              <div className="w-full flex flex-col items-center animate-fadeIn">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center mb-3">
+                  <QrCode className="w-7 h-7" />
                 </div>
-              ) : (
-                <div className="w-full flex flex-col items-center animate-fadeIn">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 flex items-center justify-center mb-3">
-                    <QrCode className="w-7 h-7" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                    {isRepMode ? "WhatsApp Line Offline" : `Line ${deviceNum} is Offline`}
-                  </h4>
-                  <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-5">
-                    {isRepMode
-                      ? "Scan a QR code to connect your WhatsApp account and receive lead inquiries."
-                      : `Connect ${deviceNum === 1 ? "primary" : "secondary"} channel for real-time CRM sync.`}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => onConnect && onConnect(session.sessionId, deviceNum)}
-                    disabled={isLoading}
-                    className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    <span>Show QR Code</span>
-                  </button>
-                </div>
-              )}
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                  {isRepMode ? "WhatsApp Line Offline" : `Line ${deviceNum} is Offline`}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-5">
+                  {isRepMode
+                    ? "Scan a QR code to connect your WhatsApp account and receive lead inquiries."
+                    : `Connect ${deviceNum === 1 ? "primary" : "secondary"} channel for real-time CRM sync.`}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onConnect && onConnect(session.sessionId, deviceNum)}
+                  disabled={isLoading}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>Show QR Code</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -427,8 +411,8 @@ export default function WhatsAppConnectModal({
               </div>
               <p className="text-xs text-slate-500 dark:text-purple-300/80 mt-0.5">
                 {isRepMode
-                  ? repPhone
-                    ? `Authorized Line: ${formattedRepPhone}`
+                  ? repSession.connectedPhone
+                    ? `Active Line: ${formatPhoneNumber(repSession.connectedPhone)}`
                     : "Personal sales line"
                   : `Organization: ${organizationName || "Multi-channel WhatsApp"}`}
               </p>

@@ -16,6 +16,8 @@ import {
   Headphones,
   Calendar,
   Send,
+  Mail,
+  Phone,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
@@ -31,6 +33,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   const {
     logout,
     currentUser,
+    allUsers,
     organization,
     totalSeats,
     usedSeats,
@@ -41,6 +44,13 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   const { unreadCount } = useNotifications();
   const { openSupportModal } = useSupportModal();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const userEmail = currentUser?.email || "";
+  const userPhone =
+    currentUser?.phone ||
+    currentUser?.mobile ||
+    allUsers?.find((u) => u.id === (currentUser?.id || currentUser?._id))?.phone ||
+    "";
 
   const isOrgOwner =
     isManager || currentUser?.role === "Sales Manager" || currentUser?.isOrgOwner;
@@ -151,17 +161,35 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
 
       {/* User Section */}
       {currentUser && (
-        <div className="p-4 flex items-center gap-3 bg-brand-light">
-          <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center font-bold text-brand-light shrink-0">
+        <div className="p-4 flex items-start gap-3 bg-brand-light">
+          <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center font-bold text-brand-light shrink-0 mt-0.5 shadow-xs">
             {currentUser.avatar}
           </div>
-          <div className="overflow-hidden">
+          <div className="overflow-hidden flex-1 min-w-0">
             <div className="text-sm font-semibold truncate text-brand-primary">
               {currentUser.name}
             </div>
             <div className="text-xs font-medium text-purple-500 truncate">
               {currentUser.role}
             </div>
+            {userEmail && (
+              <div
+                className="text-[11px] text-brand-primary/70 truncate flex items-center gap-1.5 mt-1"
+                title={userEmail}
+              >
+                <Mail className="w-3 h-3 shrink-0 text-purple-500/70" />
+                <span className="truncate">{userEmail}</span>
+              </div>
+            )}
+            {userPhone && (
+              <div
+                className="text-[11px] text-brand-primary/70 truncate flex items-center gap-1.5 mt-0.5"
+                title={userPhone}
+              >
+                <Phone className="w-3 h-3 shrink-0 text-purple-500/70" />
+                <span className="truncate">{userPhone}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
