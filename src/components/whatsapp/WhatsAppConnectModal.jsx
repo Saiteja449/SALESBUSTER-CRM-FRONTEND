@@ -17,7 +17,7 @@ export default function WhatsAppConnectModal({
   onClose,
   sessions = [],
   onConnect,
-  onPairingCodeRequest,
+  // onPairingCodeRequest, // Pairing code feature currently disabled
   onDisconnect,
   onRefresh,
   loadingSessions = {},
@@ -25,7 +25,7 @@ export default function WhatsAppConnectModal({
   whatsappLineLimit = 1,
   currentUser = null,
   repSessionError = "",
-  pairingCodeData = null,
+  // pairingCodeData = null, // Pairing code feature currently disabled
 }) {
   const [copiedSessionId, setCopiedSessionId] = useState(null);
   const [confirmDisconnectId, setConfirmDisconnectId] = useState(null);
@@ -84,7 +84,7 @@ export default function WhatsAppConnectModal({
         }
       : null;
 
-  // Auto-connect QR for Sales Rep when modal opens (QR mode only)
+  // Auto-connect QR for Sales Rep when modal opens
   useEffect(() => {
     if (!isOpen || !isRepMode) return;
     if (
@@ -92,12 +92,9 @@ export default function WhatsAppConnectModal({
       !loadingSessions[repSessionId] &&
       onConnect
     ) {
-      const currentMode = connectionMode[repSessionId] || "qr";
-      if (currentMode === "qr") {
-        onConnect(repSessionId, 1);
-      }
+      onConnect(repSessionId, 1);
     }
-  }, [isOpen, isRepMode, repSession.status, repSessionId]);
+  }, [isOpen, isRepMode, repSession.status, repSessionId, onConnect]);
 
   // Reset dismissed error state when a new error arrives
   useEffect(() => {
