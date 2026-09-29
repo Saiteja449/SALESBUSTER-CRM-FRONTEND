@@ -141,6 +141,7 @@ export function AuthProvider({ children }) {
         phone: user.phone || user.mobile || "",
         role: roleMap[user.role?.toLowerCase()] || user.role,
         avatar: (user.name || user.email).substring(0, 2).toUpperCase(),
+        telephony: user.telephony || {},
       }));
 
       setAllUsers(formattedUsers);
@@ -395,6 +396,7 @@ export function AuthProvider({ children }) {
           phone: nameOrData.phone || nameOrData.mobile,
           mobile: nameOrData.mobile || nameOrData.phone,
           telecmiExtension: nameOrData.telecmiExtension,
+          isCloudEnabled: Boolean(nameOrData.isCloudEnabled),
         };
       } else {
         payload = {
@@ -419,6 +421,22 @@ export function AuthProvider({ children }) {
       err.seatLimitReached = !!errData?.seatLimitReached;
       err.subscriptionExpired = !!errData?.subscriptionExpired;
       throw err;
+    }
+  };
+
+  const updateUserTelephony = async (userId, telephonySettings) => {
+    try {
+      const response = await axios.put(
+        API_ENDPOINTS.TELEPHONY.UPDATE_AGENT_SETTINGS(userId),
+        telephonySettings
+      );
+      await fetchUsers();
+      return response.data;
+    } catch (error) {
+      console.error("Update agent telephony error:", error);
+      const message =
+        error.response?.data?.message || "Failed to update agent telephony settings.";
+      throw new Error(message);
     }
   };
 
@@ -512,6 +530,7 @@ export function AuthProvider({ children }) {
         fetchOrganization,
         addSalesPerson,
         deleteSalesPerson,
+        updateUserTelephony,
       }}
     >
       {children}

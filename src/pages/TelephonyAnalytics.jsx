@@ -87,6 +87,7 @@ export default function TelephonyAnalytics() {
   // Filter States
   const [datePreset, setDatePreset] = useState("today"); // today, 7days, 30days, all
   const [selectedRep, setSelectedRep] = useState("all");
+  const [callSourceFilter, setCallSourceFilter] = useState("all"); // 'all' | 'cloud_telecmi' | 'manual'
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -170,6 +171,10 @@ export default function TelephonyAnalytics() {
         params.salespersonId = selectedRep;
       }
 
+      if (callSourceFilter !== "all") {
+        params.callSource = callSourceFilter;
+      }
+
       const [analyticsRes, logsRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/telephony/analytics`, { params }),
         axios.get(`${API_BASE_URL}/telephony/call-logs`, {
@@ -189,7 +194,7 @@ export default function TelephonyAnalytics() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [isAddonEnabled, datePreset, selectedRep]);
+  }, [isAddonEnabled, datePreset, selectedRep, callSourceFilter]);
 
   useEffect(() => {
     fetchData();
@@ -475,6 +480,42 @@ export default function TelephonyAnalytics() {
             </button>
           </div>
 
+          {/* Calling Channel Filter */}
+          <div className="inline-flex p-1 bg-bg-secondary border border-border-main rounded-xl text-xs font-medium">
+            <button
+              onClick={() => setCallSourceFilter("all")}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                callSourceFilter === "all"
+                  ? "bg-bg-card text-text-primary font-semibold shadow-sm"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setCallSourceFilter("cloud_telecmi")}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                callSourceFilter === "cloud_telecmi"
+                  ? "bg-bg-card text-text-primary font-semibold shadow-sm"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+              title="Cloud Telephony calls"
+            >
+              ☁️ Cloud
+            </button>
+            <button
+              onClick={() => setCallSourceFilter("manual")}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                callSourceFilter === "manual"
+                  ? "bg-bg-card text-text-primary font-semibold shadow-sm"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+              title="Normal phone calls"
+            >
+              📱 Normal
+            </button>
+          </div>
+
           <button
             onClick={fetchData}
             disabled={isRefreshing}
@@ -524,6 +565,15 @@ export default function TelephonyAnalytics() {
             <span>•</span>
             <span className="text-red-400 font-medium">
               {kpis.missedCalls} missed
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-text-secondary/80 mt-2 pt-2 border-t border-border-main/50">
+            <span className="text-blue-500 font-medium">
+              ☁️ {kpis.cloudCalls ?? 0} Cloud
+            </span>
+            <span>•</span>
+            <span className="text-slate-500 font-medium">
+              📱 {kpis.manualCalls ?? 0} Normal
             </span>
           </div>
         </div>
@@ -882,8 +932,17 @@ export default function TelephonyAnalytics() {
                       <div className="font-semibold text-text-primary">
                         {log.leadName || "Direct Contact"}
                       </div>
-                      <div className="text-[11px] text-text-secondary">
-                        {log.leadPhone}
+                      <div className="text-[11px] text-text-secondary flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span>{log.leadPhone}</span>
+                        {log.callSource === "manual" ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20">
+                            📱 Normal
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                            ☁️ Cloud
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-3 font-medium text-text-primary">
@@ -937,6 +996,10 @@ export default function TelephonyAnalytics() {
                             <Download className="w-3.5 h-3.5" />
                           </a>
                         </div>
+                      ) : log.callSource === "manual" ? (
+                        <span className="text-text-secondary/50 text-[10px] italic">
+                          Normal Call
+                        </span>
                       ) : (
                         <span className="text-text-secondary/40 text-[11px]">
                           No audio

@@ -31,6 +31,7 @@ export default function TeamPerformance() {
     isSubscriptionExpired,
     addSalesPerson,
     deleteSalesPerson,
+    updateUserTelephony,
   } = useAuth();
 
   const isManager = currentUser && currentUser.role === "Sales Manager";
@@ -40,12 +41,29 @@ export default function TeamPerformance() {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newMobile, setNewMobile] = useState("");
+  const [newIsCloudEnabled, setNewIsCloudEnabled] = useState(false);
   const [createError, setCreateError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [togglingUserId, setTogglingUserId] = useState(null);
 
   // ── Rep deletion ───────────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState("");
+
+  const handleToggleCallingMode = async (userObj) => {
+    if (!userObj?.id) return;
+    try {
+      setTogglingUserId(userObj.id);
+      const currentCloud = Boolean(userObj.telephony?.isCloudEnabled);
+      await updateUserTelephony(userObj.id, {
+        isCloudEnabled: !currentCloud,
+      });
+    } catch (err) {
+      alert(err.message || "Failed to switch calling mode.");
+    } finally {
+      setTogglingUserId(null);
+    }
+  };
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
@@ -78,15 +96,17 @@ export default function TeamPerformance() {
 
     try {
       setSubmitting(true);
-      await addSalesPerson(
-        newName.trim(),
-        newEmail.trim(),
-        `+91${digits}`
-      );
+      await addSalesPerson({
+        name: newName.trim(),
+        email: newEmail.trim(),
+        phone: `+91${digits}`,
+        isCloudEnabled: newIsCloudEnabled,
+      });
       setCreateOpen(false);
       setNewName("");
       setNewEmail("");
       setNewMobile("");
+      setNewIsCloudEnabled(false);
     } catch (err) {
       setCreateError(err.message || "Failed to create representative.");
     } finally {
@@ -389,6 +409,7 @@ export default function TeamPerformance() {
               <th className="py-4 px-6">CALLS MADE</th>
               <th className="py-4 px-6">CONVERSION RATE %</th>
               <th className="py-4 px-6">ACTIVITY RATING</th>
+              <th className="py-4 px-6 text-center">CALLING MODE</th>
               <th className="py-4 px-6 text-center">ACTIONS</th>
             </tr>
           </thead>
@@ -467,6 +488,47 @@ export default function TeamPerformance() {
                         />
                       ))}
                     </div>
+                  </td>
+
+                  {/* CALLING MODE */}
+                  <td className="py-4 px-6 text-center">
+                    {(() => {
+                      const userMatch = (allUsers || []).find(
+                        (u) =>
+                          (u.id && p.id && String(u.id) === String(p.id)) ||
+                          (u.name && p.name && u.name.trim().toLowerCase() === p.name.trim().toLowerCase())
+                      );
+                      const isCloud = Boolean(userMatch?.telephony?.isCloudEnabled);
+                      const isBusy = togglingUserId === userMatch?.id;
+
+                      if (!organization?.telephony?.isAddonEnabled) {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-brand-primary/60 bg-brand-secondary/30">
+                            📱 Normal Phone
+                          </span>
+                        );
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => userMatch && handleToggleCallingMode(userMatch)}
+                          disabled={isBusy || !userMatch}
+                          title={
+                            isCloud
+                              ? "Cloud TeleCMI active. Click to switch to Normal Phone."
+                              : "Normal Phone active. Click to switch to Cloud TeleCMI."
+                          }
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-xs ${
+                            isCloud
+                              ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/25"
+                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+                          } ${isBusy ? "opacity-50 cursor-wait" : ""}`}
+                        >
+                          <span>{isCloud ? "☁️ TeleCMI Cloud" : "📱 Normal Phone"}</span>
+                        </button>
+                      );
+                    })()}
                   </td>
 
                   <td className="py-4 px-6 text-center">
@@ -601,12 +663,26 @@ export default function TeamPerformance() {
                 </span>
               </div>
 
-              {organization?.telephony?.isAddonEnabled && organization?.telephony?.isConfigured && (
-                <div className="bg-pilot-teal/10 border border-pilot-teal/20 text-pilot-teal p-3 rounded-xl text-xs flex items-start gap-2">
-                  <span className="text-sm shrink-0 mt-0.5">📞</span>
-                  <span className="leading-relaxed">
-                    <strong>TeleCMI Cloud Telephony:</strong> An extension will be automatically provisioned on TeleCMI for this representative so they can immediately make recorded calls on the mobile app.
-                  </span>
+              {organization?.telephony?.isAddonEnabled && (
+                <div className="bg-brand-secondary/20 border border-brand-secondary/50 rounded-xl p-3.5">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newIsCloudEnabled}
+                      onChange={(e) => setNewIsCloudEnabled(e.target.checked)}
+                      className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-brand-primary block">
+                        Enable Cloud Telephony (TeleCMI VoIP)
+                      </span>
+                      <span className="text-[11px] text-brand-primary/60 block mt-0.5 leading-snug">
+                        {newIsCloudEnabled
+                          ? "Representative will make VoIP calls through TeleCMI with automatic call recording & analytics."
+                          : "Representative will use normal phone dialer with manual post-call logging."}
+                      </span>
+                    </div>
+                  </label>
                 </div>
               )}
             </form>

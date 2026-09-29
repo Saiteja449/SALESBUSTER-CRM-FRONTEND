@@ -72,6 +72,16 @@ export const API_ENDPOINTS = {
     KNOWLEDGE_UPLOAD: `${API_BASE_URL}/organizations/my-org/knowledge-base/upload`,
     KNOWLEDGE_DELETE: (docId) => `${API_BASE_URL}/organizations/my-org/knowledge-base/${docId}`,
   },
+  TELEPHONY: {
+    AGENT_CREDENTIALS: `${API_BASE_URL}/telephony/agent-credentials`,
+    CALL_LOGS: `${API_BASE_URL}/telephony/call-logs`,
+    ANALYTICS: `${API_BASE_URL}/telephony/analytics`,
+    DISPOSITION: `${API_BASE_URL}/telephony/call-disposition`,
+    MANUAL_CALL_LOG: `${API_BASE_URL}/telephony/manual-call-log`,
+    UPDATE_ORG_SETTINGS: `${API_BASE_URL}/telephony/settings/organization`,
+    UPDATE_AGENT_SETTINGS: (userId) => `${API_BASE_URL}/telephony/settings/agent/${userId}`,
+    AUTO_PROVISION_AGENT: (userId) => `${API_BASE_URL}/telephony/settings/agent/${userId}/auto-provision`,
+  },
 };
 
 export const BACKEND_URL = API_BASE_URL.replace(/\/api$/, "");
