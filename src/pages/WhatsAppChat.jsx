@@ -170,10 +170,29 @@ export default function WhatsAppChat() {
         const existingIndex = prev.findIndex((s) => s.sessionId === data.sessionId);
         if (existingIndex >= 0) {
           const newSessions = [...prev];
-          newSessions[existingIndex] = { ...newSessions[existingIndex], ...data };
+          newSessions[existingIndex] = {
+            ...newSessions[existingIndex],
+            ...data,
+            isRepSession:
+              newSessions[existingIndex].isRepSession ??
+              (isSalesRep && data.sessionId === ownRepSessionId),
+            isPrimary:
+              newSessions[existingIndex].isPrimary ??
+              (data.sessionId === primarySessionId ||
+                (isSalesRep && data.sessionId === ownRepSessionId)),
+          };
           return newSessions;
         } else {
-          return [...prev, data];
+          return [
+            ...prev,
+            {
+              ...data,
+              isRepSession: isSalesRep && data.sessionId === ownRepSessionId,
+              isPrimary:
+                data.sessionId === primarySessionId ||
+                (isSalesRep && data.sessionId === ownRepSessionId),
+            },
+          ];
         }
       });
     });
@@ -347,12 +366,22 @@ export default function WhatsAppChat() {
     }
   };
 
-  // Keep the open connection dialog synchronized while WhatsApp is pairing.
+  // Keep the open connection dialog synchronized while WhatsApp is pairing,
+  // and re-sync status whenever the modal is closed.
   useEffect(() => {
-    if (!connectModalOpen) return undefined;
+    if (!connectModalOpen) {
+      fetchSessionStatus();
+      return undefined;
+    }
     const timer = window.setInterval(fetchSessionStatus, 1500);
     return () => window.clearInterval(timer);
   }, [connectModalOpen, isSalesRep]);
+
+  // Periodic background status check
+  useEffect(() => {
+    const timer = window.setInterval(fetchSessionStatus, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const fetchConversations = async () => {
     try {
@@ -413,16 +442,26 @@ export default function WhatsAppChat() {
   const primarySessionId = orgId ? `org_${orgId}` : "device_1";
   const secondarySessionId = orgId ? `org_${orgId}_device_2` : "device_2";
 
+  const currentUserId = currentUser?.id || currentUser?._id;
+  const ownRepSessionId = orgId
+    ? `org_${orgId}_user_${currentUserId}`
+    : `user_${currentUserId}`;
+
   const primarySession = sessions.find(
-    (s) => (isSalesRep && s.isRepSession) || s.sessionId === primarySessionId || s.isPrimary,
+    (s) =>
+      (isSalesRep && (s.isRepSession || s.sessionId === ownRepSessionId)) ||
+      (!isSalesRep && (s.sessionId === primarySessionId || s.isPrimary)) ||
+      s.sessionId === primarySessionId ||
+      s.isPrimary,
   ) || {
-    sessionId: primarySessionId,
+    sessionId: isSalesRep ? ownRepSessionId : primarySessionId,
     status: "disconnected",
     qrCode: "",
     connectedPhone: "",
     connectedName: "",
-    label: "Line 1 (Primary)",
+    label: isSalesRep ? "My WhatsApp Line" : "Line 1 (Primary)",
     isPrimary: true,
+    isRepSession: isSalesRep,
   };
 
   const secondarySession = sessions.find(
@@ -439,8 +478,26 @@ export default function WhatsAppChat() {
     isPrimary: false,
   };
 
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return "";
+    const clean = String(phone).replace(/\D/g, "");
+    if (clean.length === 12 && clean.startsWith("91")) {
+      return `+91 ${clean.slice(2, 7)} ${clean.slice(7)}`;
+    }
+    if (clean.length === 10) {
+      return `+${clean.slice(0, 5)} ${clean.slice(5)}`;
+    }
+    return `+${clean}`;
+  };
+
   const handleConnect = async (targetSessionId, deviceNum = 1) => {
-    const sId = targetSessionId || (deviceNum === 2 ? secondarySessionId : primarySessionId);
+    const sId =
+      targetSessionId ||
+      (isSalesRep
+        ? ownRepSessionId
+        : deviceNum === 2
+        ? secondarySessionId
+        : primarySessionId);
     setSessionLoadingMap((prev) => ({ ...prev, [sId]: true }));
     setSessionLoading(true);
     setConnectModalOpen(true);
@@ -927,44 +984,146 @@ export default function WhatsAppChat() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Single WhatsApp Connection Button: shows Scan QR Code if ready, else Connect button */}
-          {primarySession.status === "qr" ||
-          (!isSalesRep &&
-            whatsappLineLimit >= 2 &&
-            secondarySession.status === "qr") ? (
-            <button
-              onClick={() => setConnectModalOpen(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
-            >
-              <QrCode className="w-4 h-4" />
-              <span>
-                Scan QR Code (
-                {!isSalesRep &&
-                whatsappLineLimit >= 2 &&
-                primarySession.status === "qr" &&
-                secondarySession.status === "qr"
-                  ? "2 Lines Ready"
-                  : isSalesRep || primarySession.status === "qr"
-                  ? "QR Ready"
-                  : "Line 2 Ready"}
-                )
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setConnectModalOpen(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
-            >
-              <QrCode className="w-4 h-4" />
-              <span>
-                {isSalesRep
-                  ? "WhatsApp Connection"
-                  : whatsappLineLimit >= 2
-                  ? "Connect Channels (2 QRs)"
-                  : "Connect WhatsApp"}
-              </span>
-            </button>
-          )}
+          {/* Top-Right Dynamic WhatsApp Connection / Status Controls */}
+          {(() => {
+            const isDual = !isSalesRep && whatsappLineLimit >= 2;
+            const isPrimaryConnected = primarySession.status === "connected";
+            const isSecondaryConnected =
+              isDual && secondarySession.status === "connected";
+            const isBothConnected = isDual
+              ? isPrimaryConnected && isSecondaryConnected
+              : isPrimaryConnected;
+            const isPrimaryQR = primarySession.status === "qr";
+            const isSecondaryQR = isDual && secondarySession.status === "qr";
+            const isAnyQR = isPrimaryQR || isSecondaryQR;
+            const isPrimaryConnecting =
+              primarySession.status === "connecting" ||
+              primarySession.status === "pairing";
+            const isSecondaryConnecting =
+              isDual &&
+              (secondarySession.status === "connecting" ||
+                secondarySession.status === "pairing");
+            const isAnyConnecting =
+              isPrimaryConnecting || isSecondaryConnecting;
+
+            // 1. Fully Connected (all available lines)
+            if (isBothConnected) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => setConnectModalOpen(true)}
+                  className="flex items-center gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm hover:shadow-emerald-500/15 transition-all cursor-pointer"
+                  title="WhatsApp Account Active · Click to manage or disconnect"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span className="font-bold">
+                    {isDual
+                      ? "2 WhatsApp Channels Active"
+                      : primarySession.connectedPhone
+                      ? `Active (${formatPhoneNumber(primarySession.connectedPhone)})`
+                      : isSalesRep
+                      ? "My WhatsApp Connected"
+                      : "WhatsApp Connected"}
+                  </span>
+                </button>
+              );
+            }
+
+            // 2. Dual Line: Partially connected (1 of 2 connected)
+            if (isDual && (isPrimaryConnected || isSecondaryConnected)) {
+              if (isAnyQR) {
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setConnectModalOpen(true)}
+                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
+                    title="Line 1 is active · Scan QR to connect Line 2"
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>Scan QR (Line {isPrimaryQR ? "1" : "2"} Ready)</span>
+                  </button>
+                );
+              }
+              return (
+                <button
+                  type="button"
+                  onClick={() => setConnectModalOpen(true)}
+                  className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm transition-all cursor-pointer"
+                  title="1 channel active · Click to connect second channel"
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>1/2 Active</span>
+                  <span className="text-purple-300 font-normal">
+                    · Connect Line {isPrimaryConnected ? "2" : "1"}
+                  </span>
+                </button>
+              );
+            }
+
+            // 3. QR Ready to Scan
+            if (isAnyQR) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => setConnectModalOpen(true)}
+                  className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
+                  title="Scan QR Code with mobile WhatsApp"
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>
+                    Scan QR Code (
+                    {isDual && isPrimaryQR && isSecondaryQR
+                      ? "2 Lines Ready"
+                      : isDual && isSecondaryQR
+                      ? "Line 2 Ready"
+                      : "QR Ready"}
+                    )
+                  </span>
+                </button>
+              );
+            }
+
+            // 4. Connecting / Pairing
+            if (isAnyConnecting) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => setConnectModalOpen(true)}
+                  className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs transition-all cursor-pointer"
+                  title="Connecting to WhatsApp..."
+                >
+                  <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
+                  <span>Connecting WhatsApp...</span>
+                </button>
+              );
+            }
+
+            // 5. Offline / Disconnected
+            return (
+              <button
+                type="button"
+                onClick={() => setConnectModalOpen(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+                title="Click to connect WhatsApp"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>
+                  {isSalesRep
+                    ? "Connect WhatsApp"
+                    : isDual
+                    ? "Connect Channels (2 Lines)"
+                    : "Connect WhatsApp"}
+                </span>
+              </button>
+            );
+          })()}
         </div>
       </div>
 
@@ -1930,7 +2089,10 @@ export default function WhatsAppChat() {
       {/* WhatsApp QR Connection Modal — adapts to single or dual line */}
       <WhatsAppConnectModal
         isOpen={connectModalOpen}
-        onClose={() => setConnectModalOpen(false)}
+        onClose={() => {
+          setConnectModalOpen(false);
+          fetchSessionStatus();
+        }}
         sessions={
           isSalesRep
             ? [primarySession]
