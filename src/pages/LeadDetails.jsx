@@ -32,7 +32,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { formatDate, getServiceColor, getRepName } from "../utils/helpers.js";
 import { socket } from "../utils/socket.js";
 import DatePicker from "../components/DatePicker.jsx";
-import RecordingsSidebar from "../components/leads/RecordingsSidebar.jsx";
+import LeadCallTracker from "../components/leads/LeadCallTracker.jsx";
 
 export default function LeadDetails() {
   const { allUsers, currentUser } = useAuth();
@@ -103,8 +103,6 @@ export default function LeadDetails() {
   });
 
   const [followupType, setFollowupType] = useState("Call");
-
-  const [isRecordingsSidebarOpen, setIsRecordingsSidebarOpen] = useState(false);
 
   if (!currentLead) {
     return (
@@ -723,41 +721,9 @@ export default function LeadDetails() {
           </div>
         )}
 
-        {/* 2.5 Call Recordings & AI Transcription Section */}
-        {ENABLE_AI_AUDIO_ANALYSIS && (
-          <div className="bg-brand-light border border-brand-secondary rounded-xl shadow-sm mb-6 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0 mt-0.5">
-                <Phone size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-brand-primary flex items-center gap-2 text-base">
-                  Call Recordings & AI Analysis
-                  {currentLead.recordings && currentLead.recordings.length > 0 && (
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 border border-violet-500/20">
-                      {currentLead.recordings.length} {currentLead.recordings.length === 1 ? "recording" : "recordings"}
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-brand-primary/60 mt-1">
-                  Manage audio recordings and view AI-generated insights, transcripts, and coaching.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsRecordingsSidebarOpen(true)}
-              className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold shadow-sm transition-all flex items-center gap-2 shrink-0 cursor-pointer w-full sm:w-auto justify-center"
-            >
-              <Mic size={16} /> Open Recordings panel
-            </button>
-          </div>
-        )}
-        
-        <RecordingsSidebar 
-          isOpen={isRecordingsSidebarOpen} 
-          onClose={() => setIsRecordingsSidebarOpen(false)} 
-          lead={currentLead} 
-        />
+        {/* 2.5 Call Engagement & Rep Activity Tracker */}
+        <LeadCallTracker lead={currentLead} currentUser={currentUser} />
+
         {/* 3. Update Lead Details Form */}
         <div className="bg-brand-light border border-brand-secondary rounded-xl shadow-sm">
           <div className="p-4 border-b border-brand-secondary bg-brand-light/50 rounded-t-xl">

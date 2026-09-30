@@ -75,6 +75,8 @@ export const API_ENDPOINTS = {
   TELEPHONY: {
     AGENT_CREDENTIALS: `${API_BASE_URL}/telephony/agent-credentials`,
     CALL_LOGS: `${API_BASE_URL}/telephony/call-logs`,
+    LEAD_CALLS: (leadId) => `${API_BASE_URL}/telephony/lead-calls/${leadId}`,
+    SUMMARIZE_CALL: (callLogId) => `${API_BASE_URL}/telephony/call-logs/${callLogId}/summarize`,
     ANALYTICS: `${API_BASE_URL}/telephony/analytics`,
     DISPOSITION: `${API_BASE_URL}/telephony/call-disposition`,
     MANUAL_CALL_LOG: `${API_BASE_URL}/telephony/manual-call-log`,
@@ -83,6 +85,8 @@ export const API_ENDPOINTS = {
     AUTO_PROVISION_AGENT: (userId) => `${API_BASE_URL}/telephony/settings/agent/${userId}/auto-provision`,
   },
 };
+
+export const ENDPOINTS = API_ENDPOINTS;
 
 export const BACKEND_URL = API_BASE_URL.replace(/\/api$/, "");
 
