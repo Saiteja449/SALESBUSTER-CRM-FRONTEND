@@ -30,7 +30,9 @@ export default function WhatsAppConnectModal({
   const [copiedSessionId, setCopiedSessionId] = useState(null);
   const [confirmDisconnectId, setConfirmDisconnectId] = useState(null);
   const [dismissedError, setDismissedError] = useState(false);
-  const normalizedRole = String(currentUser?.role || "").toLowerCase().trim();
+  const normalizedRole = String(currentUser?.role || "")
+    .toLowerCase()
+    .trim();
   const isRepMode = [
     "sales person",
     "sales representative",
@@ -38,16 +40,17 @@ export default function WhatsAppConnectModal({
   ].includes(normalizedRole);
 
   // Resolve rep session
-  const repSession = sessions.find((s) => s.isRepSession) || sessions[0] || {
-    sessionId: currentUser?._id
-      ? `org_${currentUser.organizationId}_user_${currentUser._id}`
-      : "rep_session",
-    status: "disconnected",
-    qrCode: "",
-    connectedPhone: "",
-    connectedName: "",
-    isRepSession: true,
-  };
+  const repSession = sessions.find((s) => s.isRepSession) ||
+    sessions[0] || {
+      sessionId: currentUser?._id
+        ? `org_${currentUser.organizationId}_user_${currentUser._id}`
+        : "rep_session",
+      status: "disconnected",
+      qrCode: "",
+      connectedPhone: "",
+      connectedName: "",
+      isRepSession: true,
+    };
 
   const repSessionId =
     repSession.sessionId ||
@@ -73,7 +76,9 @@ export default function WhatsAppConnectModal({
 
   const secondarySession =
     !isRepMode && whatsappLineLimit >= 2
-      ? sessions.find((s) => !s.isPrimary && s.sessionId?.includes("device_2")) || {
+      ? sessions.find(
+          (s) => !s.isPrimary && s.sessionId?.includes("device_2"),
+        ) || {
           sessionId: "device_2",
           status: "disconnected",
           qrCode: "",
@@ -163,15 +168,17 @@ export default function WhatsAppConnectModal({
     const title = isRepMode
       ? "Personal Sales Line"
       : deviceNum === 2
-      ? "Line 2 (Secondary WhatsApp)"
-      : "Line 1 (Primary WhatsApp)";
+        ? "Line 2 (Secondary WhatsApp)"
+        : "Line 1 (Primary WhatsApp)";
 
     const isConnected = session.status === "connected";
     const isQR = session.status === "qr" && session.qrCode;
 
     const isConnecting =
       !isQR &&
-      (session.status === "connecting" || session.status === "pairing" || (isLoading && !isQR && !isConnected));
+      (session.status === "connecting" ||
+        session.status === "pairing" ||
+        (isLoading && !isQR && !isConnected));
     const isDisconnected = !isConnected && !isQR && !isConnecting;
     const isConfirming = confirmDisconnectId === session.sessionId;
 
@@ -197,19 +204,16 @@ export default function WhatsAppConnectModal({
                 {isRepMode
                   ? "Direct customer chat channel"
                   : isPrimary
-                  ? "Incoming leads & AI replies"
-                  : "Sales rep outreach line"}
+                    ? "Incoming leads & AI replies"
+                    : "Sales rep outreach line"}
               </p>
             </div>
           </div>
-          <div className="shrink-0">
-            {renderStatusPill(session.status)}
-          </div>
+          <div className="shrink-0">{renderStatusPill(session.status)}</div>
         </div>
 
         {/* Card Body */}
         <div className="flex-1 flex flex-col justify-center items-center py-2 min-h-[280px]">
-
           {/* ── STATE: Connected ── */}
           {isConnected && (
             <div className="flex flex-col items-center text-center w-full py-2 animate-fadeIn">
@@ -223,7 +227,8 @@ export default function WhatsAppConnectModal({
                 </span>
               </div>
               <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-0.5">
-                {session.connectedName || (isRepMode ? "My WhatsApp" : `Line ${deviceNum}`)}
+                {session.connectedName ||
+                  (isRepMode ? "My WhatsApp" : `Line ${deviceNum}`)}
               </h4>
               <p className="text-xs text-slate-500 dark:text-purple-300/80 mb-2">
                 WhatsApp Account Active
@@ -235,7 +240,9 @@ export default function WhatsAppConnectModal({
                   </span>
                   <button
                     type="button"
-                    onClick={() => handleCopy(session.connectedPhone, session.sessionId)}
+                    onClick={() =>
+                      handleCopy(session.connectedPhone, session.sessionId)
+                    }
                     title="Copy Phone Number"
                     className="text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
                   >
@@ -258,7 +265,9 @@ export default function WhatsAppConnectModal({
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => onDisconnect && onDisconnect(session.sessionId)}
+                      onClick={() =>
+                        onDisconnect && onDisconnect(session.sessionId)
+                      }
                       className="py-1 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer"
                     >
                       Yes, Disconnect
@@ -306,9 +315,17 @@ export default function WhatsAppConnectModal({
               </div>
               <div className="w-full max-w-sm bg-white dark:bg-slate-800/60 rounded-xl p-3 text-left border border-slate-200/80 dark:border-purple-800/20 text-xs space-y-1.5 text-slate-600 dark:text-slate-300 mb-3">
                 {[
-                  <span key="s1">Open <strong>WhatsApp</strong> on your mobile phone.</span>,
-                  <span key="s2">Tap <strong>Menu (⋮)</strong> or <strong>Settings</strong> &gt; <strong>Linked Devices</strong>.</span>,
-                  <span key="s3">Tap <strong>Link a Device</strong> and point your camera at this QR code.</span>,
+                  <span key="s1">
+                    Open <strong>WhatsApp</strong> on your mobile phone.
+                  </span>,
+                  <span key="s2">
+                    Tap <strong>Menu (⋮)</strong> or <strong>Settings</strong>{" "}
+                    &gt; <strong>Linked Devices</strong>.
+                  </span>,
+                  <span key="s3">
+                    Tap <strong>Link a Device</strong> and point your camera at
+                    this QR code.
+                  </span>,
                 ].map((step, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <span className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-[10px] shrink-0">
@@ -321,7 +338,9 @@ export default function WhatsAppConnectModal({
               <div className="w-full max-w-sm p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-left text-xs text-amber-800 dark:text-amber-300">
                 <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
                 <div className="leading-relaxed">
-                  <strong className="font-bold">Important Note:</strong> Do not close or minimize WhatsApp on your mobile phone until the sync is fully completed.
+                  <strong className="font-bold">Important Note:</strong> Do not
+                  close or minimize WhatsApp on your mobile phone until the sync
+                  is fully completed.
                 </div>
               </div>
             </div>
@@ -334,14 +353,20 @@ export default function WhatsAppConnectModal({
                 <RefreshCw className="w-7 h-7 animate-spin text-emerald-500" />
               </div>
               <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                {isRepMode ? "Generating your WhatsApp QR code..." : `Connecting Line ${deviceNum}...`}
+                {isRepMode
+                  ? "Generating your WhatsApp QR code..."
+                  : `Connecting Line ${deviceNum}...`}
               </h4>
               <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-4">
-                Establishing a secure connection with WhatsApp. The QR code will appear automatically in a moment.
+                Establishing a secure connection with WhatsApp. The QR code will
+                appear automatically in a moment.
               </p>
               <div className="w-full p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2 text-left text-xs text-amber-700 dark:text-amber-300">
                 <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <span>Please keep your mobile WhatsApp open and ready to scan once the QR code loads.</span>
+                <span>
+                  Please keep your mobile WhatsApp open and ready to scan once
+                  the QR code loads.
+                </span>
               </div>
             </div>
           )}
@@ -354,7 +379,9 @@ export default function WhatsAppConnectModal({
                   <QrCode className="w-7 h-7" />
                 </div>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-                  {isRepMode ? "WhatsApp Line Offline" : `Line ${deviceNum} is Offline`}
+                  {isRepMode
+                    ? "WhatsApp Line Offline"
+                    : `Line ${deviceNum} is Offline`}
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-purple-300/80 max-w-xs mb-5">
                   {isRepMode
@@ -363,7 +390,9 @@ export default function WhatsAppConnectModal({
                 </p>
                 <button
                   type="button"
-                  onClick={() => onConnect && onConnect(session.sessionId, deviceNum)}
+                  onClick={() =>
+                    onConnect && onConnect(session.sessionId, deviceNum)
+                  }
                   disabled={isLoading}
                   className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
                 >
@@ -402,17 +431,17 @@ export default function WhatsAppConnectModal({
                   {isRepMode
                     ? "Personal Line"
                     : isDualLine
-                    ? "2 Channels"
-                    : "1 Channel"}
+                      ? "2 Channels"
+                      : "1 Channel"}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-purple-300/80 mt-0.5">
+              {/*<p className="text-xs text-slate-500 dark:text-purple-300/80 mt-0.5">
                 {isRepMode
                   ? repSession.connectedPhone
                     ? `Active Line: ${formatPhoneNumber(repSession.connectedPhone)}`
                     : "Personal sales line"
                   : `Organization: ${organizationName || "Multi-channel WhatsApp"}`}
-              </p>
+              </p>*/}
             </div>
           </div>
           <button
@@ -454,7 +483,9 @@ export default function WhatsAppConnectModal({
             )}
 
           {/* Device Cards Grid */}
-          <div className={`grid grid-cols-1 ${isDualLine ? "md:grid-cols-2" : ""} gap-4`}>
+          <div
+            className={`grid grid-cols-1 ${isDualLine ? "md:grid-cols-2" : ""} gap-4`}
+          >
             {isRepMode ? (
               renderDeviceCard(repSession, 1, true, isRepLoading)
             ) : (
