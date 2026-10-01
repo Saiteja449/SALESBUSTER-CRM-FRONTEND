@@ -103,6 +103,7 @@ export default function Dashboard() {
     name: "",
     email: "",
     mobile: "",
+    isCloudEnabled: false,
   });
   const [addUserLoading, setAddUserLoading] = useState(false);
   const [addUserError, setAddUserError] = useState("");
@@ -126,13 +127,14 @@ export default function Dashboard() {
 
     try {
       setAddUserLoading(true);
-      await addSalesPerson(
-        newUser.name.trim(),
-        newUser.email.trim(),
-        `+91${digitsOnly}`,
-      );
+      await addSalesPerson({
+        name: newUser.name.trim(),
+        email: newUser.email.trim(),
+        phone: `+91${digitsOnly}`,
+        isCloudEnabled: Boolean(newUser.isCloudEnabled),
+      });
       setAddUserSuccess("Sales representative added! Login credentials sent via email.");
-      setNewUser({ name: "", email: "", mobile: "" });
+      setNewUser({ name: "", email: "", mobile: "", isCloudEnabled: false });
       setTimeout(() => {
         setShowAddUserModal(false);
         setAddUserSuccess("");
@@ -1190,6 +1192,49 @@ export default function Dashboard() {
                     required
                     className="w-full min-w-0 px-3.5 py-2.5 rounded-r-xl bg-transparent text-xs text-text-primary focus:outline-none"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-text-primary mb-1.5">
+                  Calling Mode
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewUser({ ...newUser, isCloudEnabled: false })}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      !newUser.isCloudEnabled
+                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs"
+                        : "border-border-main bg-bg-secondary text-text-secondary hover:border-border-hover"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <span>📱</span>
+                      <span>Normal</span>
+                    </div>
+                    <span className="text-[10px] text-text-secondary font-normal block mt-1 leading-snug">
+                      Regular phone dialer, manual logging
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewUser({ ...newUser, isCloudEnabled: true })}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      newUser.isCloudEnabled
+                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs"
+                        : "border-border-main bg-bg-secondary text-text-secondary hover:border-border-hover"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <span>☁️</span>
+                      <span>Cloud TeleCMI</span>
+                    </div>
+                    <span className="text-[10px] text-text-secondary font-normal block mt-1 leading-snug">
+                      VoIP calling, auto recordings & AI
+                    </span>
+                  </button>
                 </div>
               </div>
 

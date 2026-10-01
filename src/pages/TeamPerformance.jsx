@@ -40,6 +40,7 @@ export default function TeamPerformance() {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newMobile, setNewMobile] = useState("");
+  const [newIsCloudEnabled, setNewIsCloudEnabled] = useState(false);
   const [createError, setCreateError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -82,12 +83,13 @@ export default function TeamPerformance() {
         name: newName.trim(),
         email: newEmail.trim(),
         phone: `+91${digits}`,
-        isCloudEnabled: Boolean(organization?.telephony?.isAddonEnabled),
+        isCloudEnabled: newIsCloudEnabled,
       });
       setCreateOpen(false);
       setNewName("");
       setNewEmail("");
       setNewMobile("");
+      setNewIsCloudEnabled(false);
     } catch (err) {
       setCreateError(err.message || "Failed to create representative.");
     } finally {
@@ -594,6 +596,58 @@ export default function TeamPerformance() {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
+                  Calling Mode
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewIsCloudEnabled(false)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      !newIsCloudEnabled
+                        ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shadow-xs"
+                        : "border-brand-secondary bg-brand-light text-brand-primary/70 hover:border-brand-primary/30"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <span>📱</span>
+                      <span>Normal Telecaller</span>
+                    </div>
+                    <span className="text-[10px] text-brand-primary/60 font-normal block mt-1 leading-snug">
+                      Regular SIM dialer, manual logging
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewIsCloudEnabled(true)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      newIsCloudEnabled
+                        ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shadow-xs"
+                        : "border-brand-secondary bg-brand-light text-brand-primary/70 hover:border-brand-primary/30"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold">
+                      <span>☁️</span>
+                      <span>Cloud Telecaller</span>
+                    </div>
+                    <span className="text-[10px] text-brand-primary/60 font-normal block mt-1 leading-snug">
+                      TeleCMI VoIP, automated recording & AI
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {newIsCloudEnabled && (
+                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 p-2.5 rounded-xl text-xs flex items-start gap-2">
+                  <span className="text-sm shrink-0 mt-0.5">📞</span>
+                  <span className="leading-relaxed">
+                    <strong>TeleCMI Cloud Telephony:</strong> A dedicated calling extension will be automatically provisioned for this representative on TeleCMI.
+                  </span>
+                </div>
+              )}
 
               <div className="bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 p-3 rounded-xl text-xs flex items-start gap-2">
                 <span className="text-sm shrink-0 mt-0.5">🔐</span>
