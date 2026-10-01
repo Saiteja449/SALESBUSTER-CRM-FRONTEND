@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import {
@@ -6,16 +6,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  CheckCircle2,
   AlertCircle,
   FileText,
   Users,
-  Calendar,
   Sparkles,
-  Zap,
-  Clock,
   Layers,
-  Phone,
   Radio,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";

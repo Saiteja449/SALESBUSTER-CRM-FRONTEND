@@ -4,18 +4,12 @@ import {
   Plus,
   Search,
   Edit2,
-  Eye,
   X,
-  Mic,
-  Info,
-  User,
-  Phone,
   Calendar,
   ExternalLink,
   Trash2,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   FileSpreadsheet,
 } from "lucide-react";
 import axios from "axios";
@@ -23,14 +17,9 @@ import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import ImportLeadsModal from "../components/leads/ImportLeadsModal.jsx";
-import RecordingsSidebar from "../components/leads/RecordingsSidebar.jsx";
 import {
   formatDate,
-  getStageColor,
   getServiceColor,
-  getStatusColor,
-  getSourceColor,
-  filterLeads,
   normalizeServices,
   getRepName,
 } from "../utils/helpers.js";
@@ -61,7 +50,7 @@ export default function Leads() {
     }
   };
 
-  const { addLead, updateLead, deleteLead, activeServices, qualificationFields } = useLeads();
+  const { addLead, updateLead, deleteLead, activeServices } = useLeads();
   const { allUsers, currentUser } = useAuth();
 
   const paramToTab = {
@@ -99,7 +88,6 @@ export default function Leads() {
   const [triggerFetch, setTriggerFetch] = useState(0);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [activeRecordingsLead, setActiveRecordingsLead] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   // const [drawerOpen, setDrawerOpen] = useState(false);
@@ -127,7 +115,6 @@ export default function Leads() {
   const [formFields, setFormFields] = useState(defaultFormFields);
   const [deleteId, setDeleteId] = useState(null);
 
-  const salespeople = (allUsers || []).map((u) => u.name);
   const tabsData = [
     { name: "OldLeads", label: "Old Leads", count: tabCounts.OldLeads || 0 },
     { name: "New", label: "New Leads", count: tabCounts.New || 0 },
@@ -597,16 +584,6 @@ export default function Leads() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => setActiveRecordingsLead(lead)}
-                          className="p-1.5 text-brand-primary/70 hover:text-violet-500 hover:bg-brand-secondary/30 rounded transition-colors relative"
-                          title="Recordings & AI Analysis"
-                        >
-                          <Mic className="w-4 h-4" />
-                          {lead.recordings && lead.recordings.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full border border-brand-light"></span>
-                          )}
-                        </button>
-                        <button
                           onClick={() => handleOpenEdit(lead)}
                           className="p-1.5 text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/30 rounded transition-colors"
                           title="Edit"
@@ -827,9 +804,14 @@ export default function Leads() {
                       disabled={currentUser?.role === "Sales Representative"}
                       className="w-full bg-brand-light border border-brand-secondary rounded-lg px-3 py-2 text-sm text-brand-primary focus:outline-none focus:border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <option value="Unassigned">Unassigned (Auto Assign)</option>
+                      <option value="Unassigned">
+                        Unassigned (Auto Assign)
+                      </option>
                       {(allUsers || []).map((rep) => (
-                        <option key={rep.id || rep._id} value={rep.id || rep._id}>
+                        <option
+                          key={rep.id || rep._id}
+                          value={rep.id || rep._id}
+                        >
                           {rep.name}
                         </option>
                       ))}
@@ -865,7 +847,10 @@ export default function Leads() {
                         <select
                           value={formFields.followupType}
                           onChange={(e) =>
-                            setFormFields({ ...formFields, followupType: e.target.value })
+                            setFormFields({
+                              ...formFields,
+                              followupType: e.target.value,
+                            })
                           }
                           className="w-full bg-brand-light border border-brand-secondary rounded-lg px-3 py-2 text-sm text-brand-primary focus:outline-none focus:border-purple-500"
                         >
@@ -884,7 +869,10 @@ export default function Leads() {
                           type="date"
                           value={formFields.nextFollowUp}
                           onChange={(e) =>
-                            setFormFields({ ...formFields, nextFollowUp: e.target.value })
+                            setFormFields({
+                              ...formFields,
+                              nextFollowUp: e.target.value,
+                            })
                           }
                           className="w-full bg-brand-light border border-brand-secondary rounded-lg px-3 py-2 text-sm text-brand-primary focus:outline-none focus:border-purple-500"
                         />
@@ -897,7 +885,10 @@ export default function Leads() {
                           type="time"
                           value={formFields.followupTime}
                           onChange={(e) =>
-                            setFormFields({ ...formFields, followupTime: e.target.value })
+                            setFormFields({
+                              ...formFields,
+                              followupTime: e.target.value,
+                            })
                           }
                           className="w-full bg-brand-light border border-brand-secondary rounded-lg px-3 py-2 text-sm text-brand-primary focus:outline-none focus:border-purple-500"
                         />
@@ -982,12 +973,6 @@ export default function Leads() {
           </div>
         </div>
       )}
-
-      <RecordingsSidebar 
-        isOpen={!!activeRecordingsLead} 
-        onClose={() => setActiveRecordingsLead(null)} 
-        lead={activeRecordingsLead} 
-      />
 
       {/* Bulk Import Leads Modal */}
       <ImportLeadsModal

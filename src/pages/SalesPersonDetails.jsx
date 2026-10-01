@@ -3,28 +3,19 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ExternalLink,
-  Eye,
-  Edit2,
-  Calendar,
   Inbox,
   Download,
   ChevronLeft,
   ChevronRight,
   Phone,
   Mail,
-  PhoneIncoming,
-  PhoneOutgoing,
-  PhoneMissed,
-  PhoneOff,
-  Clock,
-  TrendingUp,
   BarChart2,
 } from "lucide-react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getServiceColor, formatDate, exportToCSV } from "../utils/helpers.js";
+import { getServiceColor, exportToCSV } from "../utils/helpers.js";
 
 const Badge = ({ children, colorClass, className = "" }) => (
   <span
@@ -69,30 +60,6 @@ export default function SalesPersonDetails() {
     }
   }, [repId]);
 
-  const formatTalkTime = (seconds) => {
-    if (!seconds) return '00:00';
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    if (hrs > 0) return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const todayStrDate = new Date().toISOString().split("T")[0];
-  const todayAnalytics = analytics.find(a => a.date === todayStrDate) || {
-    totalCalls: 0, talkTime: 0, incoming: 0, outgoing: 0, missed: 0, connected: 0, rejected: 0, notConnected: 0
-  };
-  
-  const weeklyAnalytics = analytics.reduce((acc, curr) => ({
-    totalCalls: acc.totalCalls + curr.totalCalls,
-    talkTime: acc.talkTime + curr.talkTime,
-    incoming: acc.incoming + curr.incoming,
-    outgoing: acc.outgoing + curr.outgoing,
-    missed: acc.missed + curr.missed,
-    connected: acc.connected + curr.connected,
-    rejected: acc.rejected + curr.rejected,
-    notConnected: acc.notConnected + curr.notConnected,
-  }), { totalCalls: 0, talkTime: 0, incoming: 0, outgoing: 0, missed: 0, connected: 0, rejected: 0, notConnected: 0 });
 
   const handleScroll = (direction) => {
     if (scrollContainerRef.current) {
@@ -157,7 +124,7 @@ export default function SalesPersonDetails() {
   const handleExport = () => {
     exportToCSV(
       displayedLeads,
-      `${decodedName.replace(/\s+/g, "_")}_leads.csv`,
+      `${repName.replace(/\s+/g, "_")}_leads.csv`,
     );
   };
 

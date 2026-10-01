@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -7,30 +7,13 @@ import {
   User,
   Calendar,
   CheckCircle,
-  Plus,
   X,
-  Circle,
-  MapPin,
   MessageSquare,
   Building2,
-  ChevronDown,
-  ChevronUp,
-  Upload,
-  Mic,
-  FileAudio,
-  RotateCcw,
-  Copy,
-  Check,
-  Loader2,
-  Sparkles,
-  AlertCircle,
 } from "lucide-react";
-import axios from "axios";
-import { API_BASE_URL, BACKEND_URL, ENABLE_AI_AUDIO_ANALYSIS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { formatDate, getServiceColor, getRepName } from "../utils/helpers.js";
-import { socket } from "../utils/socket.js";
 import DatePicker from "../components/DatePicker.jsx";
 import LeadCallTracker from "../components/leads/LeadCallTracker.jsx";
 
@@ -40,11 +23,9 @@ export default function LeadDetails() {
   const navigate = useNavigate();
   const {
     leads,
-    setLeads,
     updateLead,
     followups,
     addFollowup,
-    toggleFollowupDone,
     activeServices,
     qualificationFields,
   } = useLeads();
@@ -94,13 +75,6 @@ export default function LeadDetails() {
     notes: "",
   });
 
-  // Add Activity Modal State
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [newAct, setNewAct] = useState({
-    type: "Call Completed",
-    content: "",
-    author: currentUser?.name || "Alex Mercer",
-  });
 
   const [followupType, setFollowupType] = useState("Call");
 
@@ -125,7 +99,6 @@ export default function LeadDetails() {
 
   const combinedHistory = leadFollowups
     .map((f) => {
-      const scheduledD = new Date(f.date + "T" + (f.time || "00:00:00"));
       const creationDateStr = f.createdAt || new Date().toISOString();
       const creationD = new Date(creationDateStr);
       return {
@@ -143,22 +116,7 @@ export default function LeadDetails() {
     })
     .sort((a, b) => b.rawDate - a.rawDate);
 
-  // Move Status directly
-  const handleStatusChange = async (e) => {
-    try {
-      const nextStatus = e.target.value;
-      await updateLead(
-        currentLead.id,
-        { status: nextStatus },
-        currentUser?.name || "System",
-      );
-    } catch (error) {
-      console.error(error);
-      alert("Failed to update status");
-    }
-  };
 
-  // Change assignee directly
   const handleAssigneeChange = async (e) => {
     try {
       const nextAssignee = e.target.value;
@@ -280,35 +238,6 @@ export default function LeadDetails() {
     }
   };
 
-  // Log active sales interaction
-  const handleSaveActivity = (e) => {
-    e.preventDefault();
-    if (!newAct.content) {
-      alert("Please provide the activity details content.");
-      return;
-    }
-    // Changed to manual addFollowup for user-initiated activity logs from the modal
-    addFollowup({
-      leadId: currentLead.id,
-      leadName: currentLead.name,
-      type: newAct.type,
-      date: new Date().toISOString().split("T")[0],
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      priority: "Low",
-      notes: newAct.content,
-      author: newAct.author,
-      done: true,
-    });
-    setActivityOpen(false);
-    setNewAct({
-      type: "Call Completed",
-      content: "",
-      author: currentUser?.name || "Alex Mercer",
-    });
-  };
 
   const getStatusBg = (status) => {
     switch (status) {

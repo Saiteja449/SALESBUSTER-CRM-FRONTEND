@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import  { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import {
@@ -6,14 +6,11 @@ import {
   Bot,
   User,
   Send,
-  Paperclip,
   RefreshCw,
   Play,
   FileText,
   MapPin,
   Tag,
-  Plus,
-  Trash2,
   Brain,
   Clock,
   Sparkles,
@@ -21,16 +18,11 @@ import {
   UserCheck,
   Check,
   CheckCheck,
-  Smile,
   AlertCircle,
-  FolderMinus,
   Calendar,
   X,
-  UserPlus,
   QrCode,
-  Smartphone,
   Eye,
-  ShieldCheck,
   Copy,
   CheckCircle2,
 } from "lucide-react";
@@ -44,7 +36,6 @@ export default function WhatsAppChat() {
   const { currentUser, organization } = useAuth();
   const { activeServices, qualificationFields } = useLeads();
   const orgId = organization?.id || organization?._id || currentUser?.organizationId;
-  const currentOrgSessionId = orgId ? `org_${orgId}` : "device_1";
 
   const navigate = useNavigate();
   const location = useLocation();

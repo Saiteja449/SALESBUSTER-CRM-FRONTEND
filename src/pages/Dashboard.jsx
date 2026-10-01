@@ -3,12 +3,9 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
   Users,
-  DollarSign,
   TrendingUp,
-  CheckSquare,
   AlertTriangle,
   ArrowRight,
-  Calendar,
   Star,
   CheckCircle2,
   Download,
@@ -23,22 +20,15 @@ import {
   X,
   ShieldAlert,
   CheckCheck,
-  Lock,
   Settings,
   RotateCcw,
   Smartphone,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import {
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
   Tooltip as RechartsTooltip,
   Legend,
 } from "recharts";
@@ -77,23 +67,18 @@ export default function Dashboard() {
     organization,
     isAiConfigured,
     hasSalesPerson,
-    salesRepCount,
     isOrgSetupComplete,
     isManager,
     addSalesPerson,
   } = useAuth();
 
-  const [aiLimits, setAiLimits] = useState(null);
-  const [aiLimitsLoading, setAiLimitsLoading] = useState(true);
 
   // ── WhatsApp Dashboard Widget State ─────────────────────────────────
   const [repWaStatus, setRepWaStatus] = useState(null);       // Sales rep's own session status
   const [teamWaStatuses, setTeamWaStatuses] = useState([]);   // Admin team overview
-  const [waWidgetLoading, setWaWidgetLoading] = useState(false);
 
   useEffect(() => {
     const fetchWaWidget = async () => {
-      setWaWidgetLoading(true);
       try {
         if (currentUser?.role === "sales person") {
           const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
@@ -105,9 +90,7 @@ export default function Dashboard() {
         }
       } catch (err) {
         // Non-fatal — widget just won't show data
-      } finally {
-        setWaWidgetLoading(false);
-      }
+      } 
     };
     if (currentUser) fetchWaWidget();
   }, [currentUser]);
@@ -299,30 +282,15 @@ export default function Dashboard() {
       try {
         const res = await axios.get(API_ENDPOINTS.ANALYTICS.AI_LIMITS);
         if (res.data.success) {
-          setAiLimits(res.data.data);
         }
       } catch (err) {
         console.error("Failed to fetch previous AI limits:", err);
       } finally {
-        setAiLimitsLoading(false);
       }
     };
     fetchAILimits();
   }, []);
 
-  const handleRefreshAILimits = async () => {
-    setAiLimitsLoading(true);
-    try {
-      const res = await axios.post(API_ENDPOINTS.ANALYTICS.AI_LIMITS_REFRESH);
-      if (res.data.success) {
-        setAiLimits(res.data.data);
-      }
-    } catch (err) {
-      console.error("Failed to refresh AI limits:", err);
-    } finally {
-      setAiLimitsLoading(false);
-    }
-  };
 
   const handleExport = () => {
     exportToCSV(leads, "dashboard_leads_export.csv");
