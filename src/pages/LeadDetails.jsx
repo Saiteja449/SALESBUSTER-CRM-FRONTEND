@@ -10,6 +10,8 @@ import {
   X,
   MessageSquare,
   Building2,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from "lucide-react";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -415,6 +417,68 @@ export default function LeadDetails() {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Last Contacted WhatsApp Tracker */}
+          <div className="mt-4 pt-4 border-t border-brand-secondary/60 flex flex-wrap items-center justify-between gap-3 bg-purple-500/5 px-3.5 py-2.5 rounded-lg border border-purple-500/15">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="text-purple-600 w-4 h-4 shrink-0" />
+              <span className="text-xs font-bold text-brand-primary uppercase tracking-wider">
+                WhatsApp Tracker:
+              </span>
+            </div>
+
+            {currentLead.lastContactedWhatsApp?.number || currentLead.lastContactedWhatsApp?.lineNumber ? (
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-brand-primary/60">Contacted Via:</span>
+                  <span className="font-bold text-brand-primary">
+                    Account {currentLead.lastContactedWhatsApp.lineNumber || 1}
+                  </span>
+                  {currentLead.lastContactedWhatsApp.number && (
+                    <span className="font-mono text-purple-600 font-semibold">
+                      ({currentLead.lastContactedWhatsApp.number.startsWith('+') ? currentLead.lastContactedWhatsApp.number : `+${currentLead.lastContactedWhatsApp.number}`})
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-brand-primary/60">Direction:</span>
+                  <span className={`font-semibold flex items-center gap-0.5 ${
+                    currentLead.lastContactedWhatsApp.direction === 'outbound' ? 'text-blue-600' : 'text-emerald-600'
+                  }`}>
+                    {currentLead.lastContactedWhatsApp.direction === 'outbound' ? (
+                      <>
+                        <ArrowUpRight className="w-3.5 h-3.5" /> Outbound (Sent)
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownLeft className="w-3.5 h-3.5" /> Inbound (Received)
+                      </>
+                    )}
+                  </span>
+                </div>
+                {currentLead.lastContactedWhatsApp.contactedAt && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-brand-primary/60">Time:</span>
+                    <span className="font-medium text-brand-primary font-mono text-[11px]">
+                      {new Date(currentLead.lastContactedWhatsApp.contactedAt).toLocaleString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-xs text-brand-primary/60 italic flex items-center gap-1.5">
+                <span>Not contacted via WhatsApp yet</span>
+                {currentLead.assignedWhatsAppLine && (
+                  <span className="font-semibold text-brand-primary/70">· Locked to Line {currentLead.assignedWhatsAppLine}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

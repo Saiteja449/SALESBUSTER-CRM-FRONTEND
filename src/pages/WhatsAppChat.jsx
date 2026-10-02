@@ -24,8 +24,10 @@ import {
   QrCode,
   Eye,
   Copy,
-  CheckCircle2,
   Lock,
+  ArrowUpRight,
+  ArrowDownLeft,
+  PhoneCall,
 } from "lucide-react";
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
@@ -596,6 +598,12 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
     }
   };
 
+  const getSessionPhoneForLine = (lineNum) => {
+    if (!lineNum) return "";
+    const session = sessions.find((s) => Number(s.lineNumber) === Number(lineNum));
+    return session?.connectedPhone || session?.displayPhone || "";
+  };
+
   const handleSelectConversation = async (conv) => {
     setSelectedConv(conv);
     setMessagesLoading(true);
@@ -717,31 +725,55 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
     const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
     setInputValue("");
 
-    // Optimistically snooze AI for 5 minutes if AI is enabled for this lead
-    if (selectedConv.leadId?.aiEnabled) {
-      const optimisticPausedUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-      setSelectedConv((prev) => ({
-        ...prev,
-        leadId: {
-          ...prev.leadId,
-          aiPausedUntil: optimisticPausedUntil,
+    const nowIso = new Date().toISOString();
+    const activeLinePhone = getSessionPhoneForLine(targetLine);
+    const optimisticPausedUntil = selectedConv.leadId?.aiEnabled
+      ? new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      : null;
+
+    // Optimistically update conversation & tracker state
+    setSelectedConv((prev) => ({
+      ...prev,
+      lastContactedLine: targetLine,
+      lastContactedWhatsAppNumber: activeLinePhone || prev?.lastContactedWhatsAppNumber || null,
+      lastContactedTime: nowIso,
+      lastContactedDirection: "outbound",
+      leadId: {
+        ...prev?.leadId,
+        ...(optimisticPausedUntil ? { aiPausedUntil: optimisticPausedUntil } : {}),
+        lastContactedWhatsApp: {
+          lineNumber: targetLine,
+          number: activeLinePhone || prev?.leadId?.lastContactedWhatsApp?.number || null,
+          contactedAt: nowIso,
+          direction: "outbound",
         },
-      }));
-      setConversations((prev) =>
-        prev.map((c) => {
-          const lId = c.leadId?._id || c.leadId?.id || c.leadId;
-          return String(lId) === String(leadId)
-            ? {
-                ...c,
-                leadId: {
-                  ...c.leadId,
-                  aiPausedUntil: optimisticPausedUntil,
+      },
+    }));
+
+    setConversations((prev) =>
+      prev.map((c) => {
+        const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+        return String(lId) === String(leadId)
+          ? {
+              ...c,
+              lastContactedLine: targetLine,
+              lastContactedWhatsAppNumber: activeLinePhone || c.lastContactedWhatsAppNumber || null,
+              lastContactedTime: nowIso,
+              lastContactedDirection: "outbound",
+              leadId: {
+                ...c.leadId,
+                ...(optimisticPausedUntil ? { aiPausedUntil: optimisticPausedUntil } : {}),
+                lastContactedWhatsApp: {
+                  lineNumber: targetLine,
+                  number: activeLinePhone || c.leadId?.lastContactedWhatsApp?.number || null,
+                  contactedAt: nowIso,
+                  direction: "outbound",
                 },
-              }
-            : c;
-        }),
-      );
-    }
+              },
+            }
+          : c;
+      }),
+    );
 
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.SEND_MESSAGE, {
@@ -1236,6 +1268,68 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
                             {conv.lastMessage || "No messages yet"}
                           </p>
 
+                          {/* Last Contacted WhatsApp Tracker Chip */}
+                          {(() => {
+                            const line = conv.lastContactedLine || conv.leadId?.lastContactedWhatsApp?.lineNumber;
+                            const rawNum = conv.lastContactedWhatsAppNumber || conv.leadId?.lastContactedWhatsApp?.number || getSessionPhoneForLine(line);
+                            const time = conv.lastContactedTime || conv.leadId?.lastContactedWhatsApp?.contactedAt;
+                            const dir = conv.lastContactedDirection || conv.leadId?.lastContactedWhatsApp?.direction;
+                            const isPending = conv.isAssignedPending && !time;
+
+                            if (isPending) {
+                              return (
+                                <div className="mt-1 flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                  <span className="font-semibold">Uncontacted</span>
+                                  <span className="text-amber-200/60 font-mono text-[9px]">· Line {conv.assignedLineNumber || 1}</span>
+                                </div>
+                              );
+                            }
+
+                            if (line || rawNum) {
+                              const isOutbound = dir === "outbound";
+                              const formattedPhone = rawNum
+                                ? (String(rawNum).startsWith("+") ? rawNum : `+${rawNum}`)
+                                : null;
+                              return (
+                                <div className="mt-1 flex items-center justify-between px-2 py-0.5 rounded bg-[#160b29]/80 border border-purple-500/20 text-[10px]">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                        Number(line) === 2 ? "bg-cyan-400" : "bg-emerald-400"
+                                      }`}
+                                    />
+                                    <span className="font-bold text-white/90 shrink-0">
+                                      Acc {line || 1}
+                                    </span>
+                                    {formattedPhone && (
+                                      <span className="font-mono text-purple-200/80 truncate text-[9.5px]">
+                                        {formattedPhone}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span
+                                    className={`shrink-0 text-[9px] font-semibold flex items-center gap-0.5 ml-1 ${
+                                      isOutbound ? "text-cyan-400" : "text-emerald-400"
+                                    }`}
+                                    title={isOutbound ? "Last message sent by our WhatsApp line" : "Last message received from customer"}
+                                  >
+                                    {isOutbound ? (
+                                      <>
+                                        <ArrowUpRight className="w-2.5 h-2.5" /> Out
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ArrowDownLeft className="w-2.5 h-2.5" /> In
+                                      </>
+                                    )}
+                                  </span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+
                           <div className="flex items-center justify-between mt-2">
                             <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[9px] rounded-md font-bold uppercase tracking-wider">
                               {status}
@@ -1298,6 +1392,98 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
                     </p>
                   </div>
                 </div>
+
+                {/* Last Contacted WhatsApp Tracker Card in Header */}
+                {(() => {
+                  const line = selectedConv.lastContactedLine || selectedConv.leadId?.lastContactedWhatsApp?.lineNumber;
+                  const rawNum = selectedConv.lastContactedWhatsAppNumber || selectedConv.leadId?.lastContactedWhatsApp?.number || getSessionPhoneForLine(line);
+                  const time = selectedConv.lastContactedTime || selectedConv.leadId?.lastContactedWhatsApp?.contactedAt;
+                  const dir = selectedConv.lastContactedDirection || selectedConv.leadId?.lastContactedWhatsApp?.direction;
+                  const isPending = selectedConv.isAssignedPending && !time;
+
+                  if (isPending) {
+                    return (
+                      <div className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <div className="leading-tight">
+                          <div className="font-semibold flex items-center gap-1.5">
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-amber-300/80">Tracker:</span>
+                            <span className="text-amber-100 font-medium">Not Contacted Yet</span>
+                          </div>
+                          <div className="text-[10px] text-amber-300/60 font-mono">
+                            Assigned to Account {selectedConv.assignedLineNumber || 1}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (line || rawNum) {
+                    const isOutbound = dir === "outbound";
+                    const formattedPhone = rawNum
+                      ? (String(rawNum).startsWith("+") ? rawNum : `+${rawNum}`)
+                      : null;
+                    const formattedTime = time
+                      ? new Date(time).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : null;
+
+                    return (
+                      <div className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-[#241247] border border-purple-500/30 text-xs shadow-inner">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              Number(line) === 2 ? "bg-cyan-400" : "bg-emerald-400"
+                            }`}
+                          />
+                          <div className="leading-tight">
+                            <div className="text-[9px] uppercase font-bold tracking-wider text-brand-secondary/60">
+                              Last Contacted Line
+                            </div>
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              <span>Account {line || 1}</span>
+                              {formattedPhone && (
+                                <span className="font-mono text-cyan-300 text-[11px] font-medium">
+                                  ({formattedPhone})
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-6 w-px bg-purple-500/30"></div>
+                        <div className="leading-tight text-right">
+                          <div className="text-[10px] font-semibold flex items-center justify-end gap-1">
+                            <span
+                              className={`flex items-center gap-0.5 ${
+                                isOutbound ? "text-cyan-400" : "text-emerald-400"
+                              }`}
+                            >
+                              {isOutbound ? (
+                                <>
+                                  <ArrowUpRight className="w-3 h-3" /> Outbound
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowDownLeft className="w-3 h-3" /> Inbound
+                                </>
+                              )}
+                            </span>
+                          </div>
+                          {formattedTime && (
+                            <div className="text-[10px] text-brand-secondary/60 font-mono">
+                              {formattedTime}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
 
                 <div className="flex items-center gap-4">
                   {/* Summarize Chat Button */}
@@ -1631,6 +1817,83 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
         {/* Right side: AI Qualification insights sidebar */}
         {selectedConv && (
           <div className="w-80 border-l border-[#361c5a] bg-[#1a0c35] flex flex-col overflow-y-auto shrink-0 p-4 space-y-6">
+            {/* WhatsApp Activity Tracker Card */}
+            <div className="p-3.5 rounded-xl bg-[#221044]/90 border border-purple-500/30 space-y-2.5 shadow-md">
+              <div className="flex items-center justify-between text-xs font-bold text-white border-b border-purple-500/20 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <PhoneCall className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="uppercase tracking-wider text-[11px]">WhatsApp Tracker</span>
+                </div>
+                {(selectedConv.lastContactedLine || selectedConv.leadId?.lastContactedWhatsApp?.lineNumber) && (
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      Number(selectedConv.lastContactedLine || selectedConv.leadId?.lastContactedWhatsApp?.lineNumber) === 2
+                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                        : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    }`}
+                  >
+                    Line {selectedConv.lastContactedLine || selectedConv.leadId?.lastContactedWhatsApp?.lineNumber}
+                  </span>
+                )}
+              </div>
+
+              {selectedConv.isAssignedPending && !selectedConv.lastContactedTime && !selectedConv.leadId?.lastContactedWhatsApp?.contactedAt ? (
+                <div className="text-xs text-amber-300/80 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
+                  <div className="font-semibold text-amber-200">Uncontacted Lead</div>
+                  <div className="text-[10px] text-amber-300/60 mt-0.5">
+                    Locked to Account {selectedConv.assignedLineNumber || 1}. Initial contact must be initiated from this line.
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs space-y-2">
+                  <div className="flex items-center justify-between text-brand-secondary/80">
+                    <span className="text-[11px] text-brand-secondary/60">Contacted Via:</span>
+                    <span className="font-mono text-white text-[11px] font-medium">
+                      {selectedConv.lastContactedWhatsAppNumber ||
+                        selectedConv.leadId?.lastContactedWhatsApp?.number ||
+                        getSessionPhoneForLine(selectedConv.lastContactedLine || selectedConv.leadId?.lastContactedWhatsApp?.lineNumber) ||
+                        `Account ${selectedConv.lastContactedLine || 1}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-brand-secondary/80">
+                    <span className="text-[11px] text-brand-secondary/60">Direction:</span>
+                    <span
+                      className={`text-[11px] font-semibold flex items-center gap-0.5 ${
+                        (selectedConv.lastContactedDirection || selectedConv.leadId?.lastContactedWhatsApp?.direction) === "outbound"
+                          ? "text-cyan-400"
+                          : "text-emerald-400"
+                      }`}
+                    >
+                      {(selectedConv.lastContactedDirection || selectedConv.leadId?.lastContactedWhatsApp?.direction) === "outbound" ? (
+                        <>
+                          <ArrowUpRight className="w-3 h-3" /> Outbound (Sent)
+                        </>
+                      ) : (
+                        <>
+                          <ArrowDownLeft className="w-3 h-3" /> Inbound (Received)
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  {(selectedConv.lastContactedTime || selectedConv.leadId?.lastContactedWhatsApp?.contactedAt) && (
+                    <div className="flex items-center justify-between text-brand-secondary/80">
+                      <span className="text-[11px] text-brand-secondary/60">Last Activity:</span>
+                      <span className="text-[10px] text-brand-secondary/70 font-mono">
+                        {new Date(
+                          selectedConv.lastContactedTime || selectedConv.leadId?.lastContactedWhatsApp?.contactedAt
+                        ).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Qualification Form */}
             <div>
               <div className="flex items-center gap-2 mb-4 border-b border-[#361c5a] pb-2 text-white">

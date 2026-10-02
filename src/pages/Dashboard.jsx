@@ -23,6 +23,8 @@ import {
   Settings,
   RotateCcw,
   Smartphone,
+  Info,
+  Link2,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -74,29 +76,71 @@ export default function Dashboard() {
 
 
   // ── WhatsApp Dashboard Widget State ─────────────────────────────────
-  const [repWaStatus, setRepWaStatus] = useState(null);       // Sales rep's own session status
+  const [waSessions, setWaSessions] = useState([]);
+  const [defaultWhatsAppLine, setDefaultWhatsAppLine] = useState(1);
+  const [waLineLimit, setWaLineLimit] = useState(2);
   const [teamWaStatuses, setTeamWaStatuses] = useState([]);   // Admin team overview
 
   useEffect(() => {
     const fetchWaWidget = async () => {
       try {
-        if (currentUser?.role === "sales person") {
-          const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
-          const sessions = res.data?.sessions || [];
-          setRepWaStatus(sessions[0] || null);
-        } else if (currentUser?.role === "sales manager" || currentUser?.role === "super_admin") {
-          const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS);
-          setTeamWaStatuses(res.data?.data || []);
+        const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
+        if (res.data) {
+          setWaSessions(res.data.sessions || []);
+          setDefaultWhatsAppLine(res.data.defaultWhatsAppLine || 1);
+          setWaLineLimit(res.data.whatsappLineLimit || (currentUser?.role === "sales person" ? 2 : 1));
+        }
+        if (currentUser?.role === "sales manager" || currentUser?.role === "super_admin") {
+          const teamRes = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS);
+          setTeamWaStatuses(teamRes.data?.data || []);
         }
       } catch (err) {
         // Non-fatal — widget just won't show data
       } 
     };
-    if (currentUser) fetchWaWidget();
+
+    if (currentUser) {
+      fetchWaWidget();
+      const onStatus = () => fetchWaWidget();
+      socket.on("whatsapp_status", onStatus);
+      return () => {
+        socket.off("whatsapp_status", onStatus);
+      };
+    }
   }, [currentUser]);
+
+  const line1Session = waSessions.find((s) => (s.lineNumber || (s.isPrimary ? 1 : 2)) === 1) || {
+    lineNumber: 1,
+    status: "disconnected",
+  };
+  const line2Session = waSessions.find((s) => (s.lineNumber || (s.isPrimary ? 1 : 2)) === 2) || {
+    lineNumber: 2,
+    status: "disconnected",
+  };
 
   const connectedTeamCount = teamWaStatuses.reduce((count, rep) => count + (rep.lines || [rep]).filter((line) => line.status === "connected").length, 0);
   const totalTeamLines = teamWaStatuses.reduce((count, rep) => count + (rep.lines?.length || 1), 0);
+
+  const [settingDefaultLine, setSettingDefaultLine] = useState(false);
+
+  const handleSelectDefaultLine = async (line) => {
+    if (settingDefaultLine || defaultWhatsAppLine === line) return;
+    try {
+      setSettingDefaultLine(true);
+      await axios.put(API_ENDPOINTS.WHATSAPP.DEFAULT_CONNECTION, {
+        defaultWhatsAppLine: line,
+      });
+      setDefaultWhatsAppLine(line);
+      if (currentUser) {
+        currentUser.defaultWhatsAppLine = line;
+      }
+    } catch (err) {
+      console.error("Failed to update default WhatsApp connection:", err);
+      alert(err.response?.data?.message || "Failed to update default WhatsApp connection.");
+    } finally {
+      setSettingDefaultLine(false);
+    }
+  };
 
   // Quick Add Sales Person Modal State
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -479,84 +523,253 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* WhatsApp Connection Widget */}
-      {currentUser?.role === "sales person" && (
-        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                repWaStatus?.status === "connected"
-                  ? "bg-green-500/10 border-green-500/30 text-green-500"
-                  : "bg-purple-500/10 border-purple-500/30 text-purple-400"
-              }`}>
-                <Smartphone className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-brand-primary">WhatsApp Account 1</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${
-                    repWaStatus?.status === "connected" ? "bg-green-500 animate-pulse" :
-                    repWaStatus?.status === "qr" ? "bg-amber-400 animate-pulse" :
-                    repWaStatus?.status === "connecting" ? "bg-blue-400" : "bg-slate-400"
-                  }`} />
-                  <span className="text-xs text-brand-primary/70 capitalize">
-                    {repWaStatus?.status === "connected"
-                      ? `Connected · +${repWaStatus.connectedPhone}`
-                      : repWaStatus?.status === "qr"
-                        ? "QR Code Ready to Scan"
-                        : repWaStatus?.status === "connecting"
-                          ? "Connecting..."
-                          : "Not Connected"}
-                  </span>
-                </div>
-              </div>
+      {/* ── WhatsApp Account Connections & Operational Importance Widget ── */}
+      <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-sm space-y-4">
+        {/* Top Header Row with Status & Account Selector Toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-brand-secondary/60">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40 text-emerald-500 flex items-center justify-center shrink-0">
+              <MessageCircle className="w-5 h-5" />
             </div>
-            <button
-              onClick={() => navigate("/whatsapp/account-1")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
-            >
-              {repWaStatus?.status === "connected" ? "Manage" : "Connect"}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-bold text-brand-primary">
+                WhatsApp Account Connections
+              </h3>
+              <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-0.5 rounded-full border border-brand-secondary/80">
+                View Only
+              </span>
+            </div>
+          </div>
+
+          {/* WhatsApp Account selection toggle */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-xs font-bold text-brand-primary">
+              WhatsApp Account:
+            </span>
+            <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-[#090f1d] border border-slate-800 shadow-inner">
+              <button
+                type="button"
+                onClick={() => handleSelectDefaultLine(1)}
+                disabled={settingDefaultLine}
+                title="Click to set Account 1 as default connection"
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  defaultWhatsAppLine === 1
+                    ? "bg-[#16273b] text-white shadow-xs border border-[#23425c]"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                } ${settingDefaultLine ? "opacity-70 cursor-wait" : ""}`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                <span>Account 1</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectDefaultLine(2)}
+                disabled={settingDefaultLine}
+                title="Click to set Account 2 as default connection"
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  defaultWhatsAppLine === 2
+                    ? "bg-white text-slate-900 shadow-xs border border-white"
+                    : "text-slate-300 hover:text-white hover:bg-white/5"
+                } ${settingDefaultLine ? "opacity-70 cursor-wait" : ""}`}
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                <span>Account 2</span>
+              </button>
+            </div>
           </div>
         </div>
-      )}
 
-      {(currentUser?.role === "sales manager" || currentUser?.role === "super_admin") && teamWaStatuses.length > 0 && (
-        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
-                <Smartphone className="w-4 h-4 text-purple-400" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-brand-primary">Team WhatsApp Lines</p>
-                <p className="text-xs text-brand-primary/70 mt-0.5">
-                  <span className="font-bold text-green-500">{connectedTeamCount}</span> of{" "}
-                  <span className="font-bold">{totalTeamLines}</span> lines
-                </p>
-              </div>
+        {/* Operational Importance & Rules Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-1">
+          {/* Account 1 Column */}
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-xs font-extrabold uppercase tracking-wider text-brand-primary mb-3">
+                OPERATIONAL IMPORTANCE & RULES:
+              </h4>
+
+              {defaultWhatsAppLine === 1 ? (
+                <div className="space-y-2 text-xs font-semibold text-brand-primary">
+                  <div className="flex items-center gap-1.5">
+                    <span>✅</span>
+                    <span>Welcome Messages (Simplified)</span>
+                    <span>✅</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>✅</span>
+                    <span>Missed Calls (Follow-ups)</span>
+                    <span>✅</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>✅</span>
+                    <span>Assigned Leads</span>
+                    <span>✅</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 text-xs font-medium text-brand-primary/80">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                    <span>Dual-Line Chats</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                    <span>Dual-Line Chats</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                    <span>Secondary Outreach</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              {/* Rep status mini-pills */}
-              <div className="flex items-center gap-1">
+
+            <div>
+              <span
+                className={`inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium ${
+                  line1Session.status === "connected"
+                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40"
+                    : line1Session.status === "qr" || line1Session.status === "connecting"
+                    ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40"
+                    : "bg-[#fee2e2]/80 dark:bg-rose-950/40 text-[#991b1b] dark:text-rose-300 border border-[#fecaca] dark:border-rose-900/50"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    line1Session.status === "connected"
+                      ? "bg-emerald-500"
+                      : line1Session.status === "qr" || line1Session.status === "connecting"
+                      ? "bg-amber-400"
+                      : "bg-rose-500"
+                  }`}
+                />
+                <span>
+                  Account 1 Connection ({line1Session.status === "connected" ? (line1Session.connectedPhone ? `Connected · +${line1Session.connectedPhone}` : "Connected") : line1Session.status === "qr" ? "QR Ready" : "Disconnected"})
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* Account 2 Column */}
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-xs font-extrabold uppercase tracking-wider text-brand-primary mb-3">
+                OPERATIONAL IMPORTANCE & RULES:
+              </h4>
+
+              {defaultWhatsAppLine === 2 ? (
+                <div className="space-y-2 text-xs font-semibold text-brand-primary">
+                  <div className="flex items-center gap-1.5">
+                    <span>✅</span>
+                    <span>Welcome Messages (Simplified)</span>
+                    <span>✅</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>✅</span>
+                    <span>Missed Calls (Follow-ups)</span>
+                    <span>✅</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span>✅</span>
+                    <span>Assigned Leads</span>
+                    <span>✅</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 text-xs font-medium text-brand-primary/80">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                    <span>Dual-Line Chats</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                    <span>Dual-Line Chats</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-500 shrink-0" />
+                    <span>Secondary Outreach</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <span
+                className={`inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-medium ${
+                  line2Session.status === "connected"
+                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40"
+                    : line2Session.status === "qr" || line2Session.status === "connecting"
+                    ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40"
+                    : "bg-[#fee2e2]/80 dark:bg-rose-950/40 text-[#991b1b] dark:text-rose-300 border border-[#fecaca] dark:border-rose-900/50"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    line2Session.status === "connected"
+                      ? "bg-emerald-500"
+                      : line2Session.status === "qr" || line2Session.status === "connecting"
+                      ? "bg-amber-400"
+                      : "bg-rose-500"
+                  }`}
+                />
+                <span>
+                  Account 2 Connection ({line2Session.status === "connected" ? (line2Session.connectedPhone ? `Connected · +${line2Session.connectedPhone}` : "Connected") : line2Session.status === "qr" ? "QR Ready" : "Disconnected"})
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Read-Only Notice Bar & Link to WhatsApp */}
+        <div className="border-t border-brand-secondary/60 pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-brand-primary/70">
+          <span>View full connection management in WhatsApp Chat.</span>
+          <button
+            type="button"
+            onClick={() => navigate("/whatsapp")}
+            className="inline-flex items-center gap-1.5 font-semibold text-brand-primary hover:text-purple-500 transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            <Link2 className="w-3.5 h-3.5 rotate-45" />
+            <span>Open WhatsApp Chat</span>
+          </button>
+        </div>
+
+        {/* Team Overview for Managers */}
+        {(currentUser?.role === "sales manager" || currentUser?.role === "super_admin") && teamWaStatuses.length > 0 && (
+          <div className="pt-3 border-t border-brand-secondary/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <Users className="w-4 h-4 text-purple-400" />
+              <span className="text-xs text-brand-primary">
+                Team WhatsApp Lines:{" "}
+                <strong className="text-emerald-500 font-bold">{connectedTeamCount}</strong> of{" "}
+                <strong className="font-bold">{totalTeamLines}</strong> lines connected
+              </span>
+              <div className="flex items-center gap-1 ml-2">
                 {teamWaStatuses.flatMap((rep) => (rep.lines || [rep]).map((line) => ({ rep, line }))).slice(0, 10).map(({ rep, line }) => (
-                  <div key={`${rep.userId}-${line.lineNumber || 1}`} title={`${rep.name} · Account ${line.lineNumber || 1}: ${line.status}`} className={`w-2 h-2 rounded-full ${line.status === "connected" ? "bg-green-500" : line.status === "qr" ? "bg-amber-400" : "bg-slate-400"}`} />
+                  <div
+                    key={`${rep.userId}-${line.lineNumber || 1}`}
+                    title={`${rep.name} · Account ${line.lineNumber || 1}: ${line.status}`}
+                    className={`w-2 h-2 rounded-full ${
+                      line.status === "connected" ? "bg-emerald-500" : line.status === "qr" ? "bg-amber-400" : "bg-slate-400"
+                    }`}
+                  />
                 ))}
                 {totalTeamLines > 10 && (
                   <span className="text-[10px] text-brand-primary/60 ml-1">+{totalTeamLines - 10}</span>
                 )}
               </div>
-              <button
-                onClick={() => navigate("/whatsapp/account-1")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
-              >
-                View All <ArrowRight className="w-3.5 h-3.5" />
-              </button>
             </div>
+            <button
+              type="button"
+              onClick={() => navigate("/organization")}
+              className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+            >
+              <span>Manage Team Lines</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* AI & Automation Master Control Card */}
       <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 shadow-sm">

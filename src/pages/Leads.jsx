@@ -525,7 +525,37 @@ export default function Leads() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-brand-primary">
-                      {lead.phone}
+                      <div>{lead.phone}</div>
+                      {lead.lastContactedWhatsApp?.number || lead.lastContactedWhatsApp?.lineNumber ? (
+                        <div
+                          className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20"
+                          title={`Last contacted via Account ${lead.lastContactedWhatsApp.lineNumber || 1}${lead.lastContactedWhatsApp.number ? ` (${lead.lastContactedWhatsApp.number})` : ''} - ${lead.lastContactedWhatsApp.direction === 'outbound' ? 'Sent' : 'Received'}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              Number(lead.lastContactedWhatsApp.lineNumber) === 2
+                                ? "bg-cyan-400"
+                                : "bg-emerald-400"
+                            }`}
+                          />
+                          <span>Acc {lead.lastContactedWhatsApp.lineNumber || 1}</span>
+                          {lead.lastContactedWhatsApp.number && (
+                            <span className="font-mono text-[9px] text-purple-200/80">
+                              {lead.lastContactedWhatsApp.number.startsWith('+')
+                                ? lead.lastContactedWhatsApp.number
+                                : `+${lead.lastContactedWhatsApp.number}`}
+                            </span>
+                          )}
+                        </div>
+                      ) : lead.assignedWhatsAppLine ? (
+                        <div
+                          className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-amber-500/10 text-amber-300/80 border border-amber-500/20"
+                          title={`Locked to Account ${lead.assignedWhatsAppLine}. Initial contact must be from this line.`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          <span>Locked: Line {lead.assignedWhatsAppLine}</span>
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       <Badge
