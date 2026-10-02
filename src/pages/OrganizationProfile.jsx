@@ -817,18 +817,22 @@ export default function OrganizationProfile() {
   const [teamWhatsAppStatus, setTeamWhatsAppStatus] = useState([]);
   const [teamWhatsAppLoading, setTeamWhatsAppLoading] = useState(false);
 
+  const normalizedRole = String(currentUser?.role || "").toLowerCase().trim();
   const isManager =
-    currentUser?.role === "Sales Manager" ||
-    currentUser?.role === "Super Admin" ||
-    currentUser?.isOrgOwner;
+    ["sales manager", "super_admin", "super admin"].includes(normalizedRole) ||
+    Boolean(currentUser?.isOrgOwner);
 
   // Fetch Team WhatsApp Status (admin only)
   const fetchTeamWhatsAppStatus = async () => {
     try {
       setTeamWhatsAppLoading(true);
-      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token") ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token");
       const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       setTeamWhatsAppStatus(res.data?.data || []);
     } catch (err) {
