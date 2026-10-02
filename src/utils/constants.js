@@ -36,6 +36,7 @@ export const API_ENDPOINTS = {
     SUMMARIZE_CONVERSATION: (leadId) => `${API_BASE_URL}/whatsapp/conversation/${leadId}/summarize`,
     // Admin team WhatsApp status overview
     TEAM_STATUS: `${API_BASE_URL}/whatsapp/team-status`,
+    DEFAULT_CONNECTION: `${API_BASE_URL}/whatsapp/default-connection`,
   },
   WHATSAPP_CLOUD: {
     STATUS: `${API_BASE_URL}/whatsapp/cloud/status`,

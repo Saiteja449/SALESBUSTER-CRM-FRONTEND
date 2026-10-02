@@ -32,6 +32,7 @@ import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
 import TelephonyAnalytics from "./pages/TelephonyAnalytics.jsx";
+import WhatsAppRouteRedirect from "./components/whatsapp/WhatsAppRouteRedirect.jsx";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
@@ -204,7 +205,7 @@ export default function App() {
                 </CampaignsRoute>
               }
             />
-            <Route path="/whatsapp" element={<Navigate to="/whatsapp/account-1" replace />} />
+            <Route path="/whatsapp" element={<WhatsAppRouteRedirect />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

@@ -47,6 +47,8 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
   const [sessions, setSessions] = useState([]);
   const [lineUnreadCounts, setLineUnreadCounts] = useState({ 1: 0, 2: 0 });
   const [whatsappLineLimit, setWhatsappLineLimit] = useState(1);
+  const [defaultWhatsAppLine, setDefaultWhatsAppLine] = useState(currentUser?.defaultWhatsAppLine || 1);
+  const [settingDefault, setSettingDefault] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionLoadingMap, setSessionLoadingMap] = useState({});
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -345,6 +347,9 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
         if (res.data.whatsappLineLimit) {
           setWhatsappLineLimit(res.data.whatsappLineLimit);
         }
+        if (res.data.defaultWhatsAppLine) {
+          setDefaultWhatsAppLine(res.data.defaultWhatsAppLine);
+        }
       } else {
         // Fallback for legacy array response
         const nextSessions = Array.isArray(res.data) ? res.data : [];
@@ -573,6 +578,24 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
     }
   };
 
+  const handleSetDefaultConnection = async (line) => {
+    try {
+      setSettingDefault(true);
+      const res = await axios.put(API_ENDPOINTS.WHATSAPP.DEFAULT_CONNECTION, {
+        defaultWhatsAppLine: line,
+      });
+      setDefaultWhatsAppLine(line);
+      if (currentUser) {
+        currentUser.defaultWhatsAppLine = line;
+      }
+    } catch (err) {
+      console.error("Failed to set default WhatsApp connection:", err);
+      alert(err.response?.data?.message || "Failed to set default WhatsApp connection.");
+    } finally {
+      setSettingDefault(false);
+    }
+  };
+
   const handleSelectConversation = async (conv) => {
     setSelectedConv(conv);
     setMessagesLoading(true);
@@ -728,7 +751,7 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
         lineNumber: targetLine,
       });
     } catch (err) {
-      alert("Failed to send message.");
+      alert(err.response?.data?.message || "Failed to send message.");
     }
   };
 
@@ -885,17 +908,45 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-70px)] relative overflow-hidden bg-[#130a28] text-white">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-[#361c5a] bg-[#160a2c]">
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-[#361c5a] bg-[#160a2c]">
         <span className="text-xs font-semibold text-purple-300">WhatsApp Account:</span>
         {[1, 2].map((line) => {
           const lineSession = sessions.find((session) => Number(session.lineNumber) === line);
           const active = targetLine === line;
           const unread = lineUnreadCounts[line] || 0;
-          return <button key={line} type="button" onClick={() => navigate(`/whatsapp/account-${line}`)} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold ${active ? "bg-purple-600 text-white" : "text-purple-300 hover:bg-purple-800/40"}`}>
-            <span className={`w-2 h-2 rounded-full ${lineSession?.status === "connected" ? "bg-emerald-400" : "bg-rose-400"}`} />
-            Account {line}{isSalesRep && lineSession?.displayPhone ? ` (${lineSession.displayPhone})` : ""}
-            {unread > 0 && !active && <span className="px-1.5 rounded-full bg-rose-500 text-white">{unread}</span>}
-          </button>;
+          const isDefault = Number(defaultWhatsAppLine) === line;
+          return (
+            <div key={line} className="inline-flex items-center gap-1.5">
+              <button
+                key={line}
+                type="button"
+                onClick={() => navigate(`/whatsapp/account-${line}`)}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  active ? "bg-purple-600 text-white shadow-sm" : "text-purple-300 hover:bg-purple-800/40"
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${lineSession?.status === "connected" ? "bg-emerald-400" : "bg-rose-400"}`} />
+                Account {line}{isSalesRep && lineSession?.displayPhone ? ` (${lineSession.displayPhone})` : ""}
+                {isDefault && (
+                  <span className="text-[10px] bg-amber-400/20 text-amber-300 border border-amber-400/30 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5" title="Default WhatsApp Connection">
+                    ★ Default
+                  </span>
+                )}
+                {unread > 0 && !active && <span className="px-1.5 rounded-full bg-rose-500 text-white">{unread}</span>}
+              </button>
+              {active && !isDefault && (
+                <button
+                  type="button"
+                  onClick={() => handleSetDefaultConnection(line)}
+                  disabled={settingDefault}
+                  title={`Set Account ${line} as your default WhatsApp connection`}
+                  className="px-2.5 py-1 text-[11px] font-bold text-amber-300 hover:text-amber-200 bg-amber-400/10 hover:bg-amber-400/20 border border-amber-400/30 rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                >
+                  {settingDefault ? "Saving..." : "☆ Set as Default"}
+                </button>
+              )}
+            </div>
+          );
         })}
       </div>
       {/* Top Header Connection Status Bar */}
@@ -1483,6 +1534,28 @@ export default function WhatsAppChat({ accountNumber = 1 }) {
                     </span>{" "}
                     can send messages.
                   </span>
+                </div>
+              ) : isSalesRep && messages.length === 0 && Number(targetLine) !== Number(defaultWhatsAppLine || 1) ? (
+                <div className="p-3.5 border-t border-[#361c5a] bg-[#1a0c35] flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-amber-300 font-medium">
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                      <strong className="text-amber-200">Default Connection Required:</strong> This assigned lead must be initiated from Account {defaultWhatsAppLine} (your default WhatsApp connection).
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/whatsapp/account-${defaultWhatsAppLine}?leadId=${
+                          selectedConv?.leadId?._id || selectedConv?.leadId?.id || selectedConv?.leadId
+                        }`
+                      )
+                    }
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-md cursor-pointer"
+                  >
+                    Switch to Account {defaultWhatsAppLine} to Message
+                  </button>
                 </div>
               ) : (
                 <form

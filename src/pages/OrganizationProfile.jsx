@@ -842,6 +842,42 @@ export default function OrganizationProfile() {
     }
   };
 
+  const [updatingDefaultLine, setUpdatingDefaultLine] = useState(false);
+
+  // Update Organization Default WhatsApp Line (Manager/Admin)
+  const handleUpdateDefaultConnection = async (lineNumber) => {
+    try {
+      setUpdatingDefaultLine(true);
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token") ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token");
+      const res = await axios.put(
+        API_ENDPOINTS.WHATSAPP.DEFAULT_CONNECTION,
+        { lineNumber },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      if (res.data.success) {
+        setOrgData((prev) => ({
+          ...prev,
+          defaultWhatsAppLine: lineNumber,
+        }));
+        if (setOrganization) {
+          setOrganization((prev) => ({
+            ...prev,
+            defaultWhatsAppLine: lineNumber,
+          }));
+        }
+        setSaveToast(`Default WhatsApp connection set to Account ${lineNumber}`);
+      }
+    } catch (err) {
+      console.error("Failed to update default WhatsApp line", err);
+    } finally {
+      setUpdatingDefaultLine(false);
+    }
+  };
+
   // 1. Fetch Organization Details
   const fetchOrganizationProfile = async () => {
     try {
@@ -4952,13 +4988,57 @@ export default function OrganizationProfile() {
                     {(org.whatsappLineLimit || 1) >= 2 ? "Dual Lines (2 Devices)" : "Single Line (1 Device)"}
                   </span>
                 </div>
-                <div className="flex justify-between py-1.5">
+                <div className="flex justify-between py-1.5 border-b border-border-main/50">
                   <span className="text-text-secondary">
                     Max Devices:
                   </span>
                   <span className="font-bold text-text-primary">
                     {org.whatsappLineLimit || 1}
                   </span>
+                </div>
+
+                {/* Default WhatsApp Connection Selection */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-2">
+                  <div>
+                    <span className="text-text-primary font-bold block">
+                      Default WhatsApp Connection:
+                    </span>
+                    <span className="text-[10px] text-text-secondary block">
+                      Automated welcome messages & missed-call followups send from this account
+                    </span>
+                  </div>
+                  {(org.whatsappLineLimit || 1) >= 2 ? (
+                    <div className="flex items-center gap-1.5 bg-bg-secondary p-1 rounded-xl border border-border-main shrink-0">
+                      <button
+                        type="button"
+                        disabled={updatingDefaultLine}
+                        onClick={() => handleUpdateDefaultConnection(1)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          (org.defaultWhatsAppLine || 1) === 1
+                            ? "bg-emerald-500 text-white shadow-xs"
+                            : "text-text-secondary hover:text-text-primary hover:bg-bg-card"
+                        }`}
+                      >
+                        Account 1
+                      </button>
+                      <button
+                        type="button"
+                        disabled={updatingDefaultLine}
+                        onClick={() => handleUpdateDefaultConnection(2)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          (org.defaultWhatsAppLine || 1) === 2
+                            ? "bg-emerald-500 text-white shadow-xs"
+                            : "text-text-secondary hover:text-text-primary hover:bg-bg-card"
+                        }`}
+                      >
+                        Account 2
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="font-bold text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-lg text-xs shrink-0 self-start sm:self-auto">
+                      Account 1 (Default)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -5018,17 +5098,25 @@ export default function OrganizationProfile() {
                           const isConnected = line?.status === "connected";
                           const displayPhone = line?.displayPhone || "";
                           const connectedPhone = line?.connectedPhone || "";
+                          const isDefault = (rep.defaultWhatsAppLine || 1) === i + 1;
                           return (
                             <td key={i} className="py-2.5 px-2 text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                  isConnected
-                                    ? "bg-emerald-500/10 text-emerald-600"
-                                    : "bg-rose-500/10 text-rose-500"
-                                }`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-emerald-500" : "bg-rose-500"}`} />
-                                  {line?.status || "disconnected"}
-                                </span>
+                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    isConnected
+                                      ? "bg-emerald-500/10 text-emerald-600"
+                                      : "bg-rose-500/10 text-rose-500"
+                                  }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-emerald-500" : "bg-rose-500"}`} />
+                                    {line?.status || "disconnected"}
+                                  </span>
+                                  {isDefault && (
+                                    <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">
+                                      ★ Default
+                                    </span>
+                                  )}
+                                </div>
                                 {(connectedPhone || displayPhone) && (
                                   <span className="text-[10px] text-text-secondary">
                                     {connectedPhone || displayPhone}
