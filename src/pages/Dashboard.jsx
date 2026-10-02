@@ -95,7 +95,8 @@ export default function Dashboard() {
     if (currentUser) fetchWaWidget();
   }, [currentUser]);
 
-  const connectedTeamCount = teamWaStatuses.filter((r) => r.status === "connected").length;
+  const connectedTeamCount = teamWaStatuses.reduce((count, rep) => count + (rep.lines || [rep]).filter((line) => line.status === "connected").length, 0);
+  const totalTeamLines = teamWaStatuses.reduce((count, rep) => count + (rep.lines?.length || 1), 0);
 
   // Quick Add Sales Person Modal State
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -491,7 +492,7 @@ export default function Dashboard() {
                 <Smartphone className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-bold text-brand-primary">My WhatsApp Line</p>
+                <p className="text-sm font-bold text-brand-primary">WhatsApp Account 1</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={`w-1.5 h-1.5 rounded-full ${
                     repWaStatus?.status === "connected" ? "bg-green-500 animate-pulse" :
@@ -511,7 +512,7 @@ export default function Dashboard() {
               </div>
             </div>
             <button
-              onClick={() => navigate("/whatsapp")}
+              onClick={() => navigate("/whatsapp/account-1")}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
             >
               {repWaStatus?.status === "connected" ? "Manage" : "Connect"}
@@ -532,30 +533,22 @@ export default function Dashboard() {
                 <p className="text-sm font-bold text-brand-primary">Team WhatsApp Lines</p>
                 <p className="text-xs text-brand-primary/70 mt-0.5">
                   <span className="font-bold text-green-500">{connectedTeamCount}</span> of{" "}
-                  <span className="font-bold">{teamWaStatuses.length}</span> reps connected
+                  <span className="font-bold">{totalTeamLines}</span> lines
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {/* Rep status mini-pills */}
               <div className="flex items-center gap-1">
-                {teamWaStatuses.slice(0, 5).map((rep) => (
-                  <div
-                    key={rep.userId}
-                    title={`${rep.name}: ${rep.status}`}
-                    className={`w-2 h-2 rounded-full ${
-                      rep.status === "connected" ? "bg-green-500" :
-                      rep.status === "qr" ? "bg-amber-400" :
-                      "bg-slate-400"
-                    }`}
-                  />
+                {teamWaStatuses.flatMap((rep) => (rep.lines || [rep]).map((line) => ({ rep, line }))).slice(0, 10).map(({ rep, line }) => (
+                  <div key={`${rep.userId}-${line.lineNumber || 1}`} title={`${rep.name} · Account ${line.lineNumber || 1}: ${line.status}`} className={`w-2 h-2 rounded-full ${line.status === "connected" ? "bg-green-500" : line.status === "qr" ? "bg-amber-400" : "bg-slate-400"}`} />
                 ))}
-                {teamWaStatuses.length > 5 && (
-                  <span className="text-[10px] text-brand-primary/60 ml-1">+{teamWaStatuses.length - 5}</span>
+                {totalTeamLines > 10 && (
+                  <span className="text-[10px] text-brand-primary/60 ml-1">+{totalTeamLines - 10}</span>
                 )}
               </div>
               <button
-                onClick={() => navigate("/whatsapp")}
+                onClick={() => navigate("/whatsapp/account-1")}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
               >
                 View All <ArrowRight className="w-3.5 h-3.5" />

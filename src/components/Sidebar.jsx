@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -25,6 +26,7 @@ import { useNotifications } from "../context/NotificationContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
 import LogoutConfirmModal from "./LogoutConfirmModal.jsx";
 import crmLogo from "../assets/images/Logo.png";
+import { API_ENDPOINTS } from "../utils/constants.js";
 
 const sidebarDrawerWidth = 260;
 
@@ -45,6 +47,17 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   const { unreadCount } = useNotifications();
   const { openSupportModal } = useSupportModal();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState({ sessions: [] });
+
+  useEffect(() => {
+    let mounted = true;
+    const loadStatus = () => axios.get(API_ENDPOINTS.WHATSAPP.STATUS)
+      .then((response) => { if (mounted) setWhatsappStatus(response.data || { sessions: [] }); })
+      .catch(() => {});
+    loadStatus();
+    const timer = window.setInterval(loadStatus, 30000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, []);
 
   const userEmail = currentUser?.email || "";
   const userPhone =
@@ -97,11 +110,17 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       path: "/notifications",
       badge: unreadCount,
     },
-    {
-      text: "WhatsApp Chat",
-      icon: <MessageSquare className="w-5 h-5" />,
-      path: "/whatsapp",
-    },
+    ...[1, 2].map((line) => {
+      const session = whatsappStatus.sessions?.find((item) => Number(item.lineNumber) === line);
+      const connected = session?.status === "connected";
+      const unread = line === 1 ? whatsappStatus.unreadCountLine1 : whatsappStatus.unreadCountLine2;
+      return {
+        text: `WhatsApp Account ${line}`,
+        icon: <span className="relative"><MessageSquare className="w-5 h-5" /><span title={`Account ${line}: ${session?.status || "disconnected"}`} className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-brand-light ${connected ? "bg-emerald-500" : "bg-rose-500"}`} /></span>,
+        path: `/whatsapp/account-${line}`,
+        badge: unread,
+      };
+    }),
     ...(!isSalesPerson && isOrgOwner
       ? [
           {

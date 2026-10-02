@@ -813,10 +813,30 @@ export default function OrganizationProfile() {
   const [showPromptInspector, setShowPromptInspector] = useState(false);
   const [activationResultModal, setActivationResultModal] = useState(null);
 
+  // Team WhatsApp Status (admin view)
+  const [teamWhatsAppStatus, setTeamWhatsAppStatus] = useState([]);
+  const [teamWhatsAppLoading, setTeamWhatsAppLoading] = useState(false);
+
   const isManager =
     currentUser?.role === "Sales Manager" ||
     currentUser?.role === "Super Admin" ||
     currentUser?.isOrgOwner;
+
+  // Fetch Team WhatsApp Status (admin only)
+  const fetchTeamWhatsAppStatus = async () => {
+    try {
+      setTeamWhatsAppLoading(true);
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setTeamWhatsAppStatus(res.data?.data || []);
+    } catch (err) {
+      // silent — admin may not have reps yet
+    } finally {
+      setTeamWhatsAppLoading(false);
+    }
+  };
 
   // 1. Fetch Organization Details
   const fetchOrganizationProfile = async () => {
@@ -4945,6 +4965,81 @@ export default function OrganizationProfile() {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Team WhatsApp Status — shows both Account 1 & Account 2 per rep */}
+          <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs">
+            <div className="flex items-center justify-between pb-3 border-b border-border-main mb-4">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-purple-500" />
+                <h3 className="font-bold text-xs text-text-primary">Sales Rep WhatsApp Status</h3>
+              </div>
+              <button
+                onClick={fetchTeamWhatsAppStatus}
+                className="text-[10px] text-purple-500 hover:text-purple-400 font-semibold flex items-center gap-1 transition-colors"
+              >
+                {teamWhatsAppLoading ? "Refreshing..." : "↻ Refresh"}
+              </button>
+            </div>
+
+            {teamWhatsAppStatus.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-xs text-text-secondary mb-3">Click refresh to load WhatsApp connection status for all sales reps.</p>
+                <button
+                  onClick={fetchTeamWhatsAppStatus}
+                  className="text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-1.5 rounded-xl transition-colors"
+                >
+                  Load Status
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-text-secondary border-b border-border-main">
+                      <th className="text-left pb-2 pr-3 font-semibold">Rep Name</th>
+                      <th className="text-center pb-2 px-2 font-semibold">Account 1</th>
+                      <th className="text-center pb-2 px-2 font-semibold">Account 2</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-main/50">
+                    {teamWhatsAppStatus.map((rep) => (
+                      <tr key={rep.userId} className="hover:bg-bg-secondary/30 transition-colors">
+                        <td className="py-2.5 pr-3">
+                          <div className="font-semibold text-text-primary">{rep.name || "Unknown"}</div>
+                          <div className="text-[10px] text-text-secondary truncate max-w-[120px]">{rep.email}</div>
+                        </td>
+                        {[0, 1].map((i) => {
+                          const line = rep.lines?.[i];
+                          const isConnected = line?.status === "connected";
+                          const displayPhone = line?.displayPhone || "";
+                          const connectedPhone = line?.connectedPhone || "";
+                          return (
+                            <td key={i} className="py-2.5 px-2 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  isConnected
+                                    ? "bg-emerald-500/10 text-emerald-600"
+                                    : "bg-rose-500/10 text-rose-500"
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-emerald-500" : "bg-rose-500"}`} />
+                                  {line?.status || "disconnected"}
+                                </span>
+                                {(connectedPhone || displayPhone) && (
+                                  <span className="text-[10px] text-text-secondary">
+                                    {connectedPhone || displayPhone}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           {renderDailyAiUsageCard(false)}

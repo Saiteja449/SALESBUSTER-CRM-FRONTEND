@@ -25,6 +25,7 @@ export default function WhatsAppConnectModal({
   whatsappLineLimit = 1,
   currentUser = null,
   repSessionError = "",
+  targetLineNumber = 1,
   // pairingCodeData = null, // Pairing code feature currently disabled
 }) {
   const [copiedSessionId, setCopiedSessionId] = useState(null);
@@ -40,7 +41,7 @@ export default function WhatsAppConnectModal({
   ].includes(normalizedRole);
 
   // Resolve rep session
-  const repSession = sessions.find((s) => s.isRepSession) ||
+  const repSession = sessions.find((s) => s.isRepSession && Number(s.lineNumber) === Number(targetLineNumber)) || sessions.find((s) => s.isRepSession) ||
     sessions[0] || {
       sessionId: currentUser?._id
         ? `org_${currentUser.organizationId}_user_${currentUser._id}`
@@ -97,9 +98,9 @@ export default function WhatsAppConnectModal({
       !loadingSessions[repSessionId] &&
       onConnect
     ) {
-      onConnect(repSessionId, 1);
+      onConnect(repSessionId, targetLineNumber);
     }
-  }, [isOpen, isRepMode, repSession.status, repSessionId, onConnect]);
+  }, [isOpen, isRepMode, repSession.status, repSessionId, targetLineNumber, onConnect]);
 
   // Reset dismissed error state when a new error arrives
   useEffect(() => {
@@ -391,7 +392,7 @@ export default function WhatsAppConnectModal({
                 <button
                   type="button"
                   onClick={() =>
-                    onConnect && onConnect(session.sessionId, deviceNum)
+                    onConnect && onConnect(session.sessionId, isRepMode ? targetLineNumber : deviceNum)
                   }
                   disabled={isLoading}
                   className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-md shadow-emerald-600/25 transition-all cursor-pointer disabled:opacity-50"
@@ -407,7 +408,8 @@ export default function WhatsAppConnectModal({
     );
   }
 
-  const isDualLine = !isRepMode && whatsappLineLimit >= 2;
+  const activeSingleSession = !isRepMode && sessions.length === 1 ? sessions[0] : null;
+  const isDualLine = !isRepMode && whatsappLineLimit >= 2 && sessions.length > 1;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm overflow-y-auto animate-fadeIn">
@@ -432,7 +434,7 @@ export default function WhatsAppConnectModal({
                     ? "Personal Line"
                     : isDualLine
                       ? "2 Channels"
-                      : "1 Channel"}
+                      : `Account ${targetLineNumber || activeSingleSession?.lineNumber || 1}`}
                 </span>
               </div>
               {/*<p className="text-xs text-slate-500 dark:text-purple-300/80 mt-0.5">
@@ -488,6 +490,13 @@ export default function WhatsAppConnectModal({
           >
             {isRepMode ? (
               renderDeviceCard(repSession, 1, true, isRepLoading)
+            ) : activeSingleSession ? (
+              renderDeviceCard(
+                activeSingleSession,
+                Number(activeSingleSession.lineNumber) || targetLineNumber || 1,
+                activeSingleSession.isPrimary ?? (targetLineNumber === 1),
+                !!loadingSessions[activeSingleSession.sessionId],
+              )
             ) : (
               <>
                 {renderDeviceCard(

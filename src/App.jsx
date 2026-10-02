@@ -162,7 +162,8 @@ export default function App() {
             />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/ai-followups" element={<AIFollowUps />} />
-            <Route path="/whatsapp" element={<WhatsAppChat />} />
+            <Route path="/whatsapp/account-1" element={<WhatsAppChat accountNumber={1} />} />
+            <Route path="/whatsapp/account-2" element={<WhatsAppChat accountNumber={2} />} />
             <Route
               path="/whatsapp/campaigns"
               element={
@@ -203,6 +204,7 @@ export default function App() {
                 </CampaignsRoute>
               }
             />
+            <Route path="/whatsapp" element={<Navigate to="/whatsapp/account-1" replace />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
