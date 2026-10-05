@@ -87,8 +87,8 @@ export default function Dashboard() {
   const [aiLimitsLoading, setAiLimitsLoading] = useState(true);
 
   // ── WhatsApp Dashboard Widget State ─────────────────────────────────
-  const [repWaStatus, setRepWaStatus] = useState(null);       // Sales rep's own session status
-  const [teamWaStatuses, setTeamWaStatuses] = useState([]);   // Admin team overview
+  const [repWaStatus, setRepWaStatus] = useState(null); // Sales rep's own session status
+  const [teamWaStatuses, setTeamWaStatuses] = useState([]); // Admin team overview
   const [waWidgetLoading, setWaWidgetLoading] = useState(false);
 
   useEffect(() => {
@@ -99,7 +99,10 @@ export default function Dashboard() {
           const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
           const sessions = res.data?.sessions || [];
           setRepWaStatus(sessions[0] || null);
-        } else if (currentUser?.role === "sales manager" || currentUser?.role === "super_admin") {
+        } else if (
+          currentUser?.role === "sales manager" ||
+          currentUser?.role === "super_admin"
+        ) {
           const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS);
           setTeamWaStatuses(res.data?.data || []);
         }
@@ -112,7 +115,9 @@ export default function Dashboard() {
     if (currentUser) fetchWaWidget();
   }, [currentUser]);
 
-  const connectedTeamCount = teamWaStatuses.filter((r) => r.status === "connected").length;
+  const connectedTeamCount = teamWaStatuses.filter(
+    (r) => r.status === "connected",
+  ).length;
 
   // Quick Add Sales Person Modal State
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -130,7 +135,11 @@ export default function Dashboard() {
     setAddUserError("");
     setAddUserSuccess("");
 
-    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.mobile.trim()) {
+    if (
+      !newUser.name.trim() ||
+      !newUser.email.trim() ||
+      !newUser.mobile.trim()
+    ) {
       setAddUserError("Please provide name, email, and mobile number.");
       return;
     }
@@ -148,7 +157,9 @@ export default function Dashboard() {
         newUser.email.trim(),
         `+91${digitsOnly}`,
       );
-      setAddUserSuccess("Sales representative added! Login credentials sent via email.");
+      setAddUserSuccess(
+        "Sales representative added! Login credentials sent via email.",
+      );
       setNewUser({ name: "", email: "", mobile: "" });
       setTimeout(() => {
         setShowAddUserModal(false);
@@ -182,7 +193,9 @@ export default function Dashboard() {
 
   const handleOpenWelcomeModal = () => {
     setModalTemplate(
-      globalSettings.welcomeMessageTemplate || globalSettings.defaultTemplate || "",
+      globalSettings.welcomeMessageTemplate ||
+        globalSettings.defaultTemplate ||
+        "",
     );
     setModalFallbackService(
       globalSettings.welcomeMessageFallbackService ||
@@ -255,26 +268,79 @@ export default function Dashboard() {
     fetchGlobalSettings();
 
     const handleSettingsUpdate = (data) => {
-      if (data) setGlobalSettings((prev) => ({ ...prev, ...data }));
+      if (data) {
+        setGlobalSettings((prev) => ({
+          ...prev,
+          ...data,
+          effectiveAIEnabled: Boolean(
+            (data.globalAIEnabled !== undefined ? data.globalAIEnabled : prev.globalAIEnabled) &&
+            (prev.repAIEnabled !== false)
+          ),
+        }));
+      }
+    };
+
+    const handleRepAISettingsUpdate = (data) => {
+      if (data && (!data.userId || data.userId === currentUser?._id)) {
+        setGlobalSettings((prev) => ({
+          ...prev,
+          repAIEnabled: data.aiAutoReplyEnabled,
+          effectiveAIEnabled: Boolean(prev.globalAIEnabled && data.aiAutoReplyEnabled),
+        }));
+      }
     };
 
     socket.on("global_settings_updated", handleSettingsUpdate);
+    socket.on("rep_ai_settings_updated", handleRepAISettingsUpdate);
 
     return () => {
       socket.off("global_settings_updated", handleSettingsUpdate);
+      socket.off("rep_ai_settings_updated", handleRepAISettingsUpdate);
     };
-  }, []);
+  }, [currentUser]);
 
   const handleToggleGlobalAI = async () => {
     const newVal = !globalSettings.globalAIEnabled;
-    setGlobalSettings((prev) => ({ ...prev, globalAIEnabled: newVal }));
+    setGlobalSettings((prev) => ({
+      ...prev,
+      globalAIEnabled: newVal,
+      effectiveAIEnabled: Boolean(newVal && (prev.repAIEnabled !== false)),
+    }));
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.SETTINGS, {
         globalAIEnabled: newVal,
       });
     } catch (err) {
       console.error("Failed to update global AI setting:", err);
-      setGlobalSettings((prev) => ({ ...prev, globalAIEnabled: !newVal }));
+      setGlobalSettings((prev) => ({
+        ...prev,
+        globalAIEnabled: !newVal,
+        effectiveAIEnabled: Boolean(!newVal && (prev.repAIEnabled !== false)),
+      }));
+    }
+  };
+
+  const handleToggleRepAI = async () => {
+    if (!globalSettings.globalAIEnabled) return; // Locked by manager
+
+    const currentRepVal = globalSettings.repAIEnabled !== false;
+    const newVal = !currentRepVal;
+    setGlobalSettings((prev) => ({
+      ...prev,
+      repAIEnabled: newVal,
+      effectiveAIEnabled: Boolean(prev.globalAIEnabled && newVal),
+    }));
+    try {
+      await axios.post(API_ENDPOINTS.WHATSAPP.MY_AI_TOGGLE, {
+        enabled: newVal,
+      });
+    } catch (err) {
+      console.error("Failed to update rep AI setting:", err);
+      setGlobalSettings((prev) => ({
+        ...prev,
+        repAIEnabled: currentRepVal,
+        effectiveAIEnabled: Boolean(prev.globalAIEnabled && currentRepVal),
+      }));
     }
   };
 
@@ -513,21 +579,31 @@ export default function Dashboard() {
         <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                repWaStatus?.status === "connected"
-                  ? "bg-green-500/10 border-green-500/30 text-green-500"
-                  : "bg-purple-500/10 border-purple-500/30 text-purple-400"
-              }`}>
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
+                  repWaStatus?.status === "connected"
+                    ? "bg-green-500/10 border-green-500/30 text-green-500"
+                    : "bg-purple-500/10 border-purple-500/30 text-purple-400"
+                }`}
+              >
                 <Smartphone className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-sm font-bold text-brand-primary">My WhatsApp Line</p>
+                <p className="text-sm font-bold text-brand-primary">
+                  My WhatsApp Line
+                </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${
-                    repWaStatus?.status === "connected" ? "bg-green-500 animate-pulse" :
-                    repWaStatus?.status === "qr" ? "bg-amber-400 animate-pulse" :
-                    repWaStatus?.status === "connecting" ? "bg-blue-400" : "bg-slate-400"
-                  }`} />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      repWaStatus?.status === "connected"
+                        ? "bg-green-500 animate-pulse"
+                        : repWaStatus?.status === "qr"
+                          ? "bg-amber-400 animate-pulse"
+                          : repWaStatus?.status === "connecting"
+                            ? "bg-blue-400"
+                            : "bg-slate-400"
+                    }`}
+                  />
                   <span className="text-xs text-brand-primary/70 capitalize">
                     {repWaStatus?.status === "connected"
                       ? `Connected · +${repWaStatus.connectedPhone}`
@@ -551,49 +627,61 @@ export default function Dashboard() {
         </div>
       )}
 
-      {(currentUser?.role === "sales manager" || currentUser?.role === "super_admin") && teamWaStatuses.length > 0 && (
-        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
-                <Smartphone className="w-4 h-4 text-purple-400" />
+      {(currentUser?.role === "sales manager" ||
+        currentUser?.role === "super_admin") &&
+        teamWaStatuses.length > 0 && (
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
+                  <Smartphone className="w-4 h-4 text-purple-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-brand-primary">
+                    Team WhatsApp Lines
+                  </p>
+                  <p className="text-xs text-brand-primary/70 mt-0.5">
+                    <span className="font-bold text-green-500">
+                      {connectedTeamCount}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-bold">{teamWaStatuses.length}</span>{" "}
+                    reps connected
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-bold text-brand-primary">Team WhatsApp Lines</p>
-                <p className="text-xs text-brand-primary/70 mt-0.5">
-                  <span className="font-bold text-green-500">{connectedTeamCount}</span> of{" "}
-                  <span className="font-bold">{teamWaStatuses.length}</span> reps connected
-                </p>
+              <div className="flex items-center gap-2">
+                {/* Rep status mini-pills */}
+                <div className="flex items-center gap-1">
+                  {teamWaStatuses.slice(0, 5).map((rep) => (
+                    <div
+                      key={rep.userId}
+                      title={`${rep.name}: ${rep.status}`}
+                      className={`w-2 h-2 rounded-full ${
+                        rep.status === "connected"
+                          ? "bg-green-500"
+                          : rep.status === "qr"
+                            ? "bg-amber-400"
+                            : "bg-slate-400"
+                      }`}
+                    />
+                  ))}
+                  {teamWaStatuses.length > 5 && (
+                    <span className="text-[10px] text-brand-primary/60 ml-1">
+                      +{teamWaStatuses.length - 5}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => navigate("/whatsapp")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
+                >
+                  View All <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Rep status mini-pills */}
-              <div className="flex items-center gap-1">
-                {teamWaStatuses.slice(0, 5).map((rep) => (
-                  <div
-                    key={rep.userId}
-                    title={`${rep.name}: ${rep.status}`}
-                    className={`w-2 h-2 rounded-full ${
-                      rep.status === "connected" ? "bg-green-500" :
-                      rep.status === "qr" ? "bg-amber-400" :
-                      "bg-slate-400"
-                    }`}
-                  />
-                ))}
-                {teamWaStatuses.length > 5 && (
-                  <span className="text-[10px] text-brand-primary/60 ml-1">+{teamWaStatuses.length - 5}</span>
-                )}
-              </div>
-              <button
-                onClick={() => navigate("/whatsapp")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
-              >
-                View All <ArrowRight className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* AI & Automation Master Control Card */}
       <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 shadow-sm">
@@ -617,51 +705,122 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
-            {/* Toggle 1: Global AI Chatbot */}
-            <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[240px]">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Bot
-                  className={`w-4 h-4 shrink-0 ${
-                    globalSettings.globalAIEnabled
-                      ? "text-emerald-500"
-                      : "text-amber-500"
-                  }`}
-                />
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-brand-primary truncate">
-                    Global AI Auto-Reply
-                  </div>
-                  <div className="text-[10px] text-brand-primary/60 truncate">
-                    {globalSettings.globalAIEnabled
-                      ? "AI responding automatically"
-                      : "AI auto-responses paused"}
+            {/* Toggle 1: AI Auto-Reply (Master Switch for Manager vs Personal Switch for Rep) */}
+            {currentUser?.role === "sales person" ? (
+              <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[250px]">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {!globalSettings.globalAIEnabled ? (
+                    <Lock className="w-4 h-4 shrink-0 text-amber-500" />
+                  ) : (
+                    <Bot
+                      className={`w-4 h-4 shrink-0 ${
+                        globalSettings.repAIEnabled !== false
+                          ? "text-emerald-500"
+                          : "text-amber-500"
+                      }`}
+                    />
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-brand-primary truncate flex items-center gap-1.5">
+                      <span>My AI Auto-Reply</span>
+                      {!globalSettings.globalAIEnabled && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold">
+                          Locked
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-brand-primary/60 truncate">
+                      {!globalSettings.globalAIEnabled
+                        ? "Paused globally by Sales Manager"
+                        : globalSettings.repAIEnabled !== false
+                          ? "Active for your assigned leads"
+                          : "Paused for your leads only"}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <button
-                type="button"
-                onClick={handleToggleGlobalAI}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  globalSettings.globalAIEnabled
-                    ? "bg-emerald-500"
-                    : "bg-brand-secondary/70"
-                }`}
-                title={
-                  globalSettings.globalAIEnabled
-                    ? "Pause Global AI"
-                    : "Enable Global AI"
-                }
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                {!globalSettings.globalAIEnabled ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed rounded-full border-2 border-amber-500/30 bg-amber-500/20 opacity-70 transition-colors focus:outline-none"
+                    title="Disabled by Sales Manager (Master Switch is turned off organization-wide)"
+                  >
+                    <span className="pointer-events-none inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-amber-500 text-[10px] text-white shadow ring-0 transition duration-200 ease-in-out translate-x-0">
+                      <Lock className="w-2.5 h-2.5" />
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleToggleRepAI}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      globalSettings.repAIEnabled !== false
+                        ? "bg-emerald-500"
+                        : "bg-brand-secondary/70"
+                    }`}
+                    title={
+                      globalSettings.repAIEnabled !== false
+                        ? "Pause AI auto-reply for your assigned leads"
+                        : "Enable AI auto-reply for your assigned leads"
+                    }
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        globalSettings.repAIEnabled !== false
+                          ? "translate-x-5"
+                          : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[260px]">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Bot
+                    className={`w-4 h-4 shrink-0 ${
+                      globalSettings.globalAIEnabled
+                        ? "text-emerald-500"
+                        : "text-amber-500"
+                    }`}
+                  />
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-brand-primary truncate">
+                      Organization AI Auto-Reply
+                    </div>
+                    <div className="text-[10px] text-brand-primary/60 truncate">
+                      {globalSettings.globalAIEnabled
+                        ? "Master: Active across all sales reps"
+                        : "Master: Paused for all sales reps"}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleToggleGlobalAI}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                     globalSettings.globalAIEnabled
-                      ? "translate-x-5"
-                      : "translate-x-0"
+                      ? "bg-emerald-500"
+                      : "bg-brand-secondary/70"
                   }`}
-                />
-              </button>
-            </div>
+                  title={
+                    globalSettings.globalAIEnabled
+                      ? "Pause AI Auto-Reply for all representatives"
+                      : "Enable AI Auto-Reply organization-wide"
+                  }
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      globalSettings.globalAIEnabled
+                        ? "translate-x-5"
+                        : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
 
             {/* Toggle 2: Automated Welcome Messages */}
             <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[260px]">
@@ -675,12 +834,12 @@ export default function Dashboard() {
                 />
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-brand-primary truncate">
-                    Welcome Greetings
+                    External Media Auto Messages
                   </div>
                   <div className="text-[10px] text-brand-primary/60 truncate">
                     {globalSettings.welcomeMessageEnabled
-                      ? "Sending on new leads"
-                      : "Welcome greetings paused"}
+                      ? "Sending automatically"
+                      : "External media auto messages paused"}
                   </div>
                 </div>
               </div>
@@ -1211,14 +1370,21 @@ export default function Dashboard() {
                   Mobile Number
                 </label>
                 <div className="flex rounded-xl bg-bg-secondary border border-border-main focus-within:border-pilot-blue">
-                  <span className="px-3.5 py-2.5 text-xs font-semibold text-text-secondary border-r border-border-main">+91</span>
+                  <span className="px-3.5 py-2.5 text-xs font-semibold text-text-secondary border-r border-border-main">
+                    +91
+                  </span>
                   <input
                     type="tel"
                     inputMode="numeric"
                     maxLength={10}
                     placeholder="98765 43210"
                     value={newUser.mobile}
-                    onChange={(e) => setNewUser({ ...newUser, mobile: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                    onChange={(e) =>
+                      setNewUser({
+                        ...newUser,
+                        mobile: e.target.value.replace(/\D/g, "").slice(0, 10),
+                      })
+                    }
                     required
                     className="w-full min-w-0 px-3.5 py-2.5 rounded-r-xl bg-transparent text-xs text-text-primary focus:outline-none"
                   />
@@ -1228,7 +1394,8 @@ export default function Dashboard() {
               <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-600 dark:text-blue-400 flex items-start gap-2">
                 <span className="text-sm shrink-0 mt-0.5">🔐</span>
                 <span className="leading-relaxed">
-                  A secure login password will be automatically generated and sent to this email address.
+                  A secure login password will be automatically generated and
+                  sent to this email address.
                 </span>
               </div>
 
@@ -1245,7 +1412,9 @@ export default function Dashboard() {
                   disabled={addUserLoading}
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm transition-all disabled:opacity-60 cursor-pointer"
                 >
-                  {addUserLoading ? "Creating & Sending..." : "Add & Send Credentials"}
+                  {addUserLoading
+                    ? "Creating & Sending..."
+                    : "Add & Send Credentials"}
                 </button>
               </div>
             </form>
@@ -1268,7 +1437,8 @@ export default function Dashboard() {
                     Automated Welcome Message
                   </h3>
                   <p className="text-xs text-brand-primary/60">
-                    Customize the instant WhatsApp greeting sent to brand new enquiry leads
+                    Customize the instant WhatsApp greeting sent to brand new
+                    enquiry leads
                   </p>
                 </div>
               </div>
@@ -1282,7 +1452,10 @@ export default function Dashboard() {
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={handleSaveWelcomeModal} className="flex-1 overflow-y-auto p-5 space-y-5">
+            <form
+              onSubmit={handleSaveWelcomeModal}
+              className="flex-1 overflow-y-auto p-5 space-y-5"
+            >
               {saveSuccessNotice && (
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-500 flex items-center gap-2">
                   <CheckCheck className="w-4 h-4 shrink-0" />
@@ -1297,7 +1470,8 @@ export default function Dashboard() {
                     Automated Greetings Status
                   </div>
                   <div className="text-[11px] text-brand-primary/60">
-                    When enabled, leads from Website, Meta Ads, Calls, and Mobile App automatically receive this greeting.
+                    When enabled, leads from Website, Meta Ads, Calls, and
+                    Mobile App automatically receive this greeting.
                   </div>
                 </div>
                 <button
@@ -1369,7 +1543,9 @@ export default function Dashboard() {
                       className="w-full p-3 rounded-xl bg-bg-secondary border border-border-main text-xs text-brand-primary focus:outline-none focus:border-teal-500 resize-none font-mono leading-relaxed"
                     />
                     <div className="mt-1 flex items-center justify-between text-[10px] text-brand-primary/50">
-                      <span>WhatsApp formatting: *bold*, _italic_, ~strikethrough~</span>
+                      <span>
+                        WhatsApp formatting: *bold*, _italic_, ~strikethrough~
+                      </span>
                       <span>{modalTemplate.length} characters</span>
                     </div>
                   </div>
@@ -1387,7 +1563,8 @@ export default function Dashboard() {
                       className="w-full px-3 py-2 rounded-xl bg-bg-secondary border border-border-main text-xs text-brand-primary focus:outline-none focus:border-teal-500"
                     />
                     <span className="text-[10px] text-brand-primary/50 block mt-1">
-                      Used when an incoming lead does not specify a specific product or service.
+                      Used when an incoming lead does not specify a specific
+                      product or service.
                     </span>
                   </div>
                 </div>
@@ -1409,7 +1586,9 @@ export default function Dashboard() {
                         <div className="text-xs font-bold text-white truncate">
                           {globalSettings.companyName || "Your Organization"}
                         </div>
-                        <div className="text-[9px] text-white/60">Official WhatsApp</div>
+                        <div className="text-[9px] text-white/60">
+                          Official WhatsApp
+                        </div>
                       </div>
                     </div>
 
