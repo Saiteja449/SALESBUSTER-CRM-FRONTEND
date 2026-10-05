@@ -58,10 +58,11 @@ import {
   RotateCcw,
   PhoneMissed,
   PhoneCall,
+  ImageIcon,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
-import { API_ENDPOINTS } from "../utils/constants.js";
+import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
 import KBGeneratorPromptCard from "../components/KBGeneratorPromptCard.jsx";
 
 // Wizard steps configuration
@@ -769,11 +770,14 @@ export default function OrganizationProfile() {
 
   // Modals
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [editingServiceIndex, setEditingServiceIndex] = useState(null);
   const [newService, setNewService] = useState({
     name: "",
     description: "",
     keywords: "",
+    images: [],
   });
+  const [serviceImageUploading, setServiceImageUploading] = useState(false);
 
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [editingFieldIndex, setEditingFieldIndex] = useState(null);
@@ -1294,32 +1298,151 @@ export default function OrganizationProfile() {
   };
 
   // Service Management
-  const handleAddService = () => {
-    if (!newService.name.trim()) return;
-    const keywordsArr = newService.keywords
-      .split(",")
-      .map((k) => k.trim())
-      .filter(Boolean);
+  const handleOpenAddServiceModal = () => {
+    setEditingServiceIndex(null);
+    setNewService({
+      name: "",
+      description: "",
+      keywords: "",
+      images: [],
+    });
+    setShowAddServiceModal(true);
+  };
 
-    const updated = [
-      ...aiSettings.services,
-      {
-        name: newService.name.trim(),
-        description: newService.description.trim(),
-        keywords: keywordsArr,
-      },
-    ];
+  const handleOpenEditServiceModal = (index) => {
+    const svc = aiSettings.services[index];
+    if (!svc) return;
+    setEditingServiceIndex(index);
+    setNewService({
+      name: svc.name || "",
+      description: svc.description || "",
+      keywords: Array.isArray(svc.keywords)
+        ? svc.keywords.join(", ")
+        : svc.keywords || "",
+      images: Array.isArray(svc.images)
+        ? svc.images.map((img) => ({
+            url: img.url || "",
+            title: img.title || "",
+            description: img.description || "",
+          }))
+        : [],
+    });
+    setShowAddServiceModal(true);
+  };
+
+  const handleSaveService = () => {
+    if (!newService.name.trim()) return;
+    const keywordsArr =
+      typeof newService.keywords === "string"
+        ? newService.keywords
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean)
+        : Array.isArray(newService.keywords)
+          ? newService.keywords
+          : [];
+
+    const serviceObj = {
+      name: newService.name.trim(),
+      description: newService.description.trim(),
+      keywords: keywordsArr,
+      images: Array.isArray(newService.images) ? newService.images : [],
+    };
+
+    let updated;
+    if (
+      editingServiceIndex !== null &&
+      editingServiceIndex >= 0 &&
+      editingServiceIndex < aiSettings.services.length
+    ) {
+      updated = [...aiSettings.services];
+      updated[editingServiceIndex] = serviceObj;
+    } else {
+      updated = [...aiSettings.services, serviceObj];
+    }
 
     setAiSettings({ ...aiSettings, services: updated });
-    setNewService({ name: "", description: "", keywords: "" });
+    setNewService({ name: "", description: "", keywords: "", images: [] });
+    setEditingServiceIndex(null);
     setShowAddServiceModal(false);
     handleSaveStep({ ...aiSettings, services: updated });
   };
+
+  const handleAddService = handleSaveService;
 
   const handleRemoveService = (index) => {
     const updated = aiSettings.services.filter((_, i) => i !== index);
     setAiSettings({ ...aiSettings, services: updated });
     handleSaveStep({ ...aiSettings, services: updated });
+  };
+
+  const handleServiceImageUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setServiceImageUploading(true);
+    try {
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token");
+      const uploadedImages = [];
+
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append("image", file);
+
+        const res = await axios.post(
+          API_ENDPOINTS.ORGANIZATIONS.SERVICE_IMAGE_UPLOAD,
+          formData,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "multipart/form-data",
+            },
+          },
+        );
+
+        if (res.data?.success && res.data.url) {
+          uploadedImages.push({
+            url: res.data.url,
+            title: file.name.replace(/\.[^/.]+$/, ""),
+            description: "",
+          });
+        }
+      }
+
+      setNewService((prev) => ({
+        ...prev,
+        images: [...(prev.images || []), ...uploadedImages],
+      }));
+    } catch (err) {
+      console.error("Failed to upload service image:", err);
+      alert(
+        err.response?.data?.message ||
+          "Failed to upload service image. Please try again.",
+      );
+    } finally {
+      setServiceImageUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleUpdateServiceImageDesc = (imgIdx, desc) => {
+    setNewService((prev) => {
+      const copy = [...(prev.images || [])];
+      if (copy[imgIdx]) {
+        copy[imgIdx] = { ...copy[imgIdx], description: desc };
+      }
+      return { ...prev, images: copy };
+    });
+  };
+
+  const handleRemoveServiceImage = (imgIdx) => {
+    setNewService((prev) => {
+      const copy = [...(prev.images || [])];
+      copy.splice(imgIdx, 1);
+      return { ...prev, images: copy };
+    });
   };
 
   // Field Management
@@ -3130,7 +3253,7 @@ export default function OrganizationProfile() {
                     </button>
 
                     <button
-                      onClick={() => setShowAddServiceModal(true)}
+                      onClick={handleOpenAddServiceModal}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-all shadow-xs shrink-0 cursor-pointer"
                     >
                       <Plus size={15} />
@@ -3161,7 +3284,7 @@ export default function OrganizationProfile() {
                         <span>Import Services JSON</span>
                       </button>
                       <button
-                        onClick={() => setShowAddServiceModal(true)}
+                        onClick={handleOpenAddServiceModal}
                         className="px-4 py-2 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-colors cursor-pointer"
                       >
                         Add First Service
@@ -3180,65 +3303,116 @@ export default function OrganizationProfile() {
                             <h4 className="text-xs font-black text-text-primary">
                               {svc.name}
                             </h4>
-                            <button
-                              onClick={() => handleRemoveService(idx)}
-                              className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
-                              title="Delete Service"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleOpenEditServiceModal(idx)}
+                                className="text-text-secondary hover:text-pilot-blue p-1 rounded-lg hover:bg-pilot-blue/10 transition-colors"
+                                title="Edit Service & Images"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleRemoveService(idx)}
+                                className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
+                                title="Delete Service"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-xs text-text-secondary leading-relaxed">
                             {svc.description}
                           </p>
                         </div>
 
-                        <div>
-                          <span className="text-[10px] font-bold text-text-secondary uppercase block mb-1.5">
-                            Intent Keywords:
-                          </span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {svc.keywords && svc.keywords.length > 0 ? (
-                              svc.keywords.map((kw, kidx) => (
-                                <span
-                                  key={kidx}
-                                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-bg-card border border-border-main text-pilot-blue"
-                                >
-                                  #{kw}
+                        <div className="space-y-3">
+                          <div>
+                            <span className="text-[10px] font-bold text-text-secondary uppercase block mb-1.5">
+                              Intent Keywords:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {svc.keywords && svc.keywords.length > 0 ? (
+                                svc.keywords.map((kw, kidx) => (
+                                  <span
+                                    key={kidx}
+                                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-bg-card border border-border-main text-pilot-blue"
+                                  >
+                                    #{kw}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[10px] text-text-secondary italic">
+                                  No keywords tagged
                                 </span>
-                              ))
-                            ) : (
-                              <span className="text-[10px] text-text-secondary italic">
-                                No keywords tagged
-                              </span>
-                            )}
+                              )}
+                            </div>
                           </div>
+
+                          {/* Attached Service Photos Preview */}
+                          {svc.images && svc.images.length > 0 && (
+                            <div className="pt-2.5 border-t border-border-main/50 space-y-1.5">
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-pilot-blue">
+                                <ImageIcon size={12} />
+                                <span>
+                                  {svc.images.length} Service Image{svc.images.length > 1 ? "s" : ""} Attached
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                {svc.images.map((img, i) => (
+                                  <div
+                                    key={i}
+                                    className="relative group/thumb shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-border-main bg-bg-card shadow-2xs"
+                                  >
+                                    <img
+                                      src={
+                                        img.url?.startsWith("http")
+                                          ? img.url
+                                          : `${BACKEND_URL}${img.url}`
+                                      }
+                                      alt={img.description || `Service photo ${i + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    {img.description && (
+                                      <div className="absolute inset-0 bg-black/75 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center p-1 text-[8px] text-white text-center leading-tight line-clamp-3">
+                                        {img.description}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Add Service Modal */}
+                {/* Add / Edit Service Modal */}
                 {showAddServiceModal && (
                   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
-                    <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-lg w-full space-y-4 shadow-xl">
+                    <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-lg w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
                       <div className="flex justify-between items-center pb-2 border-b border-border-main">
                         <div className="flex items-center gap-2">
                           <Layers size={18} className="text-pilot-blue" />
                           <h3 className="text-sm font-black text-text-primary">
-                            Add Product or Service
+                            {editingServiceIndex !== null
+                              ? "Edit Product or Service"
+                              : "Add Product or Service"}
                           </h3>
                         </div>
                         <button
-                          onClick={() => setShowAddServiceModal(false)}
-                          className="p-1 text-text-secondary hover:text-text-primary rounded-lg"
+                          onClick={() => {
+                            setShowAddServiceModal(false);
+                            setEditingServiceIndex(null);
+                          }}
+                          className="p-1 text-text-secondary hover:text-text-primary rounded-lg cursor-pointer"
                         >
                           <X size={16} />
                         </button>
                       </div>
 
-                      <div className="space-y-3">
+                      <div className="space-y-3.5">
                         <div>
                           <label className="block text-xs font-bold text-text-primary mb-1">
                             Service / Offering Name *
@@ -3252,8 +3426,8 @@ export default function OrganizationProfile() {
                                 name: e.target.value,
                               })
                             }
-                            placeholder="e.g. 3 BHK Luxury Flat / MRL Passenger Lift"
-                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
+                            placeholder="e.g. Gir Cow / 3 BHK Luxury Flat / MRL Passenger Lift"
+                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue font-medium"
                           />
                         </div>
 
@@ -3271,7 +3445,7 @@ export default function OrganizationProfile() {
                               })
                             }
                             placeholder="Describe features, suitability, and benefits so the AI can explain it to customers..."
-                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
+                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue leading-relaxed"
                           />
                         </div>
 
@@ -3288,23 +3462,121 @@ export default function OrganizationProfile() {
                                 keywords: e.target.value,
                               })
                             }
-                            placeholder="e.g. 3bhk, luxury flat, gated community, apartment"
+                            placeholder="e.g. gir cow, dairy cattle, a2 milk, ongole"
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           />
+                        </div>
+
+                        {/* Images & Descriptions for WhatsApp Dispatch */}
+                        <div className="pt-2 border-t border-border-main/60 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <label className="block text-xs font-bold text-text-primary">
+                                Service Images & Descriptions
+                              </label>
+                              <span className="text-[10px] text-text-secondary">
+                                Sent automatically to WhatsApp users when inquiring about this service.
+                              </span>
+                            </div>
+                            <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-secondary hover:bg-bg-secondary/70 border border-border-main text-pilot-blue text-xs font-bold cursor-pointer transition-colors shadow-2xs shrink-0">
+                              {serviceImageUploading ? (
+                                <RefreshCw size={13} className="animate-spin" />
+                              ) : (
+                                <Upload size={13} />
+                              )}
+                              <span>
+                                {serviceImageUploading
+                                  ? "Uploading..."
+                                  : "Add Photos"}
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                disabled={serviceImageUploading}
+                                onChange={handleServiceImageUpload}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+
+                          {newService.images && newService.images.length > 0 ? (
+                            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                              {newService.images.map((img, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  className="flex items-start gap-3 p-2.5 rounded-xl bg-bg-secondary/40 border border-border-main shadow-2xs"
+                                >
+                                  <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-border-main bg-black/10">
+                                    <img
+                                      src={
+                                        img.url?.startsWith("http")
+                                          ? img.url
+                                          : `${BACKEND_URL}${img.url}`
+                                      }
+                                      alt={`Service photo ${imgIdx + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <div className="flex-1 space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[10px] font-bold text-text-secondary uppercase">
+                                        Photo #{imgIdx + 1} WhatsApp Caption
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleRemoveServiceImage(imgIdx)
+                                        }
+                                        className="text-text-secondary hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
+                                        title="Remove photo"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                    <textarea
+                                      rows={2}
+                                      value={img.description || ""}
+                                      onChange={(e) =>
+                                        handleUpdateServiceImageDesc(
+                                          imgIdx,
+                                          e.target.value,
+                                        )
+                                      }
+                                      placeholder="Caption sent with this photo on WhatsApp (e.g. Pure Gir Cow, high milk yield, pedigree certified)..."
+                                      className="w-full bg-bg-card border border-border-main text-text-primary text-[11px] rounded-lg p-2 outline-none focus:border-pilot-blue resize-none"
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-4 rounded-xl border border-dashed border-border-main text-center space-y-1 bg-bg-secondary/20">
+                              <div className="w-7 h-7 rounded-lg bg-pilot-blue/10 text-pilot-blue flex items-center justify-center mx-auto">
+                                <ImageIcon size={14} />
+                              </div>
+                              <p className="text-[11px] text-text-secondary">
+                                No photos attached yet. Click "Add Photos" above to attach images and customize their WhatsApp captions.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex justify-end gap-2 pt-2 border-t border-border-main">
                         <button
-                          onClick={() => setShowAddServiceModal(false)}
-                          className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors"
+                          onClick={() => {
+                            setShowAddServiceModal(false);
+                            setEditingServiceIndex(null);
+                          }}
+                          className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors cursor-pointer"
                         >
                           Cancel
                         </button>
                         <button
-                          onClick={handleAddService}
+                          onClick={handleSaveService}
                           disabled={!newService.name.trim()}
-                          className="px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50"
+                          className="px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
                         >
                           Save Service
                         </button>

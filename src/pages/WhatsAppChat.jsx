@@ -1504,7 +1504,11 @@ export default function WhatsAppChat() {
                             {msg.mediaUrl && msg.messageType === "image" && (
                               <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-black/20">
                                 <img
-                                  src={`${BACKEND_URL}${msg.mediaUrl}`}
+                                  src={
+                                    msg.mediaUrl?.startsWith("http")
+                                      ? msg.mediaUrl
+                                      : `${BACKEND_URL}${msg.mediaUrl}`
+                                  }
                                   alt="Attachment"
                                   className="w-full object-cover max-h-60"
                                 />

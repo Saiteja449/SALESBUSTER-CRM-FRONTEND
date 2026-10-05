@@ -72,6 +72,7 @@ export const API_ENDPOINTS = {
     VALIDATE_GEMINI_KEY: `${API_BASE_URL}/organizations/my-org/validate-gemini-key`,
     KNOWLEDGE_UPLOAD: `${API_BASE_URL}/organizations/my-org/knowledge-base/upload`,
     KNOWLEDGE_DELETE: (docId) => `${API_BASE_URL}/organizations/my-org/knowledge-base/${docId}`,
+    SERVICE_IMAGE_UPLOAD: `${API_BASE_URL}/organizations/my-org/services/upload-image`,
   },
 };
 
