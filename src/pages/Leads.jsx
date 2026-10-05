@@ -11,12 +11,14 @@ import {
   User,
   Phone,
   Calendar,
+  Clock,
   ExternalLink,
   Trash2,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   FileSpreadsheet,
+  Download,
 } from "lucide-react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
@@ -26,6 +28,8 @@ import ImportLeadsModal from "../components/leads/ImportLeadsModal.jsx";
 import RecordingsSidebar from "../components/leads/RecordingsSidebar.jsx";
 import {
   formatDate,
+  formatTime,
+  formatDateTime,
   getStageColor,
   getServiceColor,
   getStatusColor,
@@ -33,6 +37,7 @@ import {
   filterLeads,
   normalizeServices,
   getRepName,
+  exportToCSV,
 } from "../utils/helpers.js";
 
 // Helper components for UI
@@ -66,6 +71,7 @@ export default function Leads() {
 
   const paramToTab = {
     new: "New",
+    missedcalls: "MissedCalls",
     todayfollowups: "TodayFollowup",
     upcomingfollowups: "UpcomingFollowup",
     notattended: "NotAttended",
@@ -75,6 +81,7 @@ export default function Leads() {
   };
   const tabToParam = {
     New: "new",
+    MissedCalls: "missedcalls",
     TodayFollowup: "todayfollowups",
     UpcomingFollowup: "upcomingfollowups",
     NotAttended: "notattended",
@@ -131,6 +138,11 @@ export default function Leads() {
   const tabsData = [
     { name: "OldLeads", label: "Old Leads", count: tabCounts.OldLeads || 0 },
     { name: "New", label: "New Leads", count: tabCounts.New || 0 },
+    {
+      name: "MissedCalls",
+      label: "Missed Calls",
+      count: tabCounts.MissedCalls || 0,
+    },
     {
       name: "TodayFollowup",
       label: "Today Followups",
@@ -312,6 +324,8 @@ export default function Leads() {
     switch (statusName?.toLowerCase()) {
       case "new":
         return "bg-purple-500/10 text-purple-500 border border-purple-500/20";
+      case "missed call":
+        return "bg-rose-500/15 text-rose-400 border border-rose-500/30 font-bold";
       case "follow up":
         return "bg-orange-500/10 text-orange-500 border border-orange-500/20";
       case "converted":
@@ -323,6 +337,25 @@ export default function Leads() {
       default:
         return "bg-brand-secondary/40 text-brand-primary/70 border border-brand-secondary/50";
     }
+  };
+
+  const handleExportLeads = () => {
+    if (!paginatedLeads || paginatedLeads.length === 0) {
+      alert("No leads available to export in the current view.");
+      return;
+    }
+    const formattedData = paginatedLeads.map((lead) => ({
+      "Lead Name": lead.name || "",
+      "Phone Number": lead.phone || "",
+      "Email Address": lead.email || "",
+      "Service / Category": normalizeServices(lead.service) || "",
+      "Status": lead.status || "New",
+      "Sales Representative": getRepName(lead.assignedTo, allUsers),
+      "Enquired Date & Time": formatDateTime(lead.joinedAt || lead.createdAt),
+      "Source": lead.source || "",
+      "Notes": lead.notes || "",
+    }));
+    exportToCSV(formattedData, `leads_${leadTypeTab.toLowerCase()}_export.csv`);
   };
 
   return (
@@ -354,6 +387,13 @@ export default function Leads() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+          <button
+            onClick={handleExportLeads}
+            className="flex items-center gap-2 px-3.5 py-2 bg-purple-700/50 hover:bg-purple-700 text-white text-sm font-bold rounded-lg border border-purple-500/30 transition-colors shadow-xs cursor-pointer"
+            title="Export leads to spreadsheet with Sales Rep name"
+          >
+            <Download className="w-4 h-4" /> Export Sheet
+          </button>
           <button
             onClick={() => setImportOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-colors shadow-xs"
@@ -459,6 +499,7 @@ export default function Leads() {
             >
               <option value="All">All Statuses</option>
               <option value="New">New</option>
+              <option value="Missed Call">Missed Call</option>
               <option value="Follow Up">Follow Up</option>
               <option value="Not Interested">Not Interested</option>
               <option value="Not Attended">Not Attended</option>
@@ -572,16 +613,22 @@ export default function Leads() {
                       </td>
                     )}
                     <td className="px-4 py-3 text-sm">
-                      {lead.joinedAt ? (
-                        <div
-                          className={`flex items-center gap-1.5 ${
-                            lead.joinedAt < "2026-05-26"
-                              ? "text-red-400"
-                              : "text-brand-primary/70"
-                          }`}
-                        >
-                          <Calendar className="w-3.5 h-3.5" />
-                          {formatDate(lead.joinedAt)}
+                      {lead.joinedAt || lead.createdAt ? (
+                        <div className="flex flex-col gap-0.5">
+                          <div
+                            className={`flex items-center gap-1.5 font-medium ${
+                              (lead.joinedAt || lead.createdAt) < "2026-05-26"
+                                ? "text-red-400"
+                                : "text-brand-primary"
+                            }`}
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <span>{formatDate(lead.joinedAt || lead.createdAt)}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px] text-brand-primary/60 pl-5">
+                            <Clock className="w-3 h-3 text-purple-400/70 shrink-0" />
+                            <span>{formatTime(lead.joinedAt || lead.createdAt)}</span>
+                          </div>
                         </div>
                       ) : (
                         <span className="text-brand-primary/70">-</span>
@@ -848,6 +895,7 @@ export default function Leads() {
                       className="w-full bg-brand-light border border-brand-secondary rounded-lg px-3 py-2 text-sm text-brand-primary focus:outline-none focus:border-purple-500"
                     >
                       <option value="New">New</option>
+                      <option value="Missed Call">Missed Call</option>
                       <option value="Follow Up">Follow Up</option>
                       <option value="Not Interested">Not Interested</option>
                       <option value="Not Attended">Not Attended</option>

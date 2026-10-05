@@ -24,7 +24,7 @@ import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getServiceColor, formatDate, exportToCSV } from "../utils/helpers.js";
+import { getServiceColor, formatDate, formatDateTime, exportToCSV, getRepName } from "../utils/helpers.js";
 
 const Badge = ({ children, colorClass, className = "" }) => (
   <span
@@ -155,9 +155,22 @@ export default function SalesPersonDetails() {
               : repLeads;
 
   const handleExport = () => {
+    const formattedData = (displayedLeads || []).map((lead) => ({
+      "Lead Name": lead.name || "N/A",
+      "Phone": lead.phone || "N/A",
+      "Email": lead.email || "N/A",
+      "Service": lead.service || "N/A",
+      "Status": lead.status || "N/A",
+      "Source": lead.source || "N/A",
+      "Sales Representative": repName || getRepName(lead.assignedTo, allUsers),
+      "Enquired On": formatDateTime(lead.joinedAt || lead.createdAt),
+      "Next Follow Up": formatDate(lead.nextFollowUp),
+      "Deal Value": lead.dealValue ?? lead.value ?? 0,
+      "Notes": lead.notes || "",
+    }));
     exportToCSV(
-      displayedLeads,
-      `${decodedName.replace(/\s+/g, "_")}_leads.csv`,
+      formattedData,
+      `${(repName || "sales_rep").replace(/\s+/g, "_")}_leads.csv`,
     );
   };
 

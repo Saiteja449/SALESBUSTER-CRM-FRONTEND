@@ -23,6 +23,43 @@ export function formatDate(dateString) {
 }
 
 /**
+ * Time Formatter helper (12-hour AM/PM)
+ */
+export function formatTime(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/**
+ * Combined Date and Time Formatter
+ */
+export function formatDateTime(dateString) {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+
+  const dateFormatted = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timeFormatted = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  return `${dateFormatted} ${timeFormatted}`;
+}
+
+/**
  * Gets a chip color class/props for standard MUI chip types based on pipeline stage
  */
 export function getStageColor(stage) {
