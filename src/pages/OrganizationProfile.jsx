@@ -1394,7 +1394,8 @@ export default function OrganizationProfile() {
   };
 
   const handleServiceImageUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
+    const fileList = e?.target?.files;
+    const files = fileList ? Array.from(fileList) : [];
     if (files.length === 0) return;
 
     setServiceImageUploading(true);
@@ -1402,36 +1403,49 @@ export default function OrganizationProfile() {
       const token =
         localStorage.getItem("salesbuster_token") ||
         localStorage.getItem("kranthi_token");
-      const uploadedImages = [];
 
+      const formData = new FormData();
       for (const file of files) {
-        const formData = new FormData();
-        formData.append("image", file);
+        formData.append("images", file);
+      }
 
-        const res = await axios.post(
-          API_ENDPOINTS.ORGANIZATIONS.SERVICE_IMAGE_UPLOAD,
-          formData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "multipart/form-data",
-            },
+      const res = await axios.post(
+        API_ENDPOINTS.ORGANIZATIONS.SERVICE_IMAGE_UPLOAD,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
           },
-        );
+        },
+      );
 
-        if (res.data?.success && res.data.url) {
-          uploadedImages.push({
-            url: res.data.url,
-            title: file.name.replace(/\.[^/.]+$/, ""),
+      let uploadedImages = [];
+      if (res.data?.success) {
+        if (Array.isArray(res.data.images) && res.data.images.length > 0) {
+          uploadedImages = res.data.images.map((img) => ({
+            url: img.url,
+            title:
+              img.title || img.originalName?.replace(/\.[^/.]+$/, "") || "",
             description: "",
-          });
+          }));
+        } else if (res.data.url) {
+          uploadedImages = [
+            {
+              url: res.data.url,
+              title: files[0]?.name?.replace(/\.[^/.]+$/, "") || "",
+              description: "",
+            },
+          ];
         }
       }
 
-      setNewService((prev) => ({
-        ...prev,
-        images: [...(prev.images || []), ...uploadedImages],
-      }));
+      if (uploadedImages.length > 0) {
+        setNewService((prev) => ({
+          ...prev,
+          images: [...(prev.images || []), ...uploadedImages],
+        }));
+      }
     } catch (err) {
       console.error("Failed to upload service image:", err);
       alert(
@@ -1440,7 +1454,9 @@ export default function OrganizationProfile() {
       );
     } finally {
       setServiceImageUploading(false);
-      e.target.value = "";
+      try {
+        if (e?.target) e.target.value = "";
+      } catch (_) {}
     }
   };
 
