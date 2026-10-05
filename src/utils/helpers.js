@@ -4,6 +4,18 @@
 export function normalizeServices(value) {
   if (!value) return "General Enquiry";
   if (Array.isArray(value)) return value[0] || "General Enquiry";
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0] || "General Enquiry";
+      } catch (e) {
+        // fallback
+      }
+    }
+    return trimmed.replace(/^["']|["']$/g, "") || "General Enquiry";
+  }
   return String(value);
 }
 
