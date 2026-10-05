@@ -3,7 +3,7 @@ import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { services } from "../data.js";
 import { useAuth } from "./AuthContext.jsx";
-import { getServiceColor, getRepName } from "../utils/helpers.js";
+import { getServiceColor, getRepName, getLocalTodayDateString } from "../utils/helpers.js";
 import { socket } from "../utils/socket.js";
 
 const LeadsContext = createContext(null);
@@ -169,7 +169,7 @@ export function LeadsProvider({ children }) {
             leadId,
             leadName: lead.name,
             type: "Lead Edited",
-            date: now.toISOString().split("T")[0],
+            date: getLocalTodayDateString(now),
             time: now.toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",

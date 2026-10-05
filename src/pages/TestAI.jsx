@@ -5,6 +5,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useWhatsAppToast } from "../context/WhatsAppToastContext.jsx";
+import { getLocalTodayDateString } from "../utils/helpers.js";
 
 export default function TestAI() {
   const { isManager, currentUser } = useAuth();
@@ -35,7 +36,7 @@ export default function TestAI() {
   const handleSimulateAIFollowupToast = () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    const tomorrowStr = getLocalTodayDateString(tomorrow);
 
     addAiFollowupToast({
       followup: {

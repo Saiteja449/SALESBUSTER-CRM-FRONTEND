@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
-import { formatDate } from "../utils/helpers.js";
+import { formatDate, getLocalTodayDateString } from "../utils/helpers.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const formatTalkTime = (seconds) => {
@@ -61,7 +61,7 @@ export default function SalesPersonReports() {
     }
   }, [repId]);
 
-  const todayStrDate = new Date().toISOString().split("T")[0];
+  const todayStrDate = getLocalTodayDateString();
   const todayAnalytics = analytics.find(a => a.date === todayStrDate) || {
     totalCalls: 0, talkTime: 0, incoming: 0, outgoing: 0, missed: 0, connected: 0, rejected: 0, notConnected: 0
   };

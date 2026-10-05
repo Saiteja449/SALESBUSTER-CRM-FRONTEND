@@ -9,7 +9,7 @@ import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "./LeadsContext.jsx";
 import { useAuth } from "./AuthContext.jsx";
-import { normalizeServices } from "../utils/helpers.js";
+import { normalizeServices, getLocalTodayDateString } from "../utils/helpers.js";
 
 const DashboardContext = createContext(null);
 
@@ -111,7 +111,7 @@ export function DashboardProvider({ children }) {
     }));
 
     // Today's Date
-    const TODAY = new Date().toISOString().split("T")[0];
+    const TODAY = getLocalTodayDateString();
     const todaysFws = followups.filter((fw) => fw.date === TODAY && !fw.done);
     const overdueFws = followups.filter((fw) => fw.date < TODAY && !fw.done);
 

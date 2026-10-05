@@ -24,7 +24,7 @@ import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getServiceColor, formatDate, formatDateTime, exportToCSV, getRepName } from "../utils/helpers.js";
+import { getServiceColor, formatDate, formatDateTime, exportToCSV, getRepName, getLocalTodayDateString } from "../utils/helpers.js";
 
 const Badge = ({ children, colorClass, className = "" }) => (
   <span
@@ -78,7 +78,7 @@ export default function SalesPersonDetails() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const todayStrDate = new Date().toISOString().split("T")[0];
+  const todayStrDate = getLocalTodayDateString();
   const todayAnalytics = analytics.find(a => a.date === todayStrDate) || {
     totalCalls: 0, talkTime: 0, incoming: 0, outgoing: 0, missed: 0, connected: 0, rejected: 0, notConnected: 0
   };
@@ -113,7 +113,7 @@ export default function SalesPersonDetails() {
   });
 
   const newLeads = repLeads.filter((l) => l.status?.toLowerCase() === "new");
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = getLocalTodayDateString();
 
   const todayFollowups = repLeads.filter((l) => {
     if (l.status?.toLowerCase() !== "follow up") return false;

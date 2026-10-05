@@ -38,6 +38,7 @@ import {
   normalizeServices,
   getRepName,
   exportToCSV,
+  getLocalTodayDateString,
 } from "../utils/helpers.js";
 
 // Helper components for UI
@@ -191,6 +192,7 @@ export default function Leads() {
           currentUserRole: currentUser?.role || "",
           currentUserName: currentUser?.name || "",
           currentUserId: currentUser?.id || currentUser?._id || "",
+          clientDate: getLocalTodayDateString(),
         });
         const res = await axios.get(
           `${API_ENDPOINTS.LEADS.BASE}/paginated?${queryParams}`,

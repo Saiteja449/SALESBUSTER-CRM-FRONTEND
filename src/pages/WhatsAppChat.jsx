@@ -44,6 +44,7 @@ import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useLeads } from "../context/LeadsContext.jsx";
 import WhatsAppConnectModal from "../components/whatsapp/WhatsAppConnectModal.jsx";
+import { getLocalTodayDateString } from "../utils/helpers.js";
 
 export default function WhatsAppChat() {
   const { currentUser, organization, allUsers } = useAuth();
@@ -107,7 +108,7 @@ export default function WhatsAppChat() {
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [followUpData, setFollowUpData] = useState({
     type: "WhatsApp",
-    date: new Date().toISOString().split("T")[0],
+    date: getLocalTodayDateString(),
     time: "11:00 AM",
     priority: "Medium",
     notes: "",
@@ -866,7 +867,7 @@ export default function WhatsAppChat() {
       setFollowUpOpen(false);
       setFollowUpData({
         type: "WhatsApp",
-        date: new Date().toISOString().split("T")[0],
+        date: getLocalTodayDateString(),
         time: "11:00 AM",
         priority: "Medium",
         notes: "",

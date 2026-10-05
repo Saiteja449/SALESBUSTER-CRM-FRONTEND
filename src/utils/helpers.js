@@ -8,6 +8,16 @@ export function normalizeServices(value) {
 }
 
 /**
+ * Returns today's local date string in YYYY-MM-DD format based on local client clock (not UTC)
+ */
+export function getLocalTodayDateString(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Date Formatter helper
  */
 export function formatDate(dateString) {

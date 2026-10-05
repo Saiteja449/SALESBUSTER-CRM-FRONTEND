@@ -29,7 +29,7 @@ import axios from "axios";
 import { API_BASE_URL, BACKEND_URL, ENABLE_AI_AUDIO_ANALYSIS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { formatDate, getServiceColor, getRepName } from "../utils/helpers.js";
+import { formatDate, getServiceColor, getRepName, getLocalTodayDateString } from "../utils/helpers.js";
 import { socket } from "../utils/socket.js";
 import DatePicker from "../components/DatePicker.jsx";
 import RecordingsSidebar from "../components/leads/RecordingsSidebar.jsx";
@@ -294,7 +294,7 @@ export default function LeadDetails() {
       leadId: currentLead.id,
       leadName: currentLead.name,
       type: newAct.type,
-      date: new Date().toISOString().split("T")[0],
+      date: getLocalTodayDateString(),
       time: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
