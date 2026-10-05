@@ -190,7 +190,7 @@ export function getSourceColor(source) {
 export function getLeadAge(createdAtString) {
   if (!createdAtString) return 0;
   const created = new Date(createdAtString);
-  const today = new Date("2026-05-26"); // Mock environment "today"
+  const today = new Date();
   const diffTime = Math.abs(today - created);
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;

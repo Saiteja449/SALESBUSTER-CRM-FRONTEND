@@ -88,7 +88,7 @@ export default function LeadDetails() {
   const [followupOpen, setFollowupOpen] = useState(false);
   const [newFw, setNewFw] = useState({
     type: "Call",
-    date: "2026-05-26",
+    date: getLocalTodayDateString(),
     time: "11:00 AM",
     priority: "Medium",
     notes: "",
@@ -196,9 +196,12 @@ export default function LeadDetails() {
       nextFollowUp: formData.nextFollowUp,
       appointmentDate: formData.appointmentDate,
       appointmentTime: formData.appointmentTime,
-      assignedTo: formData.assignedTo,
       importantLead: formData.importantLead,
     };
+
+    if (formData.assignedTo !== currentLead?.assignedTo) {
+      updatedFields.assignedTo = formData.assignedTo;
+    }
 
     const authorName = currentUser?.name || "System";
 
@@ -271,7 +274,7 @@ export default function LeadDetails() {
       setFollowupOpen(false);
       setNewFw({
         type: "Call",
-        date: "2026-05-26",
+        date: getLocalTodayDateString(),
         time: "11:00 AM",
         priority: "Medium",
         notes: "",

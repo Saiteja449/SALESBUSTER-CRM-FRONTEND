@@ -115,19 +115,21 @@ export function LeadsProvider({ children }) {
       const newLead = response.data.data || response.data;
       setLeads((prev) => [newLead, ...prev]);
 
-      // If there's a next follow-up date, automatically create a follow-up item
-      if (leadData.nextFollowUp) {
+      // If there's a next follow-up date and status is Follow Up, automatically create a follow-up item
+      if (leadData.nextFollowUp && leadData.status === "Follow Up") {
+        const targetLeadId = newLead.id || newLead._id;
         await addFollowup({
-          leadId: newLead.id,
+          leadId: targetLeadId,
           leadName: leadData.name,
-          type: "Call", // Default helper
+          type: leadData.followupType || "Call",
           date: leadData.nextFollowUp,
-          time: "10:00 AM",
+          time: leadData.followupTime || "11:00 AM",
           priority: "Medium",
-          notes: `Initial follow-up scheduled for ${leadData.name}`,
+          notes: leadData.notes || `Initial follow-up scheduled for ${leadData.name}`,
+          author,
         });
       }
-      return newLead.id;
+      return newLead.id || newLead._id;
     } catch (error) {
       console.error("Error adding lead:", error);
       throw error;

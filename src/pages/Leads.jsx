@@ -19,6 +19,7 @@ import {
   ChevronDown,
   FileSpreadsheet,
   Download,
+  AlertCircle,
 } from "lucide-react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
@@ -124,8 +125,8 @@ export default function Leads() {
       currentUser?.role === "Sales Representative"
         ? currentUser.id || currentUser._id || "Unassigned"
         : "Unassigned",
-    nextFollowUp: "2026-05-26",
-    followupTime: "11:00 AM",
+    nextFollowUp: getLocalTodayDateString(),
+    followupTime: "11:00",
     followupType: "Call",
     status: "New",
     leadType: "Client",
@@ -133,6 +134,7 @@ export default function Leads() {
   };
 
   const [formFields, setFormFields] = useState(defaultFormFields);
+  const [formError, setFormError] = useState("");
   const [deleteId, setDeleteId] = useState(null);
 
   const salespeople = (allUsers || []).map((u) => u.name);
@@ -234,32 +236,47 @@ export default function Leads() {
     setFormFields({
       ...defaultFormFields,
       service: activeServices?.[0]?.code || "General Enquiry",
+      nextFollowUp: getLocalTodayDateString(),
+      followupTime: "11:00",
     });
+    setFormError("");
     setAddOpen(true);
   };
 
   const handleSaveAdd = async (e) => {
     e.preventDefault();
+    setFormError("");
     if (!formFields.name || !formFields.phone || !formFields.service) {
-      alert(
-        "Please fill in main credentials (Customer Name, Phone, and at least one Service)",
-      );
+      const msg = "Please fill in main credentials (Customer Name, Phone, and at least one Service)";
+      setFormError(msg);
+      alert(msg);
       return;
     }
     if (
       formFields.email &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formFields.email)
     ) {
-      alert("Please enter a valid email address.");
+      const msg = "Please enter a valid email address.";
+      setFormError(msg);
+      alert(msg);
       return;
     }
     const toSave = { ...formFields, status: formFields.status || "New" };
+    if (toSave.status === "Follow Up" && !toSave.nextFollowUp) {
+      toSave.nextFollowUp = getLocalTodayDateString();
+    }
     try {
       await addLead(toSave, currentUser?.name || "System");
       setAddOpen(false);
       setTriggerFetch((prev) => prev + 1);
     } catch (error) {
-      alert("Failed to add lead. Please try again.");
+      const errMsg =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to add lead. Please try again.";
+      setFormError(errMsg);
+      alert(errMsg);
     }
   };
 
@@ -289,23 +306,27 @@ export default function Leads() {
       source: lead.source,
       service: normalizeServices(lead.service),
       assignedTo: currentAssignee,
-      nextFollowUp: lead.nextFollowUp || "",
-      followupTime: lead.followupTime || "11:00 AM",
+      nextFollowUp: lead.nextFollowUp || getLocalTodayDateString(),
+      followupTime: lead.followupTime || "11:00",
       followupType: lead.followupType || "Call",
       status: lead.status || "New",
       leadType: lead.leadType || "Client",
       notes: lead.notes || "",
     });
+    setFormError("");
     setEditOpen(true);
   };
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
+    setFormError("");
     if (
       formFields.email &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formFields.email)
     ) {
-      alert("Please enter a valid email address.");
+      const msg = "Please enter a valid email address.";
+      setFormError(msg);
+      alert(msg);
       return;
     }
     try {
@@ -317,7 +338,13 @@ export default function Leads() {
       setEditOpen(false);
       setTriggerFetch((prev) => prev + 1);
     } catch (error) {
-      alert("Failed to update lead. Please try again.");
+      const errMsg =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to update lead. Please try again.";
+      setFormError(errMsg);
+      alert(errMsg);
     }
   };
 
@@ -776,6 +803,12 @@ export default function Leads() {
                   onSubmit={addOpen ? handleSaveAdd : handleSaveEdit}
                   className="grid grid-cols-1 md:grid-cols-2 gap-4"
                 >
+                  {formError && (
+                    <div className="md:col-span-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-500 text-xs font-semibold">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-xs font-bold text-brand-primary/70 mb-1">
                       Customer Full Name *
@@ -891,9 +924,21 @@ export default function Leads() {
                     </label>
                     <select
                       value={formFields.status || "New"}
-                      onChange={(e) =>
-                        setFormFields({ ...formFields, status: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const newStatus = e.target.value;
+                        setFormFields((prev) => ({
+                          ...prev,
+                          status: newStatus,
+                          nextFollowUp:
+                            newStatus === "Follow Up" && !prev.nextFollowUp
+                              ? getLocalTodayDateString()
+                              : prev.nextFollowUp,
+                          followupTime:
+                            newStatus === "Follow Up" && !prev.followupTime
+                              ? "11:00"
+                              : prev.followupTime,
+                        }));
+                      }}
                       className="w-full bg-brand-light border border-brand-secondary rounded-lg px-3 py-2 text-sm text-brand-primary focus:outline-none focus:border-purple-500"
                     >
                       <option value="New">New</option>
