@@ -56,6 +56,8 @@ import {
   Headphones,
   MessageCircle,
   RotateCcw,
+  PhoneMissed,
+  PhoneCall,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
@@ -102,6 +104,10 @@ const STEPS = [
 ];
 
 const DEFAULT_WELCOME_TEMPLATE = `Hello {{name}}! 👋\n\nThank you for reaching out to {{company}} regarding *{{service}}*.\n\nWe have received your enquiry and our specialist will connect with you shortly.\n\nFeel free to reply with any specific requirements or questions you may have!`;
+
+const DEFAULT_MISSED_CALL_SAME_TEMPLATE = `Hello {{name}}! 👋 We have received your call, but we couldn't connect. We will call you back shortly. In the meantime, if you have any questions, you can ask right here! 💬`;
+
+const DEFAULT_MISSED_CALL_DIFF_TEMPLATE = `Hello {{name}}! 👋 You have contacted {{number}}, this is also my number. We couldn't connect right now, but we will call you back shortly. Feel free to message us right here on WhatsApp! 💬`;
 
 // Default single enquiry service for all new/unconfigured organizations
 const DEFAULT_SERVICE_TEMPLATE = {
@@ -733,6 +739,9 @@ export default function OrganizationProfile() {
       knowledgeDocs: [],
       welcomeMessageTemplate: "",
       welcomeMessageFallbackService: "",
+      missedCallMessageEnabled: true,
+      missedCallMessageTemplate: "",
+      missedCallDifferentNumberTemplate: "",
       dailyAiUsage: {
         date: new Date().toISOString().slice(0, 10),
         chatApiCalls: 0,
@@ -755,6 +764,8 @@ export default function OrganizationProfile() {
   const [showEditLimitModal, setShowEditLimitModal] = useState(false);
   const [customDailyLimit, setCustomDailyLimit] = useState(1500);
   const [savingLimit, setSavingLimit] = useState(false);
+  const [missedCallEditingTab, setMissedCallEditingTab] = useState("diff");
+  const [missedCallPreviewTab, setMissedCallPreviewTab] = useState("diff");
 
   // Modals
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
@@ -948,6 +959,20 @@ export default function OrganizationProfile() {
           data?.welcomeMessageFallbackService !== undefined
             ? data.welcomeMessageFallbackService
             : prev.welcomeMessageFallbackService || "",
+        missedCallMessageEnabled:
+          data?.missedCallMessageEnabled !== undefined
+            ? data.missedCallMessageEnabled
+            : prev.missedCallMessageEnabled !== undefined
+              ? prev.missedCallMessageEnabled
+              : true,
+        missedCallMessageTemplate:
+          data?.missedCallMessageTemplate !== undefined
+            ? data.missedCallMessageTemplate
+            : prev.missedCallMessageTemplate || "",
+        missedCallDifferentNumberTemplate:
+          data?.missedCallDifferentNumberTemplate !== undefined
+            ? data.missedCallDifferentNumberTemplate
+            : prev.missedCallDifferentNumberTemplate || "",
         dailyAiUsage: data?.dailyAiUsage ||
           prev.dailyAiUsage || {
             date: new Date().toISOString().slice(0, 10),
@@ -2690,6 +2715,360 @@ export default function OrganizationProfile() {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* ── CARD: Automated Missed Call WhatsApp Message Configuration ── */}
+                <div className="p-5 md:p-6 rounded-2xl bg-bg-card border border-border-main space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border-main">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                        <PhoneMissed className="w-5 h-5 text-rose-500" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                            Automated Missed Call WhatsApp Message
+                          </h3>
+                          <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                            Dual-SIM & Line Aware
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-secondary mt-0.5">
+                          Automatically messages callers on WhatsApp when a call to your sales representatives is missed or unanswered.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Master Enable Toggle */}
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-xs font-bold text-text-primary">
+                        {aiSettings.missedCallMessageEnabled ? "Active" : "Disabled"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAiSettings({
+                            ...aiSettings,
+                            missedCallMessageEnabled: !aiSettings.missedCallMessageEnabled,
+                          })
+                        }
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          aiSettings.missedCallMessageEnabled
+                            ? "bg-rose-500"
+                            : "bg-border-main"
+                        }`}
+                        title={
+                          aiSettings.missedCallMessageEnabled
+                            ? "Disable Automated Missed Call Messages"
+                            : "Enable Automated Missed Call Messages"
+                        }
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            aiSettings.missedCallMessageEnabled
+                              ? "translate-x-5"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {aiSettings.missedCallMessageEnabled && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+                      <div className="space-y-4">
+                        {/* Tab Switcher for Editing */}
+                        <div className="flex p-1 bg-bg-secondary/60 rounded-xl border border-border-main gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setMissedCallEditingTab("diff")}
+                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                              missedCallEditingTab === "diff"
+                                ? "bg-bg-card text-rose-500 shadow-sm border border-border-main"
+                                : "text-text-secondary hover:text-text-primary"
+                            }`}
+                          >
+                            <PhoneMissed className="w-3.5 h-3.5" />
+                            Alternate Line (SIM 2)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMissedCallEditingTab("same")}
+                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                              missedCallEditingTab === "same"
+                                ? "bg-bg-card text-teal-600 shadow-sm border border-border-main"
+                                : "text-text-secondary hover:text-text-primary"
+                            }`}
+                          >
+                            <PhoneCall className="w-3.5 h-3.5" />
+                            Same Line (SIM 1)
+                          </button>
+                        </div>
+
+                        {missedCallEditingTab === "diff" ? (
+                          <div className="space-y-3">
+                            <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-xs text-text-secondary">
+                              <span className="font-bold text-rose-500">Cross-SIM Scenario:</span> Dispatched when the customer calls a different SIM/number than your active WhatsApp connection. Informs the customer that they reached your other line.
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
+                                Insert Dynamic Placeholders
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {[
+                                  { key: "name", label: "{{name}}" },
+                                  { key: "number", label: "{{number}}", highlight: true },
+                                  { key: "company", label: "{{company}}" },
+                                  { key: "service", label: "{{service}}" },
+                                ].map((item) => (
+                                  <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => {
+                                      const current =
+                                        aiSettings.missedCallDifferentNumberTemplate ||
+                                        DEFAULT_MISSED_CALL_DIFF_TEMPLATE;
+                                      setAiSettings({
+                                        ...aiSettings,
+                                        missedCallDifferentNumberTemplate: `${current} {{${item.key}}}`,
+                                      });
+                                    }}
+                                    className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition-colors cursor-pointer ${
+                                      item.highlight
+                                        ? "bg-rose-500/10 text-rose-500 border-rose-500/30 hover:bg-rose-500/20"
+                                        : "bg-bg-secondary/70 hover:bg-teal-500/20 text-text-primary hover:text-teal-600 border-border-main"
+                                    }`}
+                                    title={`Insert ${item.label}`}
+                                  >
+                                    + {item.label} {item.highlight ? "★ (Received SIM)" : ""}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                                  Cross-Line Message Template
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAiSettings({
+                                      ...aiSettings,
+                                      missedCallDifferentNumberTemplate: DEFAULT_MISSED_CALL_DIFF_TEMPLATE,
+                                    })
+                                  }
+                                  className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  Reset Default
+                                </button>
+                              </div>
+                              <textarea
+                                rows={5}
+                                value={
+                                  aiSettings.missedCallDifferentNumberTemplate !== undefined &&
+                                  aiSettings.missedCallDifferentNumberTemplate !== ""
+                                    ? aiSettings.missedCallDifferentNumberTemplate
+                                    : DEFAULT_MISSED_CALL_DIFF_TEMPLATE
+                                }
+                                onChange={(e) =>
+                                  setAiSettings({
+                                    ...aiSettings,
+                                    missedCallDifferentNumberTemplate: e.target.value,
+                                  })
+                                }
+                                placeholder="e.g. Hello {{name}}! You have contacted {{number}}, this is also my number..."
+                                className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all font-mono leading-relaxed resize-none"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="p-3 rounded-xl bg-teal-500/5 border border-teal-500/20 text-xs text-text-secondary">
+                              <span className="font-bold text-teal-600">Same-SIM Scenario:</span> Dispatched when the customer calls the exact same number that is connected to WhatsApp. Standard greeting without attaching any secondary number.
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
+                                Insert Dynamic Placeholders
+                              </label>
+                              <div className="flex flex-wrap gap-1.5">
+                                {[
+                                  { key: "name", label: "{{name}}" },
+                                  { key: "company", label: "{{company}}" },
+                                  { key: "service", label: "{{service}}" },
+                                ].map((item) => (
+                                  <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => {
+                                      const current =
+                                        aiSettings.missedCallMessageTemplate ||
+                                        DEFAULT_MISSED_CALL_SAME_TEMPLATE;
+                                      setAiSettings({
+                                        ...aiSettings,
+                                        missedCallMessageTemplate: `${current} {{${item.key}}}`,
+                                      });
+                                    }}
+                                    className="px-2 py-1 text-[11px] font-semibold bg-bg-secondary/70 hover:bg-teal-500/20 text-text-primary hover:text-teal-600 rounded-lg border border-border-main transition-colors cursor-pointer"
+                                    title={`Insert ${item.label}`}
+                                  >
+                                    + {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                                  Same-Line Message Template
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAiSettings({
+                                      ...aiSettings,
+                                      missedCallMessageTemplate: DEFAULT_MISSED_CALL_SAME_TEMPLATE,
+                                    })
+                                  }
+                                  className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  Reset Default
+                                </button>
+                              </div>
+                              <textarea
+                                rows={5}
+                                value={
+                                  aiSettings.missedCallMessageTemplate !== undefined &&
+                                  aiSettings.missedCallMessageTemplate !== ""
+                                    ? aiSettings.missedCallMessageTemplate
+                                    : DEFAULT_MISSED_CALL_SAME_TEMPLATE
+                                }
+                                onChange={(e) =>
+                                  setAiSettings({
+                                    ...aiSettings,
+                                    missedCallMessageTemplate: e.target.value,
+                                  })
+                                }
+                                placeholder="e.g. Hello {{name}}! We received your call, but we couldn't connect..."
+                                className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-mono leading-relaxed resize-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* WhatsApp Live Preview Box */}
+                      <div className="flex flex-col justify-between p-4 rounded-2xl bg-[#0b141a] border border-border-main text-white shadow-inner min-h-[260px]">
+                        <div>
+                          <div className="pb-2.5 border-b border-white/10 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-rose-600 flex items-center justify-center font-bold text-[10px]">
+                                {(
+                                  aiSettings.companyName ||
+                                  orgData?.name ||
+                                  "O"
+                                )[0].toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-white truncate">
+                                  {aiSettings.companyName ||
+                                    orgData?.name ||
+                                    "Our Company"}
+                                </div>
+                                <div className="text-[9px] text-white/50">
+                                  Missed Call Auto-Reply
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Preview Mode Selector */}
+                            <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-lg text-[10px]">
+                              <button
+                                type="button"
+                                onClick={() => setMissedCallPreviewTab("diff")}
+                                className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                                  missedCallPreviewTab === "diff"
+                                    ? "bg-rose-500 text-white"
+                                    : "text-white/60 hover:text-white"
+                                }`}
+                              >
+                                Called SIM 2
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setMissedCallPreviewTab("same")}
+                                className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
+                                  missedCallPreviewTab === "same"
+                                    ? "bg-teal-600 text-white"
+                                    : "text-white/60 hover:text-white"
+                                }`}
+                              >
+                                Called SIM 1
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="py-3">
+                            <div className="max-w-[95%] ml-auto bg-[#005c4b] text-white text-xs p-3 rounded-2xl rounded-tr-sm shadow-md whitespace-pre-line leading-relaxed">
+                              {missedCallPreviewTab === "diff"
+                                ? (
+                                    aiSettings.missedCallDifferentNumberTemplate ||
+                                    DEFAULT_MISSED_CALL_DIFF_TEMPLATE
+                                  )
+                                    .replace(/\{\{\s*name\s*\}\}/gi, "John Doe")
+                                    .replace(
+                                      /\{\{\s*number\s*\}\}/gi,
+                                      "+91 98765 00002",
+                                    )
+                                    .replace(
+                                      /\{\{\s*company\s*\}\}/gi,
+                                      aiSettings.companyName ||
+                                        orgData?.name ||
+                                        "Our Company",
+                                    )
+                                    .replace(
+                                      /\{\{\s*service\s*\}\}/gi,
+                                      aiSettings.services?.[0]?.name ||
+                                        "General Enquiry",
+                                    )
+                                : (
+                                    aiSettings.missedCallMessageTemplate ||
+                                    DEFAULT_MISSED_CALL_SAME_TEMPLATE
+                                  )
+                                    .replace(/\{\{\s*name\s*\}\}/gi, "John Doe")
+                                    .replace(
+                                      /\{\{\s*company\s*\}\}/gi,
+                                      aiSettings.companyName ||
+                                        orgData?.name ||
+                                        "Our Company",
+                                    )
+                                    .replace(
+                                      /\{\{\s*service\s*\}\}/gi,
+                                      aiSettings.services?.[0]?.name ||
+                                        "General Enquiry",
+                                    )}
+                              <div className="mt-1 flex items-center justify-end gap-1 text-[9px] text-white/60">
+                                <span>Just now</span>
+                                <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 text-[10px] text-white/40 text-center border-t border-white/5">
+                          {missedCallPreviewTab === "diff"
+                            ? "Previewing cross-SIM notice sent to customer who called SIM 2"
+                            : "Previewing standard greeting sent when caller dialed your WhatsApp SIM"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
