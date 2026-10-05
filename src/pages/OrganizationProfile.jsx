@@ -743,6 +743,7 @@ export default function OrganizationProfile() {
       missedCallMessageEnabled: true,
       missedCallMessageTemplate: "",
       missedCallDifferentNumberTemplate: "",
+      serviceImagesAutoSendEnabled: true,
       dailyAiUsage: {
         date: new Date().toISOString().slice(0, 10),
         chatApiCalls: 0,
@@ -776,6 +777,7 @@ export default function OrganizationProfile() {
     description: "",
     keywords: "",
     images: [],
+    sendImagesEnabled: true,
   });
   const [serviceImageUploading, setServiceImageUploading] = useState(false);
 
@@ -977,6 +979,12 @@ export default function OrganizationProfile() {
           data?.missedCallDifferentNumberTemplate !== undefined
             ? data.missedCallDifferentNumberTemplate
             : prev.missedCallDifferentNumberTemplate || "",
+        serviceImagesAutoSendEnabled:
+          data?.serviceImagesAutoSendEnabled !== undefined
+            ? data.serviceImagesAutoSendEnabled
+            : prev.serviceImagesAutoSendEnabled !== undefined
+              ? prev.serviceImagesAutoSendEnabled
+              : true,
         dailyAiUsage: data?.dailyAiUsage ||
           prev.dailyAiUsage || {
             date: new Date().toISOString().slice(0, 10),
@@ -1305,6 +1313,7 @@ export default function OrganizationProfile() {
       description: "",
       keywords: "",
       images: [],
+      sendImagesEnabled: true,
     });
     setShowAddServiceModal(true);
   };
@@ -1319,6 +1328,7 @@ export default function OrganizationProfile() {
       keywords: Array.isArray(svc.keywords)
         ? svc.keywords.join(", ")
         : svc.keywords || "",
+      sendImagesEnabled: svc.sendImagesEnabled !== false,
       images: Array.isArray(svc.images)
         ? svc.images.map((img) => ({
             url: img.url || "",
@@ -1346,6 +1356,7 @@ export default function OrganizationProfile() {
       name: newService.name.trim(),
       description: newService.description.trim(),
       keywords: keywordsArr,
+      sendImagesEnabled: newService.sendImagesEnabled !== false,
       images: Array.isArray(newService.images) ? newService.images : [],
     };
 
@@ -1362,7 +1373,13 @@ export default function OrganizationProfile() {
     }
 
     setAiSettings({ ...aiSettings, services: updated });
-    setNewService({ name: "", description: "", keywords: "", images: [] });
+    setNewService({
+      name: "",
+      description: "",
+      keywords: "",
+      images: [],
+      sendImagesEnabled: true,
+    });
     setEditingServiceIndex(null);
     setShowAddServiceModal(false);
     handleSaveStep({ ...aiSettings, services: updated });
@@ -3241,7 +3258,50 @@ export default function OrganizationProfile() {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-bg-secondary border border-border-main shadow-2xs">
+                      <div className="flex flex-col text-left">
+                        <span className="text-[11px] font-bold text-text-primary leading-tight">
+                          Auto-Send Photos
+                        </span>
+                        <span className="text-[9px] text-text-secondary">
+                          {aiSettings.serviceImagesAutoSendEnabled !== false
+                            ? "Active"
+                            : "Paused"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = {
+                            ...aiSettings,
+                            serviceImagesAutoSendEnabled:
+                              aiSettings.serviceImagesAutoSendEnabled === false,
+                          };
+                          setAiSettings(updated);
+                          handleSaveStep(updated);
+                        }}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          aiSettings.serviceImagesAutoSendEnabled !== false
+                            ? "bg-pilot-blue"
+                            : "bg-border-main"
+                        }`}
+                        title={
+                          aiSettings.serviceImagesAutoSendEnabled !== false
+                            ? "Pause auto-sending service photos"
+                            : "Enable auto-sending service photos"
+                        }
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            aiSettings.serviceImagesAutoSendEnabled !== false
+                              ? "translate-x-4"
+                              : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
                     <button
                       type="button"
                       onClick={openServicesImportModal}
@@ -3300,9 +3360,16 @@ export default function OrganizationProfile() {
                       >
                         <div className="space-y-2">
                           <div className="flex items-start justify-between gap-2">
-                            <h4 className="text-xs font-black text-text-primary">
-                              {svc.name}
-                            </h4>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="text-xs font-black text-text-primary">
+                                {svc.name}
+                              </h4>
+                              {svc.sendImagesEnabled === false && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                  Photos Paused
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleOpenEditServiceModal(idx)}
@@ -3468,7 +3535,46 @@ export default function OrganizationProfile() {
                         </div>
 
                         {/* Images & Descriptions for WhatsApp Dispatch */}
-                        <div className="pt-2 border-t border-border-main/60 space-y-2.5">
+                        <div className="pt-2 border-t border-border-main/60 space-y-3">
+                          <div className="flex items-center justify-between p-3 rounded-2xl bg-bg-secondary/40 border border-border-main">
+                            <div>
+                              <div className="text-xs font-bold text-text-primary">
+                                Auto-Send Photos for this Service
+                              </div>
+                              <div className="text-[10px] text-text-secondary mt-0.5">
+                                When turned off, the AI responds without sending media attachments.
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNewService((prev) => ({
+                                  ...prev,
+                                  sendImagesEnabled:
+                                    prev.sendImagesEnabled === false,
+                                }))
+                              }
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                newService.sendImagesEnabled !== false
+                                  ? "bg-pilot-blue"
+                                  : "bg-border-main"
+                              }`}
+                              title={
+                                newService.sendImagesEnabled !== false
+                                  ? "Disable photo sending for this service"
+                                  : "Enable photo sending for this service"
+                              }
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                  newService.sendImagesEnabled !== false
+                                    ? "translate-x-4"
+                                    : "translate-x-0"
+                                }`}
+                              />
+                            </button>
+                          </div>
+
                           <div className="flex items-center justify-between">
                             <div>
                               <label className="block text-xs font-bold text-text-primary">
