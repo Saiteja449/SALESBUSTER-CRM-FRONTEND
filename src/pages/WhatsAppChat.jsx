@@ -33,6 +33,11 @@ import {
   ShieldCheck,
   Copy,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  Users,
+  SlidersHorizontal,
 } from "lucide-react";
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
@@ -41,7 +46,7 @@ import { useLeads } from "../context/LeadsContext.jsx";
 import WhatsAppConnectModal from "../components/whatsapp/WhatsAppConnectModal.jsx";
 
 export default function WhatsAppChat() {
-  const { currentUser, organization } = useAuth();
+  const { currentUser, organization, allUsers } = useAuth();
   const { activeServices, qualificationFields } = useLeads();
   const orgId = organization?.id || organization?._id || currentUser?.organizationId;
   const currentOrgSessionId = orgId ? `org_${orgId}` : "device_1";
@@ -77,6 +82,8 @@ export default function WhatsAppChat() {
   const [selectedConv, setSelectedConv] = useState(null);
   const [conversationsLoading, setConversationsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState("all"); // 'all' | 'today' | 'yesterday' | 'last7days' | 'last30days'
+  const [isQualPanelOpen, setIsQualPanelOpen] = useState(false); // Collapsible Lead Qualifications panel
 
   // Active Chat Message history
   const [messages, setMessages] = useState([]);
@@ -128,6 +135,24 @@ export default function WhatsAppChat() {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
     return `${mins}m ${secs < 10 ? "0" : ""}${secs}s`;
+  };
+
+  const getAssignedRepName = (lead) => {
+    if (!lead || !lead.assignedTo) return "Unassigned";
+    const assigned = lead.assignedTo;
+    if (typeof assigned === "object" && assigned?.name) {
+      return assigned.name;
+    }
+    const assignedStr = String(assigned).trim();
+    if (!assignedStr) return "Unassigned";
+    const matchedUser = allUsers?.find(
+      (u) => String(u.id || u._id) === assignedStr
+    );
+    if (matchedUser?.name) return matchedUser.name;
+    if (!assignedStr.match(/^[0-9a-fA-F]{24}$/)) {
+      return assignedStr;
+    }
+    return "Unassigned";
   };
 
   // Load Status on mount
@@ -851,7 +876,7 @@ export default function WhatsAppChat() {
     }
   };
 
-  // Filter conversations — supports admin rep-filter dropdown
+  // Filter conversations — supports admin rep-filter dropdown & date-wise filter
   const filteredConversations = conversations.filter((c) => {
     const name = c.leadId?.name || "Unknown";
     const phone = c.leadId?.phone || "";
@@ -859,11 +884,31 @@ export default function WhatsAppChat() {
     const matchesSearch =
       name.toLowerCase().includes(cleanQuery) || phone.includes(cleanQuery);
 
-    if (!isManager || repFilterUserId === "all") return matchesSearch;
+    if (!matchesSearch) return false;
+
+    // Date-wise Filter
+    if (dateFilter !== "all") {
+      const rawDate = c.lastMessageTime || c.updatedAt || c.createdAt;
+      if (!rawDate) return false;
+      const itemDate = new Date(rawDate);
+      if (isNaN(itemDate.getTime())) return false;
+
+      const nowDate = new Date();
+      const today = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+      const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+      const diffDays = Math.floor((today.getTime() - itemDay.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (dateFilter === "today" && diffDays !== 0) return false;
+      if (dateFilter === "yesterday" && diffDays !== 1) return false;
+      if (dateFilter === "last7days" && (diffDays < 0 || diffDays > 7)) return false;
+      if (dateFilter === "last30days" && (diffDays < 0 || diffDays > 30)) return false;
+    }
+
+    if (!isManager || repFilterUserId === "all") return true;
     if (repFilterUserId === "admin") {
       // Admin org lines: sessions that are NOT _user_ sessions
       const msgSessionId = c.leadId?.lastSessionId || "";
-      return matchesSearch && !msgSessionId.includes("_user_");
+      return !msgSessionId.includes("_user_");
     }
     // Filter by assigned rep
     const assignedTo = c.leadId?.assignedTo?._id || c.leadId?.assignedTo;
@@ -871,10 +916,9 @@ export default function WhatsAppChat() {
       (rep) => String(rep.userId) === repFilterUserId,
     );
     return (
-      matchesSearch &&
-      (String(assignedTo) === repFilterUserId ||
-        (selectedRep?.name &&
-          String(assignedTo).toLowerCase() === selectedRep.name.toLowerCase()))
+      String(assignedTo) === repFilterUserId ||
+      (selectedRep?.name &&
+        String(assignedTo).toLowerCase() === selectedRep.name.toLowerCase())
     );
   });
 
@@ -1131,30 +1175,54 @@ export default function WhatsAppChat() {
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left Side: Conversation List */}
         <div className="w-80 flex flex-col border-r border-[#361c5a] bg-[#1a0c35] shrink-0">
-          <div className="p-3 border-b border-[#361c5a]">
+          <div className="p-3 border-b border-[#361c5a] space-y-2">
             <input
               type="text"
               placeholder="Search conversations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl px-4 py-2.5 outline-none focus:border-purple-400 text-sm"
+              className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl px-4 py-2 outline-none focus:border-purple-400 text-sm text-white placeholder-purple-300/40"
             />
+
+            {/* Sales Rep Filter with dropdown icon and leading Users icon */}
             {isManager && (
-              <select
-                aria-label="Filter WhatsApp conversations by representative"
-                value={repFilterUserId}
-                onChange={(e) => setRepFilterUserId(e.target.value)}
-                className="mt-2 w-full bg-[#21103f] border border-[#3e206c] rounded-xl px-3 py-2.5 outline-none focus:border-purple-400 text-sm text-white"
-              >
-                <option value="all">All conversations</option>
-                <option value="admin">Organization WhatsApp lines</option>
-                {teamStatuses.map((rep) => (
-                  <option key={rep.userId} value={String(rep.userId)}>
-                    {rep.name || "Sales representative"}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+                <select
+                  aria-label="Filter WhatsApp conversations by representative"
+                  value={repFilterUserId}
+                  onChange={(e) => setRepFilterUserId(e.target.value)}
+                  className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 text-xs text-white appearance-none cursor-pointer"
+                >
+                  <option value="all">All conversations (Team)</option>
+                  <option value="admin">Organization WhatsApp lines</option>
+                  {teamStatuses.map((rep) => (
+                    <option key={rep.userId} value={String(rep.userId)}>
+                      {rep.name || "Sales representative"}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+              </div>
             )}
+
+            {/* Date-wise Filter with dropdown icon and leading Calendar icon */}
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+              <select
+                aria-label="Filter conversations by date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 text-xs text-white appearance-none cursor-pointer"
+              >
+                <option value="all">All Dates</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="last7days">Last 7 Days</option>
+                <option value="last30days">Last 30 Days</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -1263,16 +1331,31 @@ export default function WhatsAppChat() {
                       .toUpperCase()}
                   </div>
                   <div>
-                    <h2 className="font-bold text-sm text-white">
-                      {selectedConv.leadId?.name || "Unknown Customer"}
-                    </h2>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="font-bold text-sm text-white">
+                        {selectedConv.leadId?.name || "Unknown Customer"}
+                      </h2>
+                      {/* Assigned Sales Person Badge */}
+                      {(() => {
+                        const repName = getAssignedRepName(selectedConv.leadId);
+                        return (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                            title={`Assigned Sales Representative: ${repName}`}
+                          >
+                            <UserCheck className="w-3 h-3 text-indigo-400" />
+                            <span>{repName}</span>
+                          </span>
+                        );
+                      })()}
+                    </div>
                     <p className="text-xs text-brand-secondary/60">
                       WhatsApp: {selectedConv.leadId?.phone}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
                   {/* Summarize Chat Button */}
                   {selectedConv && (
                     <button
@@ -1319,6 +1402,23 @@ export default function WhatsAppChat() {
                     className="text-xs font-bold text-purple-400 hover:text-purple-300 border border-purple-500/30 bg-purple-500/5 px-3 py-1.5 rounded-lg"
                   >
                     View Lead Record
+                  </button>
+
+                  {/* Lead Qualifications Collapse / Expand Button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsQualPanelOpen((prev) => !prev)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+                      isQualPanelOpen
+                        ? "bg-purple-600/30 text-purple-200 border-purple-500/50"
+                        : "bg-[#251347] text-purple-300 hover:text-white border-[#3e206c] hover:border-purple-400"
+                    }`}
+                    title={isQualPanelOpen ? "Collapse Lead Qualifications to right" : "Expand Lead Qualifications"}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">
+                      {isQualPanelOpen ? "Hide Quals" : "Lead Qualifications"}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1580,15 +1680,25 @@ export default function WhatsAppChat() {
         </div>
 
         {/* Right side: AI Qualification insights sidebar */}
-        {selectedConv && (
-          <div className="w-80 border-l border-[#361c5a] bg-[#1a0c35] flex flex-col overflow-y-auto shrink-0 p-4 space-y-6">
+        {selectedConv && isQualPanelOpen && (
+          <div className="w-80 border-l border-[#361c5a] bg-[#1a0c35] flex flex-col overflow-y-auto shrink-0 p-4 space-y-6 transition-all duration-300">
             {/* Qualification Form */}
             <div>
-              <div className="flex items-center gap-2 mb-4 border-b border-[#361c5a] pb-2 text-white">
-                <Brain className="w-5 h-5 text-indigo-400" />
-                <h2 className="font-bold text-sm uppercase tracking-wide">
-                  Lead Qualifications
-                </h2>
+              <div className="flex items-center justify-between mb-4 border-b border-[#361c5a] pb-2 text-white">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-indigo-400" />
+                  <h2 className="font-bold text-sm uppercase tracking-wide">
+                    Lead Qualifications
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsQualPanelOpen(false)}
+                  title="Collapse panel to right"
+                  className="p-1 rounded-lg hover:bg-[#251347] text-purple-300 hover:text-white transition-colors cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
 
               <form
@@ -1958,6 +2068,23 @@ export default function WhatsAppChat() {
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Collapsed state tab to reopen Lead Qualifications */}
+        {selectedConv && !isQualPanelOpen && (
+          <div className="border-l border-[#361c5a] bg-[#1a0c35] flex flex-col items-center py-4 px-1.5 shrink-0 transition-all duration-300">
+            <button
+              type="button"
+              onClick={() => setIsQualPanelOpen(true)}
+              className="p-2 rounded-xl bg-[#21103f] hover:bg-[#361c5a] border border-[#3e206c] hover:border-purple-400 text-purple-300 hover:text-white transition-all cursor-pointer flex flex-col items-center gap-2 group shadow-sm"
+              title="Expand Lead Qualifications"
+            >
+              <ChevronLeft className="w-4 h-4 text-purple-400 group-hover:-translate-x-0.5 transition-transform" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 [writing-mode:vertical-rl] rotate-180 py-2">
+                Qualifications
+              </span>
+            </button>
           </div>
         )}
       </div>

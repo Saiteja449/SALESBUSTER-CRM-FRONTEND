@@ -72,6 +72,13 @@ function CampaignsRoute({ children }) {
 function AppLayout() {
   const { isAuthenticated, isOrganizationBlocked } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("sidebar_collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
   const location = useLocation();
   const { refreshData } = useLeads();
   const { refreshNotifications } = useNotifications();
@@ -88,6 +95,16 @@ function AppLayout() {
     setMobileOpen(!mobileOpen);
   };
 
+  const handleToggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sidebar_collapsed", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
@@ -101,9 +118,15 @@ function AppLayout() {
       <Sidebar
         mobileOpen={mobileOpen}
         handleDrawerToggle={handleDrawerToggle}
+        isCollapsed={isCollapsed}
+        handleToggleCollapse={handleToggleCollapse}
       />
 
-      <div className="flex-grow flex flex-col min-h-screen md:ml-64 transition-all duration-300 min-w-0">
+      <div
+        className={`flex-grow flex flex-col min-h-screen transition-all duration-300 min-w-0 ${
+          isCollapsed ? "md:ml-20" : "md:ml-64"
+        }`}
+      >
         <Header handleDrawerToggle={handleDrawerToggle} />
         <main className="flex-grow pb-6 flex flex-col min-w-0 w-full overflow-x-hidden">
           <Outlet />

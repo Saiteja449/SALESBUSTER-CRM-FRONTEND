@@ -80,8 +80,15 @@ export default function Dashboard() {
     salesRepCount,
     isOrgSetupComplete,
     isManager,
+    isSalesPerson,
     addSalesPerson,
   } = useAuth();
+
+  const isRepUser =
+    Boolean(isSalesPerson) ||
+    ["sales person", "sales representative", "sales_person"].includes(
+      (currentUser?.role || "").toLowerCase()
+    );
 
   const [aiLimits, setAiLimits] = useState(null);
   const [aiLimitsLoading, setAiLimitsLoading] = useState(true);
@@ -95,11 +102,12 @@ export default function Dashboard() {
     const fetchWaWidget = async () => {
       setWaWidgetLoading(true);
       try {
-        if (currentUser?.role === "sales person") {
+        if (isRepUser) {
           const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
           const sessions = res.data?.sessions || [];
           setRepWaStatus(sessions[0] || null);
         } else if (
+          isManager ||
           currentUser?.role === "sales manager" ||
           currentUser?.role === "super_admin"
         ) {
@@ -113,7 +121,7 @@ export default function Dashboard() {
       }
     };
     if (currentUser) fetchWaWidget();
-  }, [currentUser]);
+  }, [currentUser, isRepUser, isManager]);
 
   const connectedTeamCount = teamWaStatuses.filter(
     (r) => r.status === "connected",
@@ -575,7 +583,7 @@ export default function Dashboard() {
       ) : null}
 
       {/* WhatsApp Connection Widget */}
-      {currentUser?.role === "sales person" && (
+      {isRepUser && (
         <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -692,21 +700,24 @@ export default function Dashboard() {
             </div>
             <div>
               <h2 className="text-base font-bold text-brand-primary flex items-center gap-2">
-                AI & Automation Master Controls
+                {isRepUser
+                  ? "My AI & Automation Controls"
+                  : "AI & Automation Master Controls"}
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 border border-teal-500/20">
-                  Live Master Switches
+                  {isRepUser ? "Personal Line Switches" : "Live Master Switches"}
                 </span>
               </h2>
               <p className="text-xs text-brand-primary/70">
-                Instantly control global AI auto-replies and automated enquiry
-                greetings across all channels.
+                {isRepUser
+                  ? "Control AI auto-replies and messaging preferences for your assigned WhatsApp line."
+                  : "Instantly control global AI auto-replies and automated enquiry greetings across all channels."}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
             {/* Toggle 1: AI Auto-Reply (Master Switch for Manager vs Personal Switch for Rep) */}
-            {currentUser?.role === "sales person" ? (
+            {isRepUser ? (
               <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[250px]">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {!globalSettings.globalAIEnabled ? (
@@ -837,46 +848,59 @@ export default function Dashboard() {
                     External Media Auto Messages
                   </div>
                   <div className="text-[10px] text-brand-primary/60 truncate">
-                    {globalSettings.welcomeMessageEnabled
-                      ? "Sending automatically"
-                      : "External media auto messages paused"}
+                    {isRepUser
+                      ? globalSettings.welcomeMessageEnabled
+                        ? "Active (Managed by Sales Manager)"
+                        : "Paused by Sales Manager"
+                      : globalSettings.welcomeMessageEnabled
+                        ? "Sending automatically"
+                        : "External media auto messages paused"}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleOpenWelcomeModal}
-                  className="p-1.5 rounded-lg border border-brand-secondary hover:bg-brand-secondary/40 text-brand-primary/70 hover:text-teal-500 transition-colors cursor-pointer"
-                  title="Customize Welcome Message Template"
+              {isRepUser ? (
+                <div
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-brand-primary/60 bg-brand-secondary/30 shrink-0 border border-brand-secondary/50"
+                  title="Managed organization-wide by Sales Manager"
                 >
-                  <Settings className="w-3.5 h-3.5" />
-                </button>
+                  {globalSettings.welcomeMessageEnabled ? "Active" : "Paused"}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleOpenWelcomeModal}
+                    className="p-1.5 rounded-lg border border-brand-secondary hover:bg-brand-secondary/40 text-brand-primary/70 hover:text-teal-500 transition-colors cursor-pointer"
+                    title="Customize Welcome Message Template"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={handleToggleWelcomeMessage}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    globalSettings.welcomeMessageEnabled
-                      ? "bg-teal-500"
-                      : "bg-brand-secondary/70"
-                  }`}
-                  title={
-                    globalSettings.welcomeMessageEnabled
-                      ? "Pause Welcome Messages"
-                      : "Enable Welcome Messages"
-                  }
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  <button
+                    type="button"
+                    onClick={handleToggleWelcomeMessage}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                       globalSettings.welcomeMessageEnabled
-                        ? "translate-x-5"
-                        : "translate-x-0"
+                        ? "bg-teal-500"
+                        : "bg-brand-secondary/70"
                     }`}
-                  />
-                </button>
-              </div>
+                    title={
+                      globalSettings.welcomeMessageEnabled
+                        ? "Pause Welcome Messages"
+                        : "Enable Welcome Messages"
+                    }
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        globalSettings.welcomeMessageEnabled
+                          ? "translate-x-5"
+                          : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

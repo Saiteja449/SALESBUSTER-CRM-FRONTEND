@@ -12,6 +12,7 @@ import {
   Bot,
   Sparkles,
   Building2,
+  ChevronLeft,
   ChevronRight,
   Headphones,
   Calendar,
@@ -27,7 +28,12 @@ import crmLogo from "../assets/images/Logo.png";
 
 const sidebarDrawerWidth = 260;
 
-export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
+export default function Sidebar({
+  mobileOpen,
+  handleDrawerToggle,
+  isCollapsed = false,
+  handleToggleCollapse,
+}) {
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -143,61 +149,104 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
   };
 
   const drawerContent = (
-    <div className="flex flex-col h-full bg-brand-light text-brand-primary overflow-y-auto">
+    <div className="flex flex-col h-full bg-brand-light text-brand-primary overflow-y-auto overflow-x-hidden">
       {/* Brand Section */}
-      <div className="p-4 pb-3">
-        <div className="w-full h-11 bg-white flex items-center justify-center rounded-lg px-2">
-          <img
-            src={crmLogo}
-            alt="SalesBuster AI"
-            className="w-full h-full object-contain"
-          />
-        </div>
+      <div className={`p-4 pb-3 flex items-center ${isCollapsed ? "flex-col gap-3 justify-center" : "justify-between gap-2"}`}>
+        {isCollapsed ? (
+          <>
+            <div className="w-10 h-10 bg-white flex items-center justify-center rounded-lg p-1 shrink-0 overflow-hidden shadow-xs" title="SalesBuster AI">
+              <img
+                src={crmLogo}
+                alt="SalesBuster AI"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            {handleToggleCollapse && (
+              <button
+                type="button"
+                onClick={handleToggleCollapse}
+                title="Expand Sidebar"
+                className="hidden md:flex p-1.5 rounded-lg text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/50 transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex-1 h-11 bg-white flex items-center justify-center rounded-lg px-2 min-w-0">
+              <img
+                src={crmLogo}
+                alt="SalesBuster AI"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            {handleToggleCollapse && (
+              <button
+                type="button"
+                onClick={handleToggleCollapse}
+                title="Collapse Sidebar"
+                className="hidden md:flex p-1.5 rounded-lg text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/50 transition-colors shrink-0 cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       <hr className="border-brand-secondary" />
 
-      {/* Organization Badge (Tenant Info) */}
-
       {/* User Section */}
       {currentUser && (
-        <div className="p-4 flex items-start gap-3 bg-brand-light">
-          <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center font-bold text-brand-light shrink-0 mt-0.5 shadow-xs">
-            {currentUser.avatar}
-          </div>
-          <div className="overflow-hidden flex-1 min-w-0">
-            <div className="text-sm font-semibold truncate text-brand-primary">
-              {currentUser.name}
+        isCollapsed ? (
+          <div className="p-3 flex justify-center">
+            <div
+              className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center font-bold text-white shrink-0 shadow-xs cursor-default"
+              title={`${currentUser.name} (${currentUser.role})`}
+            >
+              {currentUser.avatar}
             </div>
-            <div className="text-xs font-medium text-purple-500 truncate">
-              {currentUser.role}
-            </div>
-            {userEmail && (
-              <div
-                className="text-[11px] text-brand-primary/70 truncate flex items-center gap-1.5 mt-1"
-                title={userEmail}
-              >
-                <Mail className="w-3 h-3 shrink-0 text-purple-500/70" />
-                <span className="truncate">{userEmail}</span>
-              </div>
-            )}
-            {userPhone && (
-              <div
-                className="text-[11px] text-brand-primary/70 truncate flex items-center gap-1.5 mt-0.5"
-                title={userPhone}
-              >
-                <Phone className="w-3 h-3 shrink-0 text-purple-500/70" />
-                <span className="truncate">{userPhone}</span>
-              </div>
-            )}
           </div>
-        </div>
+        ) : (
+          <div className="p-4 flex items-start gap-3 bg-brand-light">
+            <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center font-bold text-white shrink-0 mt-0.5 shadow-xs">
+              {currentUser.avatar}
+            </div>
+            <div className="overflow-hidden flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate text-brand-primary">
+                {currentUser.name}
+              </div>
+              <div className="text-xs font-medium text-purple-500 truncate">
+                {currentUser.role}
+              </div>
+              {userEmail && (
+                <div
+                  className="text-[11px] text-brand-primary/70 truncate flex items-center gap-1.5 mt-1"
+                  title={userEmail}
+                >
+                  <Mail className="w-3 h-3 shrink-0 text-purple-500/70" />
+                  <span className="truncate">{userEmail}</span>
+                </div>
+              )}
+              {userPhone && (
+                <div
+                  className="text-[11px] text-brand-primary/70 truncate flex items-center gap-1.5 mt-0.5"
+                  title={userPhone}
+                >
+                  <Phone className="w-3 h-3 shrink-0 text-purple-500/70" />
+                  <span className="truncate">{userPhone}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )
       )}
 
       <hr className="border-brand-secondary mb-2" />
 
       {/* Navigation Links */}
-      <nav className="flex-1 px-3">
+      <nav className={`flex-1 ${isCollapsed ? "px-2" : "px-3"}`}>
         <ul className="space-y-1">
           {menuItems.map((item) => {
             const isActive =
@@ -210,22 +259,31 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
                 <button
                   type="button"
                   onClick={() => handleNav(item)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors border ${
+                  title={item.text}
+                  className={`w-full flex items-center ${
+                    isCollapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+                  } rounded-lg transition-colors border relative cursor-pointer ${
                     isActive
                       ? "bg-brand-light text-purple-500 border-brand-secondary"
                       : "bg-transparent text-brand-primary/70 border-transparent hover:bg-brand-light hover:text-brand-primary"
                   }`}
                 >
                   <span className="shrink-0">{item.icon}</span>
-                  <span
-                    className={`text-sm flex-1 text-left ${isActive ? "font-bold" : "font-medium"}`}
-                  >
-                    {item.text}
-                  </span>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold bg-red-500 text-brand-primary rounded-full">
-                      {item.badge}
+                  {!isCollapsed && (
+                    <span
+                      className={`text-sm flex-1 text-left ${isActive ? "font-bold" : "font-medium"}`}
+                    >
+                      {item.text}
                     </span>
+                  )}
+                  {item.badge !== undefined && item.badge > 0 && (
+                    isCollapsed ? (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                    ) : (
+                      <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold bg-red-500 text-white rounded-full">
+                        {item.badge}
+                      </span>
+                    )
                   )}
                 </button>
               </li>
@@ -235,7 +293,7 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       </nav>
 
       {/* Human Assistance Quick Booking Card - Managers Only */}
-      {isOrgOwner && (
+      {isOrgOwner && !isCollapsed && (
         <div className="mx-3 mt-3 p-3 bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-transparent border border-purple-500/20 rounded-2xl">
           <div className="flex items-center gap-2 mb-1.5">
             <div className="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
@@ -270,86 +328,102 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
       )}
 
       {organization && isOrgOwner && (
-        <button
-          type="button"
-          onClick={() => handleNav("/organization")}
-          className="mx-3 mt-3 p-3.5 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-[#132742] dark:via-[#132742]/90 dark:to-[#0f1f35] hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-[#162d4c] dark:hover:to-[#132742] border border-slate-200/90 dark:border-slate-700/80 hover:border-blue-300 dark:hover:border-blue-500/50 rounded-2xl text-left transition-all duration-200 block cursor-pointer group shadow-sm hover:shadow-md w-[calc(100%-24px)]"
-          title="View Organization Profile"
-        >
-          {/* Top Row: Workspace Label & Subscription Status */}
-          <div className="flex items-center justify-between gap-2 mb-2.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50 shrink-0" />
-              <span className="text-[11px] font-bold tracking-wider uppercase text-slate-600 dark:text-slate-300 truncate">
-                Workspace
-              </span>
-            </div>
-
-            {isSubscriptionExpired ? (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-500/30 whitespace-nowrap shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                Expired
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/30 whitespace-nowrap shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Active
-              </span>
-            )}
+        isCollapsed ? (
+          <div className="flex justify-center p-2 mt-2">
+            <button
+              type="button"
+              onClick={() => handleNav("/organization")}
+              className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow-sm cursor-pointer hover:opacity-90"
+              title={`Workspace: ${organization.name}`}
+            >
+              {organization.name ? organization.name.charAt(0).toUpperCase() : "O"}
+            </button>
           </div>
-
-          {/* Middle Row: Org Avatar + Org Name + Navigation Arrow */}
-          <div className="flex items-center gap-2.5 my-1">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow-sm shrink-0">
-              {organization.name
-                ? organization.name.charAt(0).toUpperCase()
-                : "O"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div
-                className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-tight"
-                title={organization.name}
-              >
-                {organization.name}
+        ) : (
+          <button
+            type="button"
+            onClick={() => handleNav("/organization")}
+            className="mx-3 mt-3 p-3.5 bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-[#132742] dark:via-[#132742]/90 dark:to-[#0f1f35] hover:from-blue-50/50 hover:to-indigo-50/50 dark:hover:from-[#162d4c] dark:hover:to-[#132742] border border-slate-200/90 dark:border-slate-700/80 hover:border-blue-300 dark:hover:border-blue-500/50 rounded-2xl text-left transition-all duration-200 block cursor-pointer group shadow-sm hover:shadow-md w-[calc(100%-24px)]"
+            title="View Organization Profile"
+          >
+            {/* Top Row: Workspace Label & Subscription Status */}
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50 shrink-0" />
+                <span className="text-[11px] font-bold tracking-wider uppercase text-slate-600 dark:text-slate-300 truncate">
+                  Workspace
+                </span>
               </div>
-              <div className="text-xs font-medium text-slate-600 dark:text-slate-300 capitalize truncate mt-0.5">
-                {organization.subscriptionPlan || "Monthly"} Plan
+
+              {isSubscriptionExpired ? (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-500/30 whitespace-nowrap shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  Expired
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/30 whitespace-nowrap shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Active
+                </span>
+              )}
+            </div>
+
+            {/* Middle Row: Org Avatar + Org Name + Navigation Arrow */}
+            <div className="flex items-center gap-2.5 my-1">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow-sm shrink-0">
+                {organization.name
+                  ? organization.name.charAt(0).toUpperCase()
+                  : "O"}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div
+                  className="text-sm font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors leading-tight"
+                  title={organization.name}
+                >
+                  {organization.name}
+                </div>
+                <div className="text-xs font-medium text-slate-600 dark:text-slate-300 capitalize truncate mt-0.5">
+                  {organization.subscriptionPlan || "Monthly"} Plan
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-blue-500 dark:group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
+            </div>
+
+            {/* Bottom Row: Seat Utilization & Progress Bar */}
+            <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-700/60">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-medium text-slate-600 dark:text-slate-300">Team Seats</span>
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {usedSeats} / {totalSeats} used
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700/70 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${Math.min(100, Math.max(usedSeats > 0 ? 8 : 0, (usedSeats / Math.max(totalSeats, 1)) * 100))}%`,
+                  }}
+                />
               </div>
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400 dark:text-slate-400 group-hover:text-blue-500 dark:group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all shrink-0" />
-          </div>
-
-          {/* Bottom Row: Seat Utilization & Progress Bar */}
-          <div className="mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-700/60">
-            <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="font-medium text-slate-600 dark:text-slate-300">Team Seats</span>
-              <span className="font-bold text-slate-900 dark:text-white">
-                {usedSeats} / {totalSeats} used
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700/70 rounded-full h-1.5 overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-300"
-                style={{
-                  width: `${Math.min(100, Math.max(usedSeats > 0 ? 8 : 0, (usedSeats / Math.max(totalSeats, 1)) * 100))}%`,
-                }}
-              />
-            </div>
-          </div>
-        </button>
+          </button>
+        )
       )}
 
       <hr className="border-brand-secondary mt-2" />
 
       {/* Logout button */}
-      <div className="p-3">
+      <div className={`p-3 ${isCollapsed ? "flex justify-center" : ""}`}>
         <button
           type="button"
           onClick={() => setShowLogoutModal(true)}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer"
+          title="Logout"
+          className={`flex items-center ${
+            isCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5 w-full"
+          } rounded-lg text-red-400 hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer`}
         >
           <LogOut className="w-5 h-5 shrink-0" />
-          <span className="text-sm font-semibold text-left">Logout</span>
+          {!isCollapsed && <span className="text-sm font-semibold text-left">Logout</span>}
         </button>
       </div>
     </div>
@@ -368,7 +442,9 @@ export default function Sidebar({ mobileOpen, handleDrawerToggle }) {
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 transform border-r border-brand-secondary bg-brand-light transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 transform border-r border-brand-secondary bg-brand-light transition-all duration-300 ease-in-out md:translate-x-0 ${
+          isCollapsed ? "md:w-20 w-64" : "w-64"
+        } ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
