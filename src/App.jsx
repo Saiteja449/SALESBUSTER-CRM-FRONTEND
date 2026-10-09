@@ -31,6 +31,7 @@ import CreateWhatsAppTemplate from "./pages/CreateWhatsAppTemplate.jsx";
 import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
+import BIAnalyst from "./pages/BIAnalyst.jsx";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
@@ -128,7 +129,13 @@ function AppLayout() {
         }`}
       >
         <Header handleDrawerToggle={handleDrawerToggle} />
-        <main className="flex-grow pb-6 flex flex-col min-w-0 w-full overflow-x-hidden">
+        <main
+          className={`flex-grow flex flex-col min-w-0 w-full ${
+            location.pathname.startsWith("/bi-analyst")
+              ? "h-[calc(100dvh-61px)] overflow-hidden pb-0"
+              : "pb-6 overflow-x-hidden"
+          }`}
+        >
           <Outlet />
         </main>
       </div>
@@ -221,6 +228,14 @@ export default function App() {
               element={
                 <CampaignsRoute>
                   <CreateWhatsAppTemplate />
+                </CampaignsRoute>
+              }
+            />
+            <Route
+              path="/bi-analyst"
+              element={
+                <CampaignsRoute>
+                  <BIAnalyst />
                 </CampaignsRoute>
               }
             />

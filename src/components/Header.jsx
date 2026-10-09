@@ -25,6 +25,7 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
     if (path.startsWith("/services")) return "Service Offerings & Workflows";
     if (path.startsWith("/followups")) return "Follow-Up Agenda";
     if (path.startsWith("/performance")) return "Sales Leaderboard";
+    if (path.startsWith("/bi-analyst")) return "BI Analyst";
     if (path.startsWith("/organization")) return "Organization Profile";
     if (path.startsWith("/notifications")) return "Alerts Panel";
     if (path.startsWith("/settings")) return "CRM Preferences";
@@ -96,16 +97,16 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
             </>
           )}
 
-          {/* Ask AI Assistant Button - Managers Only */}
+          {/* Ask AI / BI Analyst Button - Managers Only */}
           {isManager && (
             <button
               type="button"
-              onClick={() => setIsAIDrawerOpen(true)}
-              title="Ask SalesBuster AI Intelligence Assistant (Gemini)"
+              onClick={() => navigate("/bi-analyst")}
+              title="Open BI Analyst (ChatGPT AI Intelligence)"
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white transition-all cursor-pointer shadow-xs shadow-purple-500/25 active:scale-[0.98]"
             >
               <Sparkles className="w-3.5 h-3.5 shrink-0 animate-pulse" />
-              <span>Ask AI</span>
+              <span>BI Analyst</span>
             </button>
           )}
 

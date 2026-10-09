@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import {
   X,
@@ -85,6 +86,12 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
     if (isOpen) {
       fetchSessions();
       setTimeout(() => inputRef.current?.focus(), 200);
+
+      const handleEscape = (e) => {
+        if (e.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", handleEscape);
+      return () => window.removeEventListener("keydown", handleEscape);
     }
   }, [isOpen]);
 
@@ -222,16 +229,16 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+  const drawerContent = (
+    <div className="fixed inset-0 z-[9999] overflow-hidden flex justify-end">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
 
       {/* Drawer Container */}
-      <div className="relative w-full max-w-2xl bg-bg-card border-l border-border-main text-text-primary shadow-2xl flex flex-col h-full z-10 animate-in slide-in-from-right duration-300">
+      <div className="relative w-full max-w-2xl bg-bg-card border-l border-border-main text-text-primary shadow-2xl flex flex-col h-screen h-[100dvh] z-10 animate-in slide-in-from-right duration-300">
         {/* Drawer Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border-main bg-bg-card/90 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-3">
@@ -292,10 +299,10 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
         </div>
 
         {/* Content Area with optional History Sidebar */}
-        <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex overflow-hidden relative min-h-0">
           {/* Slide-out History Panel */}
           {showHistory && (
-            <div className="w-64 border-r border-border-main bg-bg-secondary/20 flex flex-col shrink-0 animate-in slide-in-from-left duration-200">
+            <div className="w-64 border-r border-border-main bg-bg-secondary/20 flex flex-col shrink-0 min-h-0 animate-in slide-in-from-left duration-200">
               <div className="p-3 border-b border-border-main flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">
                   Recent Conversations
@@ -351,7 +358,7 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
           )}
 
           {/* Messages Container */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary/30">
+          <div className="flex-1 flex flex-col overflow-hidden bg-bg-primary/30 min-h-0">
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
               {/* If no messages in current chat, show Welcome & Quick Suggestions */}
               {messages.length === 0 && !loading && (
@@ -424,22 +431,6 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
                       >
                         {m.content}
                       </div>
-
-                      {/* Tool Badges on Assistant Messages */}
-                      {!isUser && Array.isArray(m.toolsUsed) && m.toolsUsed.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1.5 px-1">
-                          {m.toolsUsed.map((toolName, tIdx) => (
-                            <span
-                              key={tIdx}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono bg-bg-secondary text-text-secondary border border-border-main"
-                              title={`Executed live tool: ${toolName}`}
-                            >
-                              <Layers className="w-2.5 h-2.5 text-purple-500" />
-                              {toolName}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
@@ -505,4 +496,8 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
       </div>
     </div>
   );
+
+  return typeof document !== "undefined"
+    ? createPortal(drawerContent, document.body)
+    : drawerContent;
 }

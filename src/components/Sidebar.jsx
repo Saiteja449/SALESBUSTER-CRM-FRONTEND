@@ -76,6 +76,11 @@ export default function Sidebar({
     ...(isOrgOwner
       ? [
           {
+            text: "BI Analyst",
+            icon: <Bot className="w-5 h-5" />,
+            path: "/bi-analyst",
+          },
+          {
             text: "Team Performance",
             icon: <BarChart2 className="w-5 h-5" />,
             path: "/performance",
