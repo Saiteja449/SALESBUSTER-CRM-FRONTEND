@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://api.salesbuster.ai/api";
+  import.meta.env.VITE_API_BASE_URL || "https://betaapi.salesbuster.ai/api";
 
 export const API_ENDPOINTS = {
   AUTH: {
@@ -34,7 +34,8 @@ export const API_ENDPOINTS = {
     SETTINGS: `${API_BASE_URL}/whatsapp/settings`,
     MY_AI_TOGGLE: `${API_BASE_URL}/whatsapp/my-ai-toggle`,
     // AI Chat Summarization — POST with optional { forceRefresh: true } body
-    SUMMARIZE_CONVERSATION: (leadId) => `${API_BASE_URL}/whatsapp/conversation/${leadId}/summarize`,
+    SUMMARIZE_CONVERSATION: (leadId) =>
+      `${API_BASE_URL}/whatsapp/conversation/${leadId}/summarize`,
     // Admin team WhatsApp status overview
     TEAM_STATUS: `${API_BASE_URL}/whatsapp/team-status`,
   },
@@ -72,8 +73,14 @@ export const API_ENDPOINTS = {
     AI_SETTINGS: `${API_BASE_URL}/organizations/my-org/ai-settings`,
     VALIDATE_GEMINI_KEY: `${API_BASE_URL}/organizations/my-org/validate-gemini-key`,
     KNOWLEDGE_UPLOAD: `${API_BASE_URL}/organizations/my-org/knowledge-base/upload`,
-    KNOWLEDGE_DELETE: (docId) => `${API_BASE_URL}/organizations/my-org/knowledge-base/${docId}`,
+    KNOWLEDGE_DELETE: (docId) =>
+      `${API_BASE_URL}/organizations/my-org/knowledge-base/${docId}`,
     SERVICE_IMAGE_UPLOAD: `${API_BASE_URL}/organizations/my-org/services/upload-image`,
+  },
+  AI_ASSISTANT: {
+    CHAT: `${API_BASE_URL}/ai-assistant/chat`,
+    SESSIONS: `${API_BASE_URL}/ai-assistant/sessions`,
+    SESSION: (id) => `${API_BASE_URL}/ai-assistant/sessions/${id}`,
   },
 };
 

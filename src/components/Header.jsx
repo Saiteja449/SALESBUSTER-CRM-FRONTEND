@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Menu, Bell, Plus, Search, Headphones } from "lucide-react";
+import { Menu, Bell, Plus, Search, Headphones, Sparkles } from "lucide-react";
 import { useNotifications } from "../context/NotificationContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
 import ThemeToggle from "./ThemeToggle.jsx";
+import AIAssistantDrawer from "./ai/AIAssistantDrawer.jsx";
 
 export default function Header({ handleDrawerToggle, onQuickAddLead }) {
   const location = useLocation();
@@ -12,6 +13,7 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
   const { unreadCount } = useNotifications();
   const { organization, isManager } = useAuth();
   const { openSupportModal } = useSupportModal();
+  const [isAIDrawerOpen, setIsAIDrawerOpen] = useState(false);
 
   // Get dynamic title based on path
   const getPageTitle = () => {
@@ -94,6 +96,19 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
             </>
           )}
 
+          {/* Ask AI Assistant Button - Managers Only */}
+          {isManager && (
+            <button
+              type="button"
+              onClick={() => setIsAIDrawerOpen(true)}
+              title="Ask SalesBuster AI Intelligence Assistant (Gemini)"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white transition-all cursor-pointer shadow-xs shadow-purple-500/25 active:scale-[0.98]"
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+              <span>Ask AI</span>
+            </button>
+          )}
+
           {/* Human Assistance / Calendly Meeting Button - Managers Only */}
           {isManager && (
             <>
@@ -147,6 +162,14 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
           </button>
         </div>
       </div>
+
+      {/* AI Assistant Slide-over Drawer (Sales Managers Only) */}
+      {isManager && (
+        <AIAssistantDrawer
+          isOpen={isAIDrawerOpen}
+          onClose={() => setIsAIDrawerOpen(false)}
+        />
+      )}
     </header>
   );
 }

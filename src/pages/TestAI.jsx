@@ -31,7 +31,7 @@ export default function TestAI() {
 
   const API_URL = import.meta.env.VITE_API_BASE_URL
     ? `${import.meta.env.VITE_API_BASE_URL}/whatsapp/test-ai`
-    : "https://api.salesbuster.ai/api/whatsapp/test-ai";
+    : "https://betaapi.salesbuster.ai/api/whatsapp/test-ai";
 
   const handleSimulateAIFollowupToast = () => {
     const tomorrow = new Date();
@@ -47,7 +47,8 @@ export default function TestAI() {
         date: tomorrowStr,
         time: "11:00 AM",
         priority: "High",
-        notes: "Customer requested a callback regarding MRL Passenger Elevator quotation and site measurement.",
+        notes:
+          "Customer requested a callback regarding MRL Passenger Elevator quotation and site measurement.",
         author: "AI Agent",
       },
       lead: {
@@ -56,7 +57,8 @@ export default function TestAI() {
         phone: "+91 98765 43210",
         service: "Passenger Lifts",
       },
-      message: "Customer requested a callback regarding MRL Passenger Elevator quotation and site measurement.",
+      message:
+        "Customer requested a callback regarding MRL Passenger Elevator quotation and site measurement.",
       assignedRepName: "Sales Representative",
       timestamp: new Date(),
     });
@@ -260,8 +262,12 @@ export default function TestAI() {
                 </div>
 
                 {/* Organization's Dynamic Fields */}
-                {(schemaFields?.length ? schemaFields : contextQualFields)?.length > 0
-                  ? (schemaFields?.length ? schemaFields : contextQualFields).map((f) => {
+                {(schemaFields?.length ? schemaFields : contextQualFields)
+                  ?.length > 0
+                  ? (schemaFields?.length
+                      ? schemaFields
+                      : contextQualFields
+                    ).map((f) => {
                       const val = aiQualification[f.key];
                       return (
                         <React.Fragment key={f.key}>
@@ -306,7 +312,8 @@ export default function TestAI() {
                       ))}
 
                 {/* Extra dynamic attributes not covered in active schema */}
-                {(schemaFields?.length ? schemaFields : contextQualFields)?.length > 0 &&
+                {(schemaFields?.length ? schemaFields : contextQualFields)
+                  ?.length > 0 &&
                   Object.entries(aiQualification)
                     .filter(
                       ([k, v]) =>
@@ -322,7 +329,10 @@ export default function TestAI() {
                           "_id",
                           "__v",
                           "id",
-                          ...(schemaFields?.length ? schemaFields : contextQualFields).map((f) => f.key),
+                          ...(schemaFields?.length
+                            ? schemaFields
+                            : contextQualFields
+                          ).map((f) => f.key),
                         ].includes(k) &&
                         v !== undefined &&
                         v !== null &&
