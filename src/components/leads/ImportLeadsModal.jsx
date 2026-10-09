@@ -24,7 +24,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
   const { allUsers } = useAuth();
   const fileInputRef = useRef(null);
 
-  const MAX_LEADS_LIMIT = 300;
+  const MAX_LEADS_LIMIT = 500;
 
   const [file, setFile] = useState(null);
   const [parsedRows, setParsedRows] = useState([]);
@@ -167,6 +167,15 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
         setDetectedColumns(headers);
         autoDetectColumns(headers);
         setParsedRows(rows);
+
+        // Auto-suggest batch name from file name + date
+        try {
+          const cleanName = (fileObj.name || "leads")
+            .replace(/\.[^/.]+$/, "")
+            .replace(/[^a-zA-Z0-9_\-]/g, "_");
+          const dateStr = new Date().toISOString().slice(0, 10);
+          setBatchTag(`${cleanName}_${dateStr}`);
+        } catch (_) {}
       } catch (err) {
         console.error("Error parsing spreadsheet:", err);
         setError("Failed to parse spreadsheet. Please ensure it is a valid Excel or CSV file.");
@@ -450,7 +459,7 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
                     Supports Microsoft Excel (.xlsx, .xls) and CSV (.csv) files
                   </p>
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-800/70 text-[11px] font-medium text-purple-700 dark:text-purple-300 mb-4">
-                    <span>Maximum 300 leads per import batch</span>
+                    <span>Maximum 500 leads per import batch</span>
                   </div>
 
                   <button
@@ -718,16 +727,24 @@ export default function ImportLeadsModal({ isOpen, onClose, onImportSuccess }) {
                   {/* Batch Settings */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Batch Identifier Tag
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          Batch Name / Label
+                        </label>
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold bg-purple-500/10 px-1.5 py-0.5 rounded">
+                          Editable
+                        </span>
+                      </div>
                       <input
                         type="text"
                         value={batchTag}
                         onChange={(e) => setBatchTag(e.target.value)}
-                        placeholder="e.g. Excel-March-2026"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-purple-500 outline-none font-medium"
+                        placeholder="e.g. 500_leads_april9"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-800 dark:text-slate-200"
                       />
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                        💡 Used in WhatsApp Campaigns dropdown to target strictly this batch.
+                      </p>
                     </div>
 
                     <div>

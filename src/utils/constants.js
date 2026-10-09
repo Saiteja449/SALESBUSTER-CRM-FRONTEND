@@ -47,6 +47,7 @@ export const API_ENDPOINTS = {
     DELETE_TEMPLATE: (id) => `${API_BASE_URL}/whatsapp/cloud/templates/${id}`,
     SYNC_TEMPLATES: `${API_BASE_URL}/whatsapp/cloud/templates/sync`,
     AUDIENCE_ESTIMATE: `${API_BASE_URL}/whatsapp/cloud/audience/estimate`,
+    AUDIENCE_BATCHES: `${API_BASE_URL}/whatsapp/cloud/audience/batches`,
     CAMPAIGNS: `${API_BASE_URL}/whatsapp/cloud/campaigns`,
     CAMPAIGN: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}`,
     START: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/start`,

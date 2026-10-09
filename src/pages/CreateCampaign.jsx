@@ -58,6 +58,9 @@ export default function CreateCampaign() {
   });
   const [audienceEstimate, setAudienceEstimate] = useState(null);
   const [estimating, setEstimating] = useState(false);
+  const [availableBatches, setAvailableBatches] = useState([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [selectedBatchTag, setSelectedBatchTag] = useState("");
 
   // Step 3: Templates
   const [templates, setTemplates] = useState([]);
@@ -75,7 +78,22 @@ export default function CreateCampaign() {
   useEffect(() => {
     checkCloudStatus();
     fetchTemplates();
+    fetchBatches();
   }, []);
+
+  const fetchBatches = async () => {
+    setLoadingBatches(true);
+    try {
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.AUDIENCE_BATCHES);
+      if (res.data?.success) {
+        setAvailableBatches(res.data.data?.batches || []);
+      }
+    } catch (err) {
+      console.error("Error loading audience batches:", err);
+    } finally {
+      setLoadingBatches(false);
+    }
+  };
 
   const checkCloudStatus = async () => {
     try {
@@ -104,6 +122,13 @@ export default function CreateCampaign() {
       }
     }
   }, [templates, preselectedTemplateId]);
+
+  // Refresh batches when entering audience step
+  useEffect(() => {
+    if (currentStep === 2) {
+      fetchBatches();
+    }
+  }, [currentStep]);
 
   // Re-estimate audience when criteria change
   useEffect(() => {
@@ -459,12 +484,17 @@ export default function CreateCampaign() {
                     <button
                       key={seg.id}
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const isOld = seg.id === "old_leads_only";
                         setAudienceCriteria((prev) => ({
                           ...prev,
                           leadType: seg.id,
-                        }))
-                      }
+                          tags: isOld && selectedBatchTag ? [selectedBatchTag] : [],
+                        }));
+                        if (!isOld) {
+                          setSelectedBatchTag("");
+                        }
+                      }}
                       className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                         active
                           ? "bg-purple-600 text-white shadow-xs font-bold"
@@ -476,6 +506,77 @@ export default function CreateCampaign() {
                   );
                 })}
               </div>
+
+              {/* Target Specific Import Batch Dropdown */}
+              {audienceCriteria.leadType === "old_leads_only" && (
+                <div className="mt-4 pt-3.5 border-t border-purple-500/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <span>Target Specific Excel Batch</span>
+                      <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                        Differentiate Uploads
+                      </span>
+                    </label>
+                    {selectedBatchTag && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedBatchTag("");
+                          setAudienceCriteria((prev) => ({ ...prev, tags: [] }));
+                        }}
+                        className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline font-semibold"
+                      >
+                        Reset to All Old Leads
+                      </button>
+                    )}
+                  </div>
+
+                  {loadingBatches ? (
+                    <div className="text-xs text-slate-400 py-2">Loading import batches...</div>
+                  ) : availableBatches.length > 0 ? (
+                    <select
+                      value={selectedBatchTag}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedBatchTag(val);
+                        setAudienceCriteria((prev) => ({
+                          ...prev,
+                          tags: val ? [val] : [],
+                        }));
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl text-xs font-medium border border-purple-300 dark:border-purple-700/60 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-purple-500 outline-none shadow-xs"
+                    >
+                      <option value="">
+                        -- All Old Leads Combined ({availableBatches.reduce((acc, b) => acc + (b.count || 0), 0)} leads) --
+                      </option>
+                      {availableBatches.map((b) => (
+                        <option key={b.batchTag} value={b.batchTag}>
+                          🏷️ {b.batchTag} ({b.count} {b.count === 1 ? "lead" : "leads"})
+                          {b.lastImported
+                            ? ` • ${new Date(b.lastImported).toLocaleDateString()}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      No specific batch tags detected yet. All imported old leads will be targeted.
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                    {selectedBatchTag ? (
+                      <span className="text-purple-600 dark:text-purple-400 font-semibold">
+                        ✓ Locked to batch "{selectedBatchTag}". Other Excel uploads are excluded.
+                      </span>
+                    ) : (
+                      <span>
+                        💡 Select your specific Excel batch above to run this campaign only for that upload.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Filter Controls */}
@@ -897,6 +998,14 @@ export default function CreateCampaign() {
                   {audienceEstimate?.eligibleCount || 0} Leads
                 </span>
               </div>
+              {selectedBatchTag && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Target Batch:</span>
+                  <span className="font-bold text-purple-600 dark:text-purple-400">
+                    🏷️ {selectedBatchTag}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-400">Sending Speed:</span>
                 <span className="font-medium text-slate-700 dark:text-slate-300">
