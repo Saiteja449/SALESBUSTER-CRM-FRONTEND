@@ -20,9 +20,13 @@ import {
   BarChart3,
   Bot,
   AlertCircle,
+  Mic,
+  Radio,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useGeminiLiveVoice } from "../hooks/useGeminiLiveVoice.js";
+import GeminiLiveVoiceModal from "../components/ai/GeminiLiveVoiceModal.jsx";
 
 // Suggested questions when no messages yet
 const SUGGESTED_PROMPTS = [
@@ -290,6 +294,62 @@ export default function BIAnalyst() {
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [feedbackState, setFeedbackState] = useState({});
   const [error, setError] = useState(null);
+  const [isLiveVoiceModalOpen, setIsLiveVoiceModalOpen] = useState(false);
+
+  // Gemini Multimodal Live API Voice Hook
+  const {
+    isConnected: isLiveConnected,
+    isRecording: isLiveRecording,
+    isPlaying: isLivePlaying,
+    status: liveStatus,
+    activeToolName: liveActiveToolName,
+    inputVolume: liveInputVolume,
+    outputVolume: liveOutputVolume,
+    liveTranscript,
+    conversationTurns: liveConversationTurns,
+    error: liveVoiceError,
+    voiceName,
+    isMuted: isLiveMuted,
+    setVoiceName,
+    startLiveVoice,
+    stopLiveVoice,
+    toggleMute: toggleLiveMute,
+    interrupt: interruptLive,
+  } = useGeminiLiveVoice();
+
+  // Sync finished spoken turns into chat message history
+  useEffect(() => {
+    if (liveConversationTurns.length > 0) {
+      const lastTurn = liveConversationTurns[liveConversationTurns.length - 1];
+      setMessages((prev) => {
+        const alreadyExists = prev.some(
+          (m) => m.content === lastTurn.text && Math.abs(new Date(m.timestamp || 0) - new Date(lastTurn.timestamp)) < 4000
+        );
+        if (!alreadyExists) {
+          return [
+            ...prev,
+            {
+              id: `voice_${Date.now()}`,
+              role: lastTurn.role,
+              content: lastTurn.text,
+              timestamp: lastTurn.timestamp,
+            },
+          ];
+        }
+        return prev;
+      });
+    }
+  }, [liveConversationTurns]);
+
+  const handleOpenLiveVoice = () => {
+    setIsLiveVoiceModalOpen(true);
+    startLiveVoice();
+  };
+
+  const handleCloseLiveVoice = () => {
+    stopLiveVoice();
+    setIsLiveVoiceModalOpen(false);
+  };
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -595,6 +655,17 @@ export default function BIAnalyst() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Live Voice Mode Button */}
+            <button
+              type="button"
+              onClick={handleOpenLiveVoice}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Open Gemini Multimodal Live Voice Chat"
+            >
+              <Radio className="w-3.5 h-3.5 animate-pulse text-purple-200" />
+              <span>Live Voice</span>
+            </button>
+
             <button
               type="button"
               onClick={handleStartNewChat}
@@ -803,16 +874,29 @@ export default function BIAnalyst() {
                 <span className="hidden sm:inline">to send</span>
               </div>
 
-              {/* Round Send Button with ArrowUp */}
-              <button
-                type="button"
-                onClick={() => handleSendMessage()}
-                disabled={!inputValue.trim() || loading}
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-purple-600 hover:bg-purple-700 text-white disabled:bg-bg-secondary disabled:text-text-secondary/40 cursor-pointer disabled:cursor-not-allowed shadow-xs shrink-0"
-                aria-label="Send message"
-              >
-                <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-              </button>
+              {/* Action Buttons: Live Mic and Send */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenLiveVoice}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-bg-secondary hover:bg-purple-600 hover:text-white text-text-secondary cursor-pointer shadow-xs shrink-0"
+                  title="Talk with Gemini Live Voice"
+                  aria-label="Start Voice Chat"
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
+
+                {/* Round Send Button with ArrowUp */}
+                <button
+                  type="button"
+                  onClick={() => handleSendMessage()}
+                  disabled={!inputValue.trim() || loading}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-purple-600 hover:bg-purple-700 text-white disabled:bg-bg-secondary disabled:text-text-secondary/40 cursor-pointer disabled:cursor-not-allowed shadow-xs shrink-0"
+                  aria-label="Send message"
+                >
+                  <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -822,6 +906,23 @@ export default function BIAnalyst() {
           </p>
         </div>
       </div>
+
+      {/* Gemini Multimodal Live Voice Modal */}
+      <GeminiLiveVoiceModal
+        isOpen={isLiveVoiceModalOpen}
+        onClose={handleCloseLiveVoice}
+        status={liveStatus}
+        activeToolName={liveActiveToolName}
+        inputVolume={liveInputVolume}
+        outputVolume={liveOutputVolume}
+        liveTranscript={liveTranscript}
+        error={liveVoiceError}
+        voiceName={voiceName}
+        onVoiceChange={setVoiceName}
+        isMuted={isLiveMuted}
+        onToggleMute={toggleLiveMute}
+        onInterrupt={interruptLive}
+      />
     </div>
   );
 }
