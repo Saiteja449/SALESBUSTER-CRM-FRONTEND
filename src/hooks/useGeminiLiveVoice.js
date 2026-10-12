@@ -155,7 +155,7 @@ export function useGeminiLiveVoice() {
         setIsRecording(true);
 
         // Tell backend to start Gemini Live Session
-        socket.emit("bi_voice_start", { voiceName: preferredVoice });
+        socket.emit("bi_voice_start", { voiceName: preferredVoice, model: "gemini-3.8-live" });
       } catch (err) {
         console.error("[Live Voice Hook] Failed to start:", err);
         setError(err.message || "Microphone access denied or audio initialization failed.");

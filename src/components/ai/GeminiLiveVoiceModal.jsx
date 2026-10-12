@@ -172,7 +172,7 @@ export default function GeminiLiveVoiceModal({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
               </div>
-              <p className="text-[11px] text-text-secondary">Powered by Gemini Multimodal Live API</p>
+              <p className="text-[11px] text-text-secondary">Powered by Gemini 3.8 Live API</p>
             </div>
           </div>
 
