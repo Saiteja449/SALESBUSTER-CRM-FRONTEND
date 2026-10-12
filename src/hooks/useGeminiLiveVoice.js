@@ -134,11 +134,6 @@ export function useGeminiLiveVoice() {
       currentAssistantTurnRef.current = "";
 
       try {
-        // Unlock Web Audio playback explicitly on user gesture
-        if (playerRef.current) {
-          playerRef.current.init();
-        }
-
         // Ensure socket is connected
         if (!socket.connected) {
           socket.connect();
