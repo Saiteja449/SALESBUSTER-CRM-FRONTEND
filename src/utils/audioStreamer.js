@@ -18,22 +18,6 @@ export function float32ToInt16PCM(float32Array) {
   return buffer;
 }
 
-function resampleAudio(input, inputRate, outputRate) {
-  if (inputRate === outputRate) return input;
-  const outputLength = Math.max(1, Math.floor((input.length * outputRate) / inputRate));
-  const output = new Float32Array(outputLength);
-  const step = inputRate / outputRate;
-
-  for (let i = 0; i < outputLength; i++) {
-    const position = i * step;
-    const left = Math.floor(position);
-    const right = Math.min(left + 1, input.length - 1);
-    const fraction = position - left;
-    output[i] = input[left] * (1 - fraction) + input[right] * fraction;
-  }
-  return output;
-}
-
 /**
  * Converts ArrayBuffer / Uint8Array to base64 string
  */
@@ -97,9 +81,6 @@ export class LiveAudioRecorder {
 
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     this.audioContext = new AudioContextClass({ sampleRate: 16000 });
-    if (this.audioContext.state === "suspended") {
-      await this.audioContext.resume();
-    }
 
     this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
     this.analyser = this.audioContext.createAnalyser();
@@ -111,8 +92,7 @@ export class LiveAudioRecorder {
     this.processor.onaudioprocess = (e) => {
       if (!this.isRecording) return;
       const inputData = e.inputBuffer.getChannelData(0);
-      const pcm16k = resampleAudio(inputData, this.audioContext.sampleRate, 16000);
-      const pcmBuffer = float32ToInt16PCM(pcm16k);
+      const pcmBuffer = float32ToInt16PCM(inputData);
       const base64Chunk = arrayBufferToBase64(pcmBuffer);
 
       if (this.onAudioChunk) {
@@ -286,7 +266,7 @@ export class LiveAudioPlayer {
       try {
         source.stop();
         source.disconnect();
-      } catch {
+      } catch (e) {
         // Source might have already finished
       }
     }
