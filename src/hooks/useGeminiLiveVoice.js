@@ -23,6 +23,12 @@ export function useGeminiLiveVoice() {
   const recorderRef = useRef(null);
   const playerRef = useRef(null);
   const currentAssistantTurnRef = useRef("");
+  const isMutedRef = useRef(isMuted);
+  const voiceSessionReadyRef = useRef(false);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
   // Initialize player once
   useEffect(() => {
@@ -51,10 +57,12 @@ export function useGeminiLiveVoice() {
     const handleStatus = (data) => {
       if (data.state === "connected") {
         setIsConnected(true);
+        voiceSessionReadyRef.current = true;
         setStatus("listening");
         setError(null);
       } else if (data.state === "closed") {
         setIsConnected(false);
+        voiceSessionReadyRef.current = false;
         setStatus("idle");
       } else if (data.state === "tool_running") {
         setStatus("tool_running");
@@ -131,6 +139,7 @@ export function useGeminiLiveVoice() {
       setError(null);
       setStatus("connecting");
       setLiveTranscript("");
+      voiceSessionReadyRef.current = false;
       currentAssistantTurnRef.current = "";
 
       try {
@@ -142,7 +151,7 @@ export function useGeminiLiveVoice() {
         // Initialize Audio Recorder
         recorderRef.current = new LiveAudioRecorder({
           onAudioChunk: (base64Chunk) => {
-            if (!isMuted && socket.connected) {
+            if (!isMutedRef.current && voiceSessionReadyRef.current && socket.connected) {
               socket.emit("bi_voice_audio_in", base64Chunk);
             }
           },
@@ -160,10 +169,15 @@ export function useGeminiLiveVoice() {
         console.error("[Live Voice Hook] Failed to start:", err);
         setError(err.message || "Microphone access denied or audio initialization failed.");
         setStatus("error");
-        stopLiveVoice();
+        recorderRef.current?.stop();
+        recorderRef.current = null;
+        playerRef.current?.flush();
+        voiceSessionReadyRef.current = false;
+        socket.emit("bi_voice_stop");
+        setIsRecording(false);
       }
     },
-    [voiceName, isMuted]
+    [voiceName]
   );
 
   /**
@@ -177,6 +191,7 @@ export function useGeminiLiveVoice() {
     if (playerRef.current) {
       playerRef.current.flush();
     }
+    voiceSessionReadyRef.current = false;
     socket.emit("bi_voice_stop");
     setIsRecording(false);
     setIsConnected(false);
