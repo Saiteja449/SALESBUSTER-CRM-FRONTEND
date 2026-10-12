@@ -1,19 +1,48 @@
 /**
- * Utility functions for Web Audio API:
- * 1. Live Microphone PCM 16kHz Streaming (User -> Gemini)
- * 2. Real-time PCM 24kHz Queue Playback with Instant Interruption (Gemini -> Speaker)
- * 3. Volume and Frequency Analysis for Animated Voice Orb
+ * Web Audio API Utilities for Gemini Multimodal Live API
+ * - Real-time downsampling to exact 16,000 Hz linear PCM (fixes silent/unresponsive AI)
+ * - Jitter-buffered 24kHz PCM playback with smooth queueing and debounced state transitions
+ * - Instant barge-in interruption flush
+ * - High-precision volume & frequency analysis for animated voice orb
  */
 
 /**
- * Converts Float32Array from Web Audio to 16-bit Linear PCM ArrayBuffer
+ * Resamples any input sample rate (44.1kHz, 48kHz, 96kHz) down to exact 16,000 Hz
+ */
+export function downsampleTo16000(inputBuffer, inputSampleRate) {
+  if (!inputBuffer || inputBuffer.length === 0) return new Float32Array(0);
+  if (inputSampleRate === 16000) return inputBuffer;
+
+  const ratio = inputSampleRate / 16000;
+  const newLength = Math.round(inputBuffer.length / ratio);
+  const result = new Float32Array(newLength);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+
+  while (offsetResult < result.length) {
+    const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+    let accum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer && i < inputBuffer.length; i++) {
+      accum += inputBuffer[i];
+      count++;
+    }
+    result[offsetResult] = count > 0 ? accum / count : 0;
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return result;
+}
+
+/**
+ * Converts Float32Array (-1.0 to 1.0) to 16-bit Linear PCM ArrayBuffer (Little Endian)
  */
 export function float32ToInt16PCM(float32Array) {
   const buffer = new ArrayBuffer(float32Array.length * 2);
   const view = new DataView(buffer);
   for (let i = 0; i < float32Array.length; i++) {
     const s = Math.max(-1, Math.min(1, float32Array[i]));
-    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); // Little endian
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
   }
   return buffer;
 }
@@ -51,7 +80,7 @@ export function base64ToFloat32Array(base64String) {
 }
 
 /**
- * Live Microphone Recorder targeting 16,000 Hz for Gemini Multimodal Live API
+ * Live Microphone Recorder with Automatic 16,000 Hz Software Downsampler
  */
 export class LiveAudioRecorder {
   constructor({ onAudioChunk, onVolumeChange }) {
@@ -69,10 +98,10 @@ export class LiveAudioRecorder {
   async start() {
     if (this.isRecording) return;
 
+    // Request clean audio with acoustic echo cancellation
     this.mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
-        sampleRate: 16000,
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
@@ -80,19 +109,27 @@ export class LiveAudioRecorder {
     });
 
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    this.audioContext = new AudioContextClass({ sampleRate: 16000 });
+    // Allow browser default hardware rate (usually 48kHz on Windows/Mac) to avoid audio driver distortion
+    this.audioContext = new AudioContextClass();
+    if (this.audioContext.state === "suspended") {
+      await this.audioContext.resume();
+    }
 
+    const hardwareRate = this.audioContext.sampleRate || 48000;
     this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 256;
 
-    // Buffer size of 2048 at 16kHz is ~128ms per chunk (ideal for live streaming)
-    this.processor = this.audioContext.createScriptProcessor(2048, 1, 1);
+    // 4096 buffer size gives ~85ms chunks at 48kHz (smooth, low overhead)
+    this.processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
     this.processor.onaudioprocess = (e) => {
       if (!this.isRecording) return;
-      const inputData = e.inputBuffer.getChannelData(0);
-      const pcmBuffer = float32ToInt16PCM(inputData);
+      const rawFloat32 = e.inputBuffer.getChannelData(0);
+
+      // Downsample from hardware rate (48000Hz/44100Hz) down to exact 16000Hz expected by Gemini
+      const downsampled16k = downsampleTo16000(rawFloat32, hardwareRate);
+      const pcmBuffer = float32ToInt16PCM(downsampled16k);
       const base64Chunk = arrayBufferToBase64(pcmBuffer);
 
       if (this.onAudioChunk) {
@@ -109,6 +146,7 @@ export class LiveAudioRecorder {
   }
 
   startVolumePolling() {
+    if (!this.analyser) return;
     const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
     const poll = () => {
       if (!this.isRecording) return;
@@ -117,8 +155,8 @@ export class LiveAudioRecorder {
       for (let i = 0; i < dataArray.length; i++) {
         sum += dataArray[i];
       }
-      const avg = sum / dataArray.length; // 0 to 255
-      const normalized = Math.min(1, avg / 80);
+      const avg = sum / dataArray.length;
+      const normalized = Math.min(1, avg / 65);
 
       if (this.onVolumeChange) {
         this.onVolumeChange(normalized);
@@ -136,15 +174,21 @@ export class LiveAudioRecorder {
     }
 
     if (this.processor) {
-      this.processor.disconnect();
+      try {
+        this.processor.disconnect();
+      } catch (e) {}
       this.processor = null;
     }
     if (this.source) {
-      this.source.disconnect();
+      try {
+        this.source.disconnect();
+      } catch (e) {}
       this.source = null;
     }
     if (this.analyser) {
-      this.analyser.disconnect();
+      try {
+        this.analyser.disconnect();
+      } catch (e) {}
       this.analyser = null;
     }
     if (this.mediaStream) {
@@ -152,7 +196,9 @@ export class LiveAudioRecorder {
       this.mediaStream = null;
     }
     if (this.audioContext && this.audioContext.state !== "closed") {
-      this.audioContext.close();
+      try {
+        this.audioContext.close();
+      } catch (e) {}
       this.audioContext = null;
     }
 
@@ -164,7 +210,7 @@ export class LiveAudioRecorder {
 
 /**
  * Continuous PCM 24kHz Audio Stream Player for Gemini Responses
- * Features jitter queue scheduling and instant interruption flush
+ * Features jitter queue scheduling, debounced playback ending, and instant barge-in flush
  */
 export class LiveAudioPlayer {
   constructor({ onVolumeChange, onPlaybackEnded } = {}) {
@@ -176,6 +222,7 @@ export class LiveAudioPlayer {
     this.activeSources = new Set();
     this.animFrameId = null;
     this.isPlaying = false;
+    this.playbackEndTimer = null;
   }
 
   init() {
@@ -187,7 +234,8 @@ export class LiveAudioPlayer {
       this.analyser.connect(this.audioContext.destination);
       this.nextPlayTime = this.audioContext.currentTime;
       this.startVolumePolling();
-    } else if (this.audioContext.state === "suspended") {
+    }
+    if (this.audioContext.state === "suspended") {
       this.audioContext.resume();
     }
   }
@@ -203,7 +251,7 @@ export class LiveAudioPlayer {
         sum += dataArray[i];
       }
       const avg = sum / dataArray.length;
-      const normalized = Math.min(1, avg / 70);
+      const normalized = Math.min(1, avg / 60);
 
       if (this.onVolumeChange) {
         this.onVolumeChange(normalized);
@@ -222,6 +270,11 @@ export class LiveAudioPlayer {
       const float32Samples = base64ToFloat32Array(base64Chunk);
       if (float32Samples.length === 0) return;
 
+      if (this.playbackEndTimer) {
+        clearTimeout(this.playbackEndTimer);
+        this.playbackEndTimer = null;
+      }
+
       const audioBuffer = this.audioContext.createBuffer(
         1,
         float32Samples.length,
@@ -234,9 +287,9 @@ export class LiveAudioPlayer {
       source.connect(this.analyser);
 
       const currentTime = this.audioContext.currentTime;
-      // If queue fell behind, reset nextPlayTime to avoid delay
+      // If queue fell behind (e.g. pause or network lag), smoothly restart with 40ms safety buffer
       if (this.nextPlayTime < currentTime) {
-        this.nextPlayTime = currentTime + 0.02; // Tiny 20ms buffer
+        this.nextPlayTime = currentTime + 0.04;
       }
 
       source.start(this.nextPlayTime);
@@ -247,10 +300,16 @@ export class LiveAudioPlayer {
       source.onended = () => {
         this.activeSources.delete(source);
         if (this.activeSources.size === 0) {
-          this.isPlaying = false;
-          if (this.onPlaybackEnded) {
-            this.onPlaybackEnded();
-          }
+          // Debounce playback end to allow subsequent chunks without choppy stutter
+          if (this.playbackEndTimer) clearTimeout(this.playbackEndTimer);
+          this.playbackEndTimer = setTimeout(() => {
+            if (this.activeSources.size === 0) {
+              this.isPlaying = false;
+              if (this.onPlaybackEnded) {
+                this.onPlaybackEnded();
+              }
+            }
+          }, 300);
         }
       };
     } catch (err) {
@@ -262,13 +321,15 @@ export class LiveAudioPlayer {
    * Instant interruption flush: stops all playing buffers immediately
    */
   flush() {
+    if (this.playbackEndTimer) {
+      clearTimeout(this.playbackEndTimer);
+      this.playbackEndTimer = null;
+    }
     for (const source of this.activeSources) {
       try {
         source.stop();
         source.disconnect();
-      } catch (e) {
-        // Source might have already finished
-      }
+      } catch (e) {}
     }
     this.activeSources.clear();
     this.isPlaying = false;
@@ -287,7 +348,9 @@ export class LiveAudioPlayer {
       this.animFrameId = null;
     }
     if (this.audioContext && this.audioContext.state !== "closed") {
-      this.audioContext.close();
+      try {
+        this.audioContext.close();
+      } catch (e) {}
       this.audioContext = null;
     }
   }
