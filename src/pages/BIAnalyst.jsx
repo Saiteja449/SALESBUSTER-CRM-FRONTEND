@@ -22,6 +22,8 @@ import {
   AlertCircle,
   Mic,
   Radio,
+  X,
+  HelpCircle,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -294,6 +296,7 @@ export default function BIAnalyst() {
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [feedbackState, setFeedbackState] = useState({});
   const [error, setError] = useState(null);
+  const [activeOptions, setActiveOptions] = useState(null);
   const [isLiveVoiceModalOpen, setIsLiveVoiceModalOpen] = useState(false);
 
   // Gemini Multimodal Live API Voice Hook
@@ -407,7 +410,19 @@ export default function BIAnalyst() {
       setError(null);
       const res = await axios.get(API_ENDPOINTS.AI_ASSISTANT.SESSION(chatId));
       if (res.data.success && res.data.data) {
-        setMessages(res.data.data.messages || []);
+        const msgs = res.data.data.messages || [];
+        setMessages(msgs);
+        const lastMsg = msgs[msgs.length - 1];
+        if (
+          lastMsg &&
+          lastMsg.role === "assistant" &&
+          Array.isArray(lastMsg.options) &&
+          lastMsg.options.length > 0
+        ) {
+          setActiveOptions(lastMsg.options);
+        } else {
+          setActiveOptions(null);
+        }
       }
     } catch (err) {
       console.error("Failed to load session:", err);
@@ -419,6 +434,7 @@ export default function BIAnalyst() {
   const handleStartNewChat = () => {
     setActiveSessionId(null);
     setMessages([]);
+    setActiveOptions(null);
     setError(null);
     setInputValue("");
     if (textareaRef.current) {
@@ -446,6 +462,7 @@ export default function BIAnalyst() {
     if (!text || loading) return;
 
     setError(null);
+    setActiveOptions(null);
     setInputValue("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -468,7 +485,7 @@ export default function BIAnalyst() {
       });
 
       if (res.data.success) {
-        const { reply, chatId: returnedChatId } = res.data;
+        const { reply, options, chatId: returnedChatId } = res.data;
 
         if (!activeSessionId && returnedChatId) {
           setActiveSessionId(returnedChatId);
@@ -479,10 +496,16 @@ export default function BIAnalyst() {
           id: `resp_${Date.now()}`,
           role: "assistant",
           content: reply,
+          options: options || [],
           timestamp: new Date().toISOString(),
         };
 
         setMessages((prev) => [...prev, assistantMsg]);
+        if (Array.isArray(options) && options.length > 0) {
+          setActiveOptions(options);
+        } else {
+          setActiveOptions(null);
+        }
       } else {
         setError(res.data.message || "Failed to generate reply.");
       }
@@ -755,6 +778,29 @@ export default function BIAnalyst() {
 
                           <RenderFormattedContent content={m.content} />
 
+                          {/* Clarification / Suggested Options within message bubble */}
+                          {Array.isArray(m.options) && m.options.length > 0 && (
+                            <div className="mt-3 pt-2.5 border-t border-border-main/40 flex flex-wrap gap-2">
+                              {m.options.map((opt, oIdx) => (
+                                <button
+                                  key={oIdx}
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveOptions(null);
+                                    handleSendMessage(opt);
+                                  }}
+                                  disabled={loading}
+                                  className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-600 hover:text-white border border-purple-500/20 hover:border-purple-600 text-xs font-medium text-purple-700 dark:text-purple-300 transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-2xs hover:shadow-xs active:scale-95"
+                                >
+                                  <span className="w-3.5 h-3.5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold">
+                                    {oIdx + 1}
+                                  </span>
+                                  <span>{opt}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
                           {/* ChatGPT Message Action Bar */}
                           <div className="flex items-center gap-1 mt-3 pt-1 text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity">
                             {/* Copy Button */}
@@ -847,6 +893,46 @@ export default function BIAnalyst() {
               >
                 Dismiss
               </button>
+            </div>
+          )}
+
+          {/* Clarification / Suggested Options Bar — positioned just above text input */}
+          {activeOptions && activeOptions.length > 0 && !loading && (
+            <div className="mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-purple-500/5 border border-purple-500/25 shadow-sm backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
+                  <span>Choose an option to clarify:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveOptions(null)}
+                  className="p-1 px-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60 text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                  title="Dismiss options"
+                >
+                  <span className="text-[10px]">Dismiss</span>
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {activeOptions.map((opt, oIdx) => (
+                  <button
+                    key={oIdx}
+                    type="button"
+                    onClick={() => {
+                      setActiveOptions(null);
+                      handleSendMessage(opt);
+                    }}
+                    className="group relative px-3.5 py-2 rounded-xl bg-bg-card hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white border border-border-main hover:border-purple-600 text-xs font-medium text-text-primary transition-all duration-150 shadow-2xs hover:shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left flex items-center gap-2"
+                  >
+                    <span className="w-4 h-4 rounded-full bg-purple-500/15 group-hover:bg-white/20 text-purple-600 dark:text-purple-400 group-hover:text-white flex items-center justify-center text-[10px] font-bold transition-colors">
+                      {oIdx + 1}
+                    </span>
+                    <span className="group-hover:text-white transition-colors">{opt}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
