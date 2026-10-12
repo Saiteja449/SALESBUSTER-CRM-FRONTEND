@@ -419,7 +419,10 @@ export default function BIAnalyst() {
           Array.isArray(lastMsg.options) &&
           lastMsg.options.length > 0
         ) {
-          setActiveOptions(lastMsg.options);
+          setActiveOptions({
+            question: lastMsg.content,
+            options: lastMsg.options,
+          });
         } else {
           setActiveOptions(null);
         }
@@ -485,7 +488,7 @@ export default function BIAnalyst() {
       });
 
       if (res.data.success) {
-        const { reply, options, chatId: returnedChatId } = res.data;
+        const { reply, options, question, chatId: returnedChatId } = res.data;
 
         if (!activeSessionId && returnedChatId) {
           setActiveSessionId(returnedChatId);
@@ -502,7 +505,10 @@ export default function BIAnalyst() {
 
         setMessages((prev) => [...prev, assistantMsg]);
         if (Array.isArray(options) && options.length > 0) {
-          setActiveOptions(options);
+          setActiveOptions({
+            question: question || reply,
+            options: options,
+          });
         } else {
           setActiveOptions(null);
         }
@@ -896,45 +902,65 @@ export default function BIAnalyst() {
             </div>
           )}
 
-          {/* Clarification / Suggested Options Bar — positioned just above text input */}
-          {activeOptions && activeOptions.length > 0 && !loading && (
-            <div className="mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-purple-500/5 border border-purple-500/25 shadow-sm backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
-                  <span>Choose an option to clarify:</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveOptions(null)}
-                  className="p-1 px-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60 text-[11px] transition-colors cursor-pointer flex items-center gap-1"
-                  title="Dismiss options"
-                >
-                  <span className="text-[10px]">Dismiss</span>
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
+          {/* Clarification Question & Options Card (Screenshot Style UI) */}
+          {activeOptions && !loading && (() => {
+            const optionsList = Array.isArray(activeOptions)
+              ? activeOptions
+              : Array.isArray(activeOptions?.options)
+              ? activeOptions.options
+              : [];
+            const questionTitle =
+              (typeof activeOptions === "object" && !Array.isArray(activeOptions) && activeOptions?.question) ||
+              "Please choose an option to continue:";
 
-              <div className="flex flex-wrap gap-2">
-                {activeOptions.map((opt, oIdx) => (
+            if (optionsList.length === 0) return null;
+
+            return (
+              <div className="mb-3 p-3.5 sm:p-4 rounded-2xl bg-bg-card/95 border border-border-main shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200">
+                {/* Header: Icon + Question Title + Dismiss */}
+                <div className="flex items-start justify-between gap-3 mb-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="p-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                      <HelpCircle className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-sm font-semibold text-text-primary leading-tight">
+                      {questionTitle}
+                    </h4>
+                  </div>
                   <button
-                    key={oIdx}
                     type="button"
-                    onClick={() => {
-                      setActiveOptions(null);
-                      handleSendMessage(opt);
-                    }}
-                    className="group relative px-3.5 py-2 rounded-xl bg-bg-card hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white border border-border-main hover:border-purple-600 text-xs font-medium text-text-primary transition-all duration-150 shadow-2xs hover:shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left flex items-center gap-2"
+                    onClick={() => setActiveOptions(null)}
+                    className="p-1 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer shrink-0"
+                    title="Dismiss options"
                   >
-                    <span className="w-4 h-4 rounded-full bg-purple-500/15 group-hover:bg-white/20 text-purple-600 dark:text-purple-400 group-hover:text-white flex items-center justify-center text-[10px] font-bold transition-colors">
-                      {oIdx + 1}
-                    </span>
-                    <span className="group-hover:text-white transition-colors">{opt}</span>
+                    <X className="w-4 h-4" />
                   </button>
-                ))}
+                </div>
+
+                {/* Stacked Vertical Options List (Identical to screenshot) */}
+                <div className="flex flex-col gap-2">
+                  {optionsList.map((opt, oIdx) => (
+                    <button
+                      key={oIdx}
+                      type="button"
+                      onClick={() => {
+                        setActiveOptions(null);
+                        handleSendMessage(opt);
+                      }}
+                      className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-bg-secondary/70 hover:bg-bg-secondary dark:bg-zinc-800/60 dark:hover:bg-zinc-700/80 border border-border-main hover:border-purple-500/50 text-left transition-all duration-150 cursor-pointer group shadow-2xs"
+                    >
+                      <span className="px-2.5 py-0.5 rounded-md bg-bg-main dark:bg-zinc-900 text-text-secondary group-hover:text-purple-600 dark:group-hover:text-purple-400 font-mono text-xs font-semibold shrink-0 border border-border-main/60">
+                        {oIdx + 1}
+                      </span>
+                      <span className="text-sm text-text-primary group-hover:text-purple-700 dark:group-hover:text-white transition-colors flex-1">
+                        {opt}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Floating Pill Input Box (Signature ChatGPT) */}
           <div className="relative rounded-3xl border border-border-main bg-bg-card shadow-md focus-within:shadow-lg focus-within:border-purple-500/60 transition-all p-2 sm:p-3">
