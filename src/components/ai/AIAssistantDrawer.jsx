@@ -19,6 +19,7 @@ import {
   CheckCircle,
   HelpCircle,
   MessageSquare,
+  CornerDownRight,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../../utils/constants.js";
 import FormattedAIResponse from "./FormattedAIResponse.jsx";
@@ -182,7 +183,7 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
       });
 
       if (res.data.success) {
-        const { reply, toolsUsed, chatId: returnedChatId } = res.data;
+        const { reply, options, toolsUsed, chatId: returnedChatId } = res.data;
 
         // If this was a new chat, update session tracking
         if (!activeSessionId && returnedChatId) {
@@ -194,6 +195,7 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
           id: `resp_${Date.now()}`,
           role: "assistant",
           content: reply,
+          options: options || [],
           toolsUsed: toolsUsed || [],
           timestamp: new Date().toISOString(),
         };
@@ -433,7 +435,25 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
                         {isUser ? (
                           m.content
                         ) : (
-                          <FormattedAIResponse content={m.content} />
+                          <>
+                            <FormattedAIResponse content={m.content} />
+                            {Array.isArray(m.options) && m.options.length > 0 && (
+                              <div className="mt-3 p-2 rounded-2xl bg-purple-500/5 dark:bg-purple-950/25 border border-purple-500/20 dark:border-purple-500/25 shadow-2xs flex flex-wrap items-center gap-2">
+                                {m.options.map((opt, oIdx) => (
+                                  <button
+                                    key={oIdx}
+                                    type="button"
+                                    onClick={() => handleSendMessage(opt)}
+                                    disabled={loading}
+                                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-border-main hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50/80 dark:hover:bg-purple-950/40 text-xs font-semibold text-slate-800 dark:text-slate-100 hover:text-purple-700 dark:hover:text-purple-300 transition-all duration-150 shadow-2xs hover:shadow-xs cursor-pointer disabled:opacity-50 text-left active:scale-[0.98]"
+                                  >
+                                    <CornerDownRight className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0 stroke-[2.5]" />
+                                    <span>{opt}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

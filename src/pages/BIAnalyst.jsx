@@ -24,6 +24,7 @@ import {
   Radio,
   X,
   HelpCircle,
+  CornerDownRight,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -591,23 +592,18 @@ export default function BIAnalyst() {
 
                           <RenderFormattedContent content={m.content} />
 
-                          {/* Clarification / Suggested Options within message bubble */}
+                          {/* Clarification / Suggested Options directly under message content */}
                           {Array.isArray(m.options) && m.options.length > 0 && (
-                            <div className="mt-3 pt-2.5 border-t border-border-main/40 flex flex-wrap gap-2">
+                            <div className="mt-3.5 p-2.5 rounded-2xl bg-purple-500/5 dark:bg-purple-950/25 border border-purple-500/20 dark:border-purple-500/25 shadow-2xs flex flex-wrap items-center gap-2">
                               {m.options.map((opt, oIdx) => (
                                 <button
                                   key={oIdx}
                                   type="button"
-                                  onClick={() => {
-                                    setActiveOptions(null);
-                                    handleSendMessage(opt);
-                                  }}
+                                  onClick={() => handleSendMessage(opt)}
                                   disabled={loading}
-                                  className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-600 hover:text-white border border-purple-500/20 hover:border-purple-600 text-xs font-medium text-purple-700 dark:text-purple-300 transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-2xs hover:shadow-xs active:scale-95"
+                                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-border-main hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50/80 dark:hover:bg-purple-950/40 text-xs font-semibold text-slate-800 dark:text-slate-100 hover:text-purple-700 dark:hover:text-purple-300 transition-all duration-150 shadow-2xs hover:shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-left active:scale-[0.98]"
                                 >
-                                  <span className="w-3.5 h-3.5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold">
-                                    {oIdx + 1}
-                                  </span>
+                                  <CornerDownRight className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0 stroke-[2.5]" />
                                   <span>{opt}</span>
                                 </button>
                               ))}
@@ -709,45 +705,6 @@ export default function BIAnalyst() {
             </div>
           )}
 
-          {/* Clarification / Suggested Options Bar — positioned just above text input */}
-          {activeOptions && activeOptions.length > 0 && !loading && (
-            <div className="mb-2.5 p-3 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-purple-500/5 border border-purple-500/25 shadow-sm backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
-                  <span>Choose an option to clarify:</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveOptions(null)}
-                  className="p-1 px-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60 text-[11px] transition-colors cursor-pointer flex items-center gap-1"
-                  title="Dismiss options"
-                >
-                  <span className="text-[10px]">Dismiss</span>
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {activeOptions.map((opt, oIdx) => (
-                  <button
-                    key={oIdx}
-                    type="button"
-                    onClick={() => {
-                      setActiveOptions(null);
-                      handleSendMessage(opt);
-                    }}
-                    className="group relative px-3.5 py-2 rounded-xl bg-bg-card hover:bg-purple-600 dark:hover:bg-purple-600 hover:text-white border border-border-main hover:border-purple-600 text-xs font-medium text-text-primary transition-all duration-150 shadow-2xs hover:shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer text-left flex items-center gap-2"
-                  >
-                    <span className="w-4 h-4 rounded-full bg-purple-500/15 group-hover:bg-white/20 text-purple-600 dark:text-purple-400 group-hover:text-white flex items-center justify-center text-[10px] font-bold transition-colors">
-                      {oIdx + 1}
-                    </span>
-                    <span className="group-hover:text-white transition-colors">{opt}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Floating Pill Input Box (Signature ChatGPT) */}
           <div className="relative rounded-3xl border border-border-main bg-bg-card shadow-md focus-within:shadow-lg focus-within:border-purple-500/60 transition-all p-2 sm:p-3">
