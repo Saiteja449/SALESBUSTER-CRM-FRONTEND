@@ -21,6 +21,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../../utils/constants.js";
+import FormattedAIResponse from "./FormattedAIResponse.jsx";
 
 const SUGGESTED_QUESTIONS = [
   {
@@ -425,11 +426,15 @@ export default function AIAssistantDrawer({ isOpen, onClose }) {
                       <div
                         className={`p-3.5 rounded-2xl text-xs leading-relaxed ${
                           isUser
-                            ? "bg-purple-600 text-white rounded-tr-xs"
-                            : "bg-bg-card border border-border-main text-text-primary shadow-xs rounded-tl-xs whitespace-pre-line"
+                            ? "bg-purple-600 text-white rounded-tr-xs whitespace-pre-line"
+                            : "bg-bg-card border border-border-main text-text-primary shadow-xs rounded-tl-xs"
                         }`}
                       >
-                        {m.content}
+                        {isUser ? (
+                          m.content
+                        ) : (
+                          <FormattedAIResponse content={m.content} />
+                        )}
                       </div>
                     </div>
                   </div>
