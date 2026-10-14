@@ -86,8 +86,11 @@ export class LiveAudioRecorder {
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 256;
 
-    // Buffer size of 2048 at 16kHz is ~128ms per chunk (ideal for live streaming)
-    this.processor = this.audioContext.createScriptProcessor(2048, 1, 1);
+    // Buffer size of 512 at 16kHz is ~32ms per chunk.
+    // Smaller chunks reach Gemini faster, reducing voice activity detection (VAD)
+    // latency and making responses feel more immediate. Trade-off is slightly
+    // more frequent onaudioprocess callbacks, which is negligible on modern hardware.
+    this.processor = this.audioContext.createScriptProcessor(512, 1, 1);
 
     this.processor.onaudioprocess = (e) => {
       if (!this.isRecording) return;

@@ -9,6 +9,10 @@ const customPath = url.pathname === "/" ? "" : url.pathname;
 export const socket = io(url.origin, {
   autoConnect: true,
   path: `${customPath}/socket.io/`,
+  // Skip HTTP long-polling and go straight to WebSocket.
+  // This eliminates the polling upgrade handshake, reducing startup latency
+  // and keeping all frames (including voice audio) on the raw WS channel.
+  transports: ["websocket"],
   auth: (cb) => {
     const token =
       localStorage.getItem("salesbuster_token") ||

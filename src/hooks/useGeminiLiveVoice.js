@@ -29,9 +29,10 @@ export function useGeminiLiveVoice() {
     playerRef.current = new LiveAudioPlayer({
       onVolumeChange: (vol) => {
         setOutputVolume(vol);
+        // Only update isPlaying from volume — status transitions are driven by socket events,
+        // not volume levels, to avoid the race condition where status updated before audio played.
         if (vol > 0.05) {
           setIsPlaying(true);
-          setStatus((prev) => (prev !== "tool_running" ? "speaking" : prev));
         }
       },
       onPlaybackEnded: () => {
@@ -60,7 +61,14 @@ export function useGeminiLiveVoice() {
         setStatus("tool_running");
         setActiveToolName(data.toolName);
       } else if (data.state === "tool_complete") {
+        // Clear the tool name but do NOT set status to 'speaking' yet.
+        // The gateway will emit a dedicated 'speaking' event the moment the
+        // first audio chunk is ready, ensuring the badge only shows 'Speaking'
+        // when sound is actually about to play — not before.
         setActiveToolName(null);
+      } else if (data.state === "speaking") {
+        // Fired by the gateway right before bi_voice_audio_out, so status
+        // transitions to 'speaking' in sync with the first audio chunk.
         setStatus("speaking");
       }
     };
