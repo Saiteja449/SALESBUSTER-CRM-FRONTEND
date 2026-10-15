@@ -9,10 +9,22 @@ export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const { isAuthenticated, currentUser } = useAuth();
 
-  const fetchNotifications = async (pageNum = 1) => {
-    if (!isAuthenticated || !currentUser?.token) return;
+  const fetchNotifications = async (pageNum = 1, isBackground = false) => {
+    if (!isAuthenticated || !currentUser?.token) {
+      setLoading(false);
+      return;
+    }
+
+    if (pageNum === 1 && !isBackground) {
+      if (notifications.length === 0) setLoading(true);
+      else setIsRefreshing(true);
+    }
+    setError(null);
 
     try {
       const response = await axios.get(
@@ -25,28 +37,32 @@ export function NotificationProvider({ children }) {
       );
 
       if (pageNum === 1) {
-        setNotifications(response.data.notifications);
+        setNotifications(response.data.notifications || []);
       } else {
-        setNotifications((prev) => [...prev, ...response.data.notifications]);
+        setNotifications((prev) => [...prev, ...(response.data.notifications || [])]);
       }
 
-      setHasMore(response.data.hasMore);
+      setHasMore(Boolean(response.data.hasMore));
       setPage(pageNum);
-    } catch (error) {
-      console.error("Failed to fetch notifications", error);
+    } catch (err) {
+      console.error("Failed to fetch notifications", err);
+      setError(err?.response?.data?.message || "Failed to load notifications. Please check your connection.");
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   const loadMore = () => {
     if (hasMore) {
-      fetchNotifications(page + 1);
+      fetchNotifications(page + 1, false);
     }
   };
 
   useEffect(() => {
-    fetchNotifications(1);
-    // Poll every 30 seconds for the first page only to get new alerts
-    const interval = setInterval(() => fetchNotifications(1), 30000);
+    fetchNotifications(1, false);
+    // Poll every 30 seconds for the first page only to get new alerts in background
+    const interval = setInterval(() => fetchNotifications(1, true), 30000);
     return () => clearInterval(interval);
   }, [isAuthenticated, currentUser]);
 
@@ -117,6 +133,23 @@ export function NotificationProvider({ children }) {
     setNotifications((prev) => [newNotice, ...prev]);
   };
 
+  const markAsUnread = (id) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: false } : n)),
+    );
+  };
+
+  const restoreNotification = (notification, index = 0) => {
+    if (!notification) return;
+    setNotifications((prev) => {
+      const exists = prev.some((n) => n.id === notification.id);
+      if (exists) return prev;
+      const updated = [...prev];
+      updated.splice(Math.min(index, updated.length), 0, notification);
+      return updated;
+    });
+  };
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
@@ -124,11 +157,16 @@ export function NotificationProvider({ children }) {
       value={{
         notifications,
         unreadCount,
+        loading,
+        isRefreshing,
+        error,
         markAsRead,
+        markAsUnread,
         markAllAsRead,
         deleteNotification,
+        restoreNotification,
         addNotification,
-        refreshNotifications: () => fetchNotifications(1),
+        refreshNotifications: () => fetchNotifications(1, false),
         loadMore,
         hasMore,
       }}

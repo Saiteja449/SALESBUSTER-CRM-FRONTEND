@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -27,6 +27,7 @@ import {
   Upload,
   FileText,
   CheckSquare,
+  Loader2,
   ChevronRight,
   ChevronLeft,
   Play,
@@ -69,38 +70,67 @@ import KBGeneratorPromptCard from "../components/KBGeneratorPromptCard.jsx";
 const STEPS = [
   {
     id: 1,
-    title: "AI Engine & Identity",
-    shortTitle: "Engine & Tone",
-    subtitle: "Gemini API key, brand persona & rules",
-    icon: Bot,
+    title: "Business Profile",
+    shortTitle: "Business Profile",
+    subtitle: "Company name, business overview, and AI conversational tone",
+    icon: Building2,
+    description: "Tell the AI about your brand, what your company does, and how it should speak to prospective customers on WhatsApp.",
   },
   {
     id: 2,
-    title: "Catalog & Offerings",
-    shortTitle: "Services",
-    subtitle: "Products, services & keywords",
-    icon: Layers,
+    title: "AI Connection & Quota",
+    shortTitle: "AI Connection",
+    subtitle: "Connect your Google Gemini API key and manage daily call quotas",
+    icon: Bot,
+    description: "Provide an active Google Gemini API key to power WhatsApp automated replies, lead qualification, and call recording intelligence across your organization.",
   },
   {
     id: 3,
-    title: "Lead Qualification",
-    shortTitle: "Qualification",
-    subtitle: "Dynamic lead questionnaire",
-    icon: ListFilter,
+    title: "Products & Services Catalog",
+    shortTitle: "Services",
+    subtitle: "What your business offers and customer search keywords",
+    icon: Layers,
+    description: "Add all products, services, and packages you offer. The AI uses these descriptions and keywords to answer inquiries and suggest offerings.",
   },
   {
     id: 4,
-    title: "Knowledge Base (RAG)",
-    shortTitle: "Knowledge Base",
-    subtitle: "PDFs, brochures & FAQs",
-    icon: BookOpen,
+    title: "Lead Questions & Qualification",
+    shortTitle: "Lead Questions",
+    subtitle: "Information the AI should naturally gather from leads",
+    icon: ListFilter,
+    description: "Define the specific data points (location, budget, timeline, project requirements) the AI asks during conversation to qualify each lead.",
   },
   {
     id: 5,
-    title: "Review & Playground",
-    shortTitle: "Review",
-    subtitle: "Prompt verification & test",
+    title: "Customer Messages & Greetings",
+    shortTitle: "Customer Messages",
+    subtitle: "Automated WhatsApp welcome greetings and missed-call notifications",
+    icon: MessageCircle,
+    description: "Configure the automated messages sent to customers on WhatsApp when they first message you or when an inbound call is missed.",
+  },
+  {
+    id: 6,
+    title: "Company Knowledge Documents",
+    shortTitle: "Knowledge Base",
+    subtitle: "Brochures, price sheets, and FAQs the AI references",
+    icon: BookOpen,
+    description: "Upload PDFs, Word docs, or text files containing brochures, FAQs, and price lists. The AI searches these documents to answer specific customer questions.",
+  },
+  {
+    id: 7,
+    title: "Review & Test AI Assistant",
+    shortTitle: "Review & Test",
+    subtitle: "Verify setup completeness, inspect compiled prompt, and test sample conversations",
     icon: Sparkles,
+    description: "Review your configuration against mandatory requirements, test sample conversations in the interactive playground, and activate your AI pilot.",
+  },
+  {
+    id: 8,
+    title: "Subscription & Seats",
+    shortTitle: "Subscription",
+    subtitle: "Plan validity, sales representative licenses, and connection mode",
+    icon: CreditCard,
+    description: "Review your organization's subscription plan, allocated user seats, WhatsApp connection configuration, and daily usage statistics.",
   },
 ];
 
@@ -717,6 +747,22 @@ export default function OrganizationProfile() {
   // Primary Navigation: "wizard" | "billing"
   const [activeTab, setActiveTab] = useState("wizard");
   const [currentStep, setCurrentStep] = useState(1);
+  const stepperScrollRef = useRef(null);
+
+  useEffect(() => {
+    if (stepperScrollRef.current) {
+      const activeBtn = stepperScrollRef.current.querySelector(
+        '[aria-selected="true"]'
+      );
+      if (activeBtn) {
+        activeBtn.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      }
+    }
+  }, [currentStep]);
 
   // Data States
   const [orgData, setOrgData] = useState(cachedOrg || null);
@@ -757,17 +803,62 @@ export default function OrganizationProfile() {
 
   const [aiSaving, setAiSaving] = useState(false);
   const [saveToast, setSaveToast] = useState("");
+  const [serviceFormError, setServiceFormError] = useState("");
+  const [fieldFormError, setFieldFormError] = useState("");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
   const [keyTestResult, setKeyTestResult] = useState(null);
+  const geminiKeyLooksValid = /^AIza[\w-]{10,}$/.test((aiSettings.geminiApiKey || "").trim());
   const [refreshingUsage, setRefreshingUsage] = useState(false);
   const [resetCountdown, setResetCountdown] = useState("");
   const [showEditLimitModal, setShowEditLimitModal] = useState(false);
   const [customDailyLimit, setCustomDailyLimit] = useState(1500);
+  const [quotaLimitError, setQuotaLimitError] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
   const [missedCallEditingTab, setMissedCallEditingTab] = useState("diff");
   const [missedCallPreviewTab, setMissedCallPreviewTab] = useState("diff");
+  const [customerMessagePreviewTab, setCustomerMessagePreviewTab] = useState("welcome");
+
+  // Format WhatsApp markdown (*bold* and newlines) for live preview
+  const renderFormattedWhatsAppText = (text) => {
+    if (!text) return "";
+    const lines = String(text).split("\n");
+    return lines.map((line, lIdx) => {
+      const parts = line.split(/(\*[^\*]+\*)/g);
+      return (
+        <React.Fragment key={lIdx}>
+          {parts.map((part, pIdx) => {
+            if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+              return (
+                <strong key={pIdx} className="font-bold text-white">
+                  {part.slice(1, -1)}
+                </strong>
+              );
+            }
+            return part;
+          })}
+          {lIdx < lines.length - 1 && <br />}
+        </React.Fragment>
+      );
+    });
+  };
+
+  // Replace placeholders with realistic customer preview values
+  const getWhatsAppPreviewText = (template, type = "welcome") => {
+    let text = template || "";
+    const company = aiSettings.companyName?.trim() || orgData?.name || cachedOrg?.name || "Our Business";
+    const service =
+      aiSettings.welcomeMessageFallbackService?.trim() ||
+      aiSettings.services?.[0]?.name ||
+      "Consultation";
+    const phone = orgData?.mobile || cachedOrg?.mobile || "+91 98765 43210";
+    return text
+      .replace(/\{\{name\}\}/gi, "Rahul Sharma")
+      .replace(/\{\{company\}\}/gi, company)
+      .replace(/\{\{service\}\}/gi, service)
+      .replace(/\{\{number\}\}/gi, phone);
+  };
 
   // Modals
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
@@ -829,6 +920,11 @@ export default function OrganizationProfile() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [showPromptInspector, setShowPromptInspector] = useState(false);
   const [activationResultModal, setActivationResultModal] = useState(null);
+
+  // Destructive Action Confirmation States
+  const [deleteServiceTarget, setDeleteServiceTarget] = useState(null); // { index, service }
+  const [deleteFieldTarget, setDeleteFieldTarget] = useState(null); // { index, field }
+  const [deleteDocTarget, setDeleteDocTarget] = useState(null); // { docId, filename }
 
   const isManager =
     currentUser?.role === "Sales Manager" ||
@@ -1029,14 +1125,12 @@ export default function OrganizationProfile() {
   };
 
   const handleUpdateDailyLimit = async (newLimit) => {
-    const targetLimit = parseInt(
-      newLimit !== undefined ? newLimit : customDailyLimit,
-      10,
-    );
-    if (!targetLimit || targetLimit <= 0) {
-      alert("Please enter a valid daily API calls limit (greater than 0).");
+    const targetLimit = Number(newLimit !== undefined ? newLimit : customDailyLimit);
+    if (!Number.isInteger(targetLimit) || targetLimit < 100 || targetLimit > 100000) {
+      setQuotaLimitError("Enter a whole number between 100 and 100,000 calls per day.");
       return;
     }
+    setQuotaLimitError("");
     setSavingLimit(true);
     try {
       const token =
@@ -1105,6 +1199,61 @@ export default function OrganizationProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Modal Escape key dismissal & body scroll lock
+  useEffect(() => {
+    const isAnyModalOpen =
+      showAddServiceModal ||
+      showAddFieldModal ||
+      showServicesImportModal ||
+      showQualificationImportModal ||
+      showAiGuidanceModal ||
+      showEditLimitModal ||
+      Boolean(activationResultModal) ||
+      showPromptInspector ||
+      Boolean(deleteServiceTarget) ||
+      Boolean(deleteFieldTarget) ||
+      Boolean(deleteDocTarget);
+
+    if (!isAnyModalOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowAddServiceModal(false);
+        setShowAddFieldModal(false);
+        setShowServicesImportModal(false);
+        setShowQualificationImportModal(false);
+        setShowAiGuidanceModal(false);
+        setShowEditLimitModal(false);
+        setActivationResultModal(null);
+        setShowPromptInspector(false);
+        setDeleteServiceTarget(null);
+        setDeleteFieldTarget(null);
+        setDeleteDocTarget(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [
+    showAddServiceModal,
+    showAddFieldModal,
+    showServicesImportModal,
+    showQualificationImportModal,
+    showAiGuidanceModal,
+    showEditLimitModal,
+    activationResultModal,
+    showPromptInspector,
+    deleteServiceTarget,
+    deleteFieldTarget,
+    deleteDocTarget,
+  ]);
+
   // Save changes handler
   const handleSaveStep = async (overrideData = null, nextStep = null) => {
     setAiSaving(true);
@@ -1143,7 +1292,7 @@ export default function OrganizationProfile() {
       setSaveToast(errMsg);
     } finally {
       setAiSaving(false);
-      setTimeout(() => setSaveToast(""), 3500);
+      window.setTimeout(() => setSaveToast(""), 6000);
 
       if (nextStep && nextStep <= STEPS.length) {
         setCurrentStep(nextStep);
@@ -1197,25 +1346,25 @@ export default function OrganizationProfile() {
   // Final step activation handler
   const handleFinishSetup = async () => {
     const missing = [];
-    if (!aiSettings.geminiApiKey || !aiSettings.geminiApiKey.trim()) {
-      missing.push({
-        step: 1,
-        field: "Google Gemini API Key",
-        detail: "Configure and test your Gemini API key in Step 1.",
-      });
-    }
     if (!aiSettings.companyName || !aiSettings.companyName.trim()) {
       missing.push({
         step: 1,
         field: "Company / Brand Name",
-        detail: "Provide your brand name in Step 1.",
+        detail: "Provide your company name in Step 1.",
+      });
+    }
+    if (!aiSettings.geminiApiKey || !aiSettings.geminiApiKey.trim()) {
+      missing.push({
+        step: 2,
+        field: "Google Gemini API Key",
+        detail: "Configure and test your Gemini API key in Step 2.",
       });
     }
     if (!aiSettings.services || aiSettings.services.length === 0) {
       missing.push({
-        step: 2,
+        step: 3,
         field: "Catalog Offerings",
-        detail: "Add at least 1 product or service offering in Step 2.",
+        detail: "Add at least 1 product or service offering in Step 3.",
       });
     }
     if (
@@ -1223,9 +1372,9 @@ export default function OrganizationProfile() {
       aiSettings.qualificationFields.length === 0
     ) {
       missing.push({
-        step: 3,
-        field: "Lead Qualification Criteria",
-        detail: "Add at least 1 qualification question in Step 3.",
+        step: 4,
+        field: "Lead Qualification Questions",
+        detail: "Add at least 1 lead qualification question in Step 4.",
       });
     }
 
@@ -1307,6 +1456,7 @@ export default function OrganizationProfile() {
 
   // Service Management
   const handleOpenAddServiceModal = () => {
+    setServiceFormError("");
     setEditingServiceIndex(null);
     setNewService({
       name: "",
@@ -1319,6 +1469,7 @@ export default function OrganizationProfile() {
   };
 
   const handleOpenEditServiceModal = (index) => {
+    setServiceFormError("");
     const svc = aiSettings.services[index];
     if (!svc) return;
     setEditingServiceIndex(index);
@@ -1341,16 +1492,23 @@ export default function OrganizationProfile() {
   };
 
   const handleSaveService = () => {
-    if (!newService.name.trim()) return;
     const keywordsArr =
       typeof newService.keywords === "string"
-        ? newService.keywords
-            .split(",")
-            .map((k) => k.trim())
-            .filter(Boolean)
-        : Array.isArray(newService.keywords)
-          ? newService.keywords
-          : [];
+        ? newService.keywords.split(",").map((k) => k.trim()).filter(Boolean)
+        : Array.isArray(newService.keywords) ? newService.keywords : [];
+    if (newService.name.trim().length < 2) {
+      setServiceFormError("Enter a service name with at least 2 characters.");
+      return;
+    }
+    if (!newService.description.trim()) {
+      setServiceFormError("Add a short description for this service.");
+      return;
+    }
+    if (!keywordsArr.length) {
+      setServiceFormError("Add at least one keyword to help AI recognize this service.");
+      return;
+    }
+    setServiceFormError("");
 
     const serviceObj = {
       name: newService.name.trim(),
@@ -1388,9 +1546,17 @@ export default function OrganizationProfile() {
   const handleAddService = handleSaveService;
 
   const handleRemoveService = (index) => {
+    const service = aiSettings.services[index];
+    setDeleteServiceTarget({ index, service });
+  };
+
+  const handleConfirmDeleteService = () => {
+    if (!deleteServiceTarget) return;
+    const { index } = deleteServiceTarget;
     const updated = aiSettings.services.filter((_, i) => i !== index);
     setAiSettings({ ...aiSettings, services: updated });
     handleSaveStep({ ...aiSettings, services: updated });
+    setDeleteServiceTarget(null);
   };
 
   const handleServiceImageUpload = async (e) => {
@@ -1480,6 +1646,7 @@ export default function OrganizationProfile() {
 
   // Field Management
   const handleEditField = (index) => {
+    setFieldFormError("");
     const f = aiSettings.qualificationFields[index];
     if (!f) return;
     setEditingFieldIndex(index);
@@ -1497,11 +1664,23 @@ export default function OrganizationProfile() {
   };
 
   const handleAddField = () => {
-    if (!newField.key.trim() || !newField.label.trim()) return;
+    if (!newField.label.trim()) {
+      setFieldFormError("Enter a question label.");
+      return;
+    }
+    if (!newField.key.trim()) {
+      setFieldFormError("Enter a field key.");
+      return;
+    }
+    if (newField.type === "select" && !newField.options.split(",").some((option) => option.trim())) {
+      setFieldFormError("Add at least one choice for this dropdown.");
+      return;
+    }
+    setFieldFormError("");
     const cleanKey = newField.key
       .trim()
       .replace(/[^a-zA-Z0-9_]/g, "_")
-      .replace(/^[0-9]/, "_$&");
+    .replace(/^[0-9]/, "_$&");
 
     const optionsArr = newField.options
       .split(",")
@@ -1544,11 +1723,19 @@ export default function OrganizationProfile() {
   };
 
   const handleRemoveField = (index) => {
+    const field = aiSettings.qualificationFields[index];
+    setDeleteFieldTarget({ index, field });
+  };
+
+  const handleConfirmDeleteField = () => {
+    if (!deleteFieldTarget) return;
+    const { index } = deleteFieldTarget;
     const updated = aiSettings.qualificationFields.filter(
       (_, i) => i !== index,
     );
     setAiSettings({ ...aiSettings, qualificationFields: updated });
     handleSaveStep({ ...aiSettings, qualificationFields: updated });
+    setDeleteFieldTarget(null);
   };
 
   // Services Dedicated JSON Handlers
@@ -1785,7 +1972,7 @@ export default function OrganizationProfile() {
 
     if (!aiSettings.geminiApiKey?.trim()) {
       alert(
-        "Please configure and save your Google Gemini API Key in Step 1 first. Gemini embeddings are required to index documents into Qdrant.",
+        "Please configure and save your Google Gemini API Key in Step 2 first. Gemini embeddings are required to index documents into Qdrant.",
       );
       e.target.value = "";
       return;
@@ -1830,9 +2017,17 @@ export default function OrganizationProfile() {
     }
   };
 
-  const handleDeleteDoc = async (docId) => {
-    if (!window.confirm("Remove this document from the AI knowledge base?"))
-      return;
+  const handleDeleteDoc = (docId) => {
+    const doc = (aiSettings.knowledgeDocs || []).find((d) => d.docId === docId);
+    setDeleteDocTarget({
+      docId,
+      filename: doc?.filename || "Document",
+    });
+  };
+
+  const handleConfirmDeleteDoc = async () => {
+    if (!deleteDocTarget) return;
+    const { docId } = deleteDocTarget;
     try {
       const token =
         localStorage.getItem("salesbuster_token") ||
@@ -1847,6 +2042,8 @@ export default function OrganizationProfile() {
       );
       setAiSettings({ ...aiSettings, knowledgeDocs: updatedDocs });
       handleSaveStep({ ...aiSettings, knowledgeDocs: updatedDocs });
+    } finally {
+      setDeleteDocTarget(null);
     }
   };
 
@@ -1999,6 +2196,10 @@ export default function OrganizationProfile() {
               <span>{refreshingUsage ? "Syncing..." : "Sync"}</span>
             </button>
           </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300">
+          <strong>Daily quota protection:</strong> when this limit is reached, automated AI replies pause until the counter resets at midnight UTC.
         </div>
 
         {/* Overall Quota Progress Meter */}
@@ -2176,41 +2377,260 @@ export default function OrganizationProfile() {
     );
   };
 
+    const renderSubscriptionAndSeatsContent = () => (
+    <div className="space-y-6 animate-fadeIn">
+      {/* ── Organization Identification & Validity ── */}
+      <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-8 shadow-xs">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pilot-blue to-blue-700 text-white flex items-center justify-center font-black text-2xl shadow-sm shrink-0">
+              {(org.name || "S").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-xl font-black text-text-primary">
+                  {org.name || "Client Organization"}
+                </h2>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  {org.status ? org.status.toUpperCase() : "ACTIVE"}
+                </span>
+              </div>
+              <p className="text-xs text-text-secondary mt-1">
+                Organization license, sales representative seat allocations, and billing cycle.
+              </p>
+            </div>
+          </div>
+
+          <div className="text-right sm:border-l border-border-main sm:pl-6 shrink-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary block">
+              Subscription Validity
+            </span>
+            <span className="text-sm font-black text-text-primary block mt-0.5">
+              {formatDate(org.subscriptionEndDate)}
+            </span>
+            <span
+              className={`text-[11px] font-bold ${isExpired ? "text-red-500" : "text-emerald-600"}`}
+            >
+              {isExpired
+                ? "Subscription Expired"
+                : `${remainingDays} days remaining`}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 mt-6 border-t border-border-main text-xs">
+          <div className="flex items-center gap-2.5 text-text-secondary">
+            <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue shrink-0">
+              <Mail size={14} />
+            </div>
+            <span className="text-text-primary font-medium truncate">
+              {org.email || "No email"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2.5 text-text-secondary">
+            <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue shrink-0">
+              <Phone size={14} />
+            </div>
+            <span className="text-text-primary font-medium">
+              {org.mobile || "No phone"}
+            </span>
+          </div>
+          <div className="flex items-center gap-2.5 text-text-secondary">
+            <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue shrink-0">
+              <Globe size={14} />
+            </div>
+            <span className="text-text-primary font-medium truncate">
+              {org.website || "No website"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Seat Utilization, Billing Model & WhatsApp Mode ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Card 1: Seats */}
+        <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border-main">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-pilot-blue" />
+              <h3 className="font-bold text-xs text-text-primary">
+                Seat Utilization & Licensing
+              </h3>
+            </div>
+            <span className="text-xs font-black text-pilot-blue">
+              {usedSeats} / {totalSeats} Used
+            </span>
+          </div>
+
+          <div className="w-full bg-bg-secondary rounded-full h-3 overflow-hidden">
+            <div
+              className="bg-pilot-blue h-3 rounded-full transition-all duration-500"
+              style={{ width: `${seatPercentage}%` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 pt-2 text-center">
+            <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
+              <div className="text-[10px] text-text-secondary font-bold uppercase">
+                Total Seats
+              </div>
+              <div className="text-base font-black text-text-primary mt-0.5">
+                {totalSeats}
+              </div>
+            </div>
+            <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
+              <div className="text-[10px] text-text-secondary font-bold uppercase">
+                Active Reps
+              </div>
+              <div className="text-base font-black text-pilot-blue mt-0.5">
+                {usedSeats}
+              </div>
+            </div>
+            <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
+              <div className="text-[10px] text-text-secondary font-bold uppercase">
+                Available
+              </div>
+              <div className="text-base font-black text-emerald-600 mt-0.5">
+                {remainingSeats}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Billing Model */}
+        <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border-main">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-pilot-blue" />
+              <h3 className="font-bold text-xs text-text-primary">
+                Billing & Commercial Model
+              </h3>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue uppercase">
+              {org.subscriptionPlan || "MONTHLY"}
+            </span>
+          </div>
+
+          <div className="space-y-2.5 text-xs">
+            <div className="flex justify-between py-1.5 border-b border-border-main/50">
+              <span className="text-text-secondary">
+                Subscription Plan:
+              </span>
+              <span className="font-bold text-text-primary uppercase">
+                {org.subscriptionPlan
+                  ? `${org.subscriptionPlan} Seat-Wise`
+                  : "Monthly Seat-Wise"}
+              </span>
+            </div>
+            <div className="flex justify-between py-1.5 border-b border-border-main/50">
+              <span className="text-text-secondary">Rate Per Seat:</span>
+              <span className="font-bold text-text-primary">
+                ₹{org.pricingPerSeat || 599} /{" "}
+                {org.subscriptionPlan === "annually"
+                  ? "year"
+                  : org.subscriptionPlan === "quarterly"
+                    ? "quarter"
+                    : "month"}
+              </span>
+            </div>
+            <div className="flex justify-between py-1.5">
+              <span className="text-text-secondary">
+                Current Cycle:
+              </span>
+              <span className="font-medium text-text-primary">
+                {formatDate(org.subscriptionStartDate)} &rarr;{" "}
+                {formatDate(org.subscriptionEndDate)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: WhatsApp Connection Mode */}
+        <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border-main">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-emerald-500" />
+              <h3 className="font-bold text-xs text-text-primary">
+                WhatsApp Connection
+              </h3>
+            </div>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+              (org.whatsappLineLimit || 1) >= 2
+                ? "bg-emerald-500/10 text-emerald-600"
+                : "bg-slate-500/10 text-slate-600"
+            }`}>
+              {(org.whatsappLineLimit || 1) >= 2 ? "DUAL LINE" : "SINGLE LINE"}
+            </span>
+          </div>
+
+          <div className="space-y-2.5 text-xs">
+            <div className="flex justify-between py-1.5 border-b border-border-main/50">
+              <span className="text-text-secondary">
+                Connection Mode:
+              </span>
+              <span className="font-bold text-text-primary">
+                {(org.whatsappLineLimit || 1) >= 2 ? "Dual Lines (2 Devices)" : "Single Line (1 Device)"}
+              </span>
+            </div>
+            <div className="flex justify-between py-1.5">
+              <span className="text-text-secondary">
+                Max Devices:
+              </span>
+              <span className="font-bold text-text-primary">
+                {org.whatsappLineLimit || 1}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-secondary/50 border border-border-main">
+            <Info className="w-3.5 h-3.5 text-text-secondary shrink-0 mt-0.5" />
+            <p className="text-[10px] text-text-secondary leading-relaxed">
+              WhatsApp connection mode is managed by your system administrator. Contact support to upgrade your connection plan.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Daily Quota & Usage Monitor Card */}
+      {renderDailyAiUsageCard(false)}
+    </div>
+  );
+
   const activeStepObj = STEPS.find((s) => s.id === currentStep) || STEPS[0];
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="w-full max-w-7xl mx-auto min-w-0 p-3.5 sm:p-6 lg:p-8 space-y-6">
       {/* ── Top Header with Brand Details & Clean Tab Switcher ───────────── */}
-      <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="bg-bg-card border border-border-main rounded-3xl p-5 sm:p-6 shadow-xs w-full min-w-0">
+        <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center gap-5">
           {/* Org Identification */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3.5 min-w-0">
             <button
               onClick={() => navigate(-1)}
-              className="p-2.5 rounded-2xl bg-bg-secondary border border-border-main text-text-secondary hover:text-text-primary hover:border-pilot-blue/40 transition-colors shrink-0"
+              className="p-2.5 rounded-2xl bg-bg-secondary border border-border-main text-text-secondary hover:text-text-primary hover:border-pilot-blue/40 transition-colors shrink-0 cursor-pointer"
               title="Go Back"
             >
               <ArrowLeft size={18} />
             </button>
 
-            <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-pilot-blue to-blue-700 text-white flex items-center justify-center font-black text-xl shadow-sm shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pilot-blue to-blue-700 text-white flex items-center justify-center font-black text-xl shadow-sm shrink-0">
               {(org.name || "S").charAt(0).toUpperCase()}
             </div>
 
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-xl md:text-2xl font-black text-text-primary tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl md:text-2xl font-black text-text-primary tracking-tight truncate max-w-[260px] sm:max-w-md">
                   {org.name || "Organization"}
                 </h1>
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {org.status ? org.status.toUpperCase() : "ACTIVE"}
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20 shrink-0">
                   Multi-Tenant
                 </span>
               </div>
-              <p className="text-xs text-text-secondary mt-1">
+              <p className="text-xs text-text-secondary mt-0.5 line-clamp-1 sm:line-clamp-none">
                 Customize your AI sales pilot, products catalog, qualification
                 schema, and knowledge documents.
               </p>
@@ -2218,29 +2638,39 @@ export default function OrganizationProfile() {
           </div>
 
           {/* Primary View Switcher Tabs */}
-          <div className="flex items-center p-1.5 bg-bg-secondary border border-border-main rounded-2xl gap-1.5 self-stretch lg:self-auto shrink-0 flex-wrap">
+          <div className="flex items-center p-1.5 bg-bg-secondary border border-border-main rounded-2xl gap-1.5 w-full 2xl:w-auto flex-wrap sm:flex-nowrap">
             <button
-              onClick={() => setActiveTab("wizard")}
-              className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === "wizard"
+              type="button"
+              onClick={() => {
+                setActiveTab("wizard");
+                if (currentStep === 8) setCurrentStep(1);
+              }}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "wizard" && currentStep !== 8
                   ? "bg-pilot-blue text-white shadow-sm"
                   : "text-text-secondary hover:text-text-primary hover:bg-bg-card/50"
               }`}
             >
-              <Bot size={16} />
-              <span>AI Setup Wizard</span>
+              <Bot size={15} className="shrink-0" />
+              <span className="whitespace-nowrap">AI Setup Wizard</span>
+              <span className="hidden xl:inline text-[10px] opacity-80">(Steps 1–7)</span>
             </button>
 
             <button
-              onClick={() => setActiveTab("billing")}
-              className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === "billing"
+              type="button"
+              onClick={() => {
+                setActiveTab("billing");
+                setCurrentStep(8);
+              }}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "billing" || currentStep === 8
                   ? "bg-pilot-blue text-white shadow-sm"
                   : "text-text-secondary hover:text-text-primary hover:bg-bg-card/50"
               }`}
             >
-              <Building2 size={16} />
-              <span>Subscription & Seats</span>
+              <Building2 size={15} className="shrink-0" />
+              <span className="whitespace-nowrap">Subscription & Seats</span>
+              <span className="hidden xl:inline text-[10px] opacity-80">(Step 8)</span>
             </button>
 
             <button
@@ -2250,11 +2680,11 @@ export default function OrganizationProfile() {
                   "Book 1-on-1 Human Assistance & Consultation Session for AI Pilot Setup."
                 )
               }
-              className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
               title="Schedule a 1-on-1 support meeting via Calendly"
             >
-              <Headphones size={16} />
-              <span>Book Human Assistance</span>
+              <Headphones size={15} className="shrink-0" />
+              <span className="whitespace-nowrap">Human Assistance</span>
             </button>
           </div>
         </div>
@@ -2262,14 +2692,17 @@ export default function OrganizationProfile() {
 
       {/* ── Success Toast Banner ─────────────────────────────────────────── */}
       {saveToast && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center justify-between shadow-xs animate-fadeIn">
-          <div className="flex items-center gap-2.5">
-            <CheckCircle2 size={17} />
-            <span>{saveToast}</span>
+      <div role="status" aria-live="polite" className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center justify-between shadow-xs animate-fadeIn w-full min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <CheckCircle2 size={17} className="shrink-0" />
+            <span className="truncate">{saveToast}</span>
           </div>
           <button
+            type="button"
             onClick={() => setSaveToast("")}
-            className="p-1 hover:bg-emerald-500/20 rounded-lg transition-colors"
+            aria-label="Dismiss save message"
+            title="Dismiss message"
+            className="p-1 hover:bg-emerald-500/20 rounded-lg transition-colors shrink-0"
           >
             <X size={14} />
           </button>
@@ -2280,15 +2713,15 @@ export default function OrganizationProfile() {
       {/* TAB 1: STEP-BY-STEP GUIDED AI PILOT SETUP WIZARD                    */}
       {/* ═════════════════════════════════════════════════════════════════════ */}
       {activeTab === "wizard" && (
-        <div className="space-y-6">
+        <div className="space-y-6 w-full min-w-0">
           {/* ── AI DOCUMENT EXTRACTION & SETUP HERO GUIDE ────────────────────── */}
-          <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-pilot-blue/15 via-indigo-600/10 to-bg-card border border-pilot-blue/30 shadow-sm relative overflow-hidden">
+          <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-r from-pilot-blue/15 via-indigo-600/10 to-bg-card border border-pilot-blue/30 shadow-sm relative overflow-hidden w-full min-w-0">
             <div className="absolute top-0 right-0 -mt-8 -mr-8 w-44 h-44 bg-pilot-blue/10 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 relative z-10">
-              <div className="space-y-1.5 max-w-2xl">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pilot-blue text-white shadow-xs">
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5 relative z-10 w-full min-w-0">
+              <div className="space-y-1.5 max-w-2xl min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-pilot-blue text-white shadow-xs shrink-0">
                     <Sparkles size={11} className="animate-pulse" />
                     AI Auto-Configuration Available
                   </span>
@@ -2310,18 +2743,18 @@ export default function OrganizationProfile() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+              <div className="flex items-center gap-2.5 flex-wrap w-full xl:w-auto">
                 <button
                   type="button"
                   onClick={() => {
                     setGuidanceTab("prompt");
                     setShowAiGuidanceModal(true);
                   }}
-                  className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-md shadow-pilot-blue/20 cursor-pointer group"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-md shadow-pilot-blue/20 cursor-pointer group whitespace-nowrap"
                 >
                   <Sparkles
                     size={15}
-                    className="group-hover:rotate-12 transition-transform"
+                    className="group-hover:rotate-12 transition-transform shrink-0"
                   />
                   <span>Document Extraction Guide</span>
                 </button>
@@ -2329,19 +2762,19 @@ export default function OrganizationProfile() {
                 <button
                   type="button"
                   onClick={handleCopyQuickPrompt}
-                  className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-bg-card border border-border-main hover:border-pilot-blue/40 text-text-primary text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 rounded-2xl bg-bg-card border border-border-main hover:border-pilot-blue/40 text-text-primary text-xs font-bold transition-all shadow-2xs cursor-pointer whitespace-nowrap"
                   title="Copy the extraction prompt to clipboard directly"
                 >
                   {copiedQuickPrompt ? (
                     <>
-                      <Check size={14} className="text-emerald-500" />
+                      <Check size={14} className="text-emerald-500 shrink-0" />
                       <span className="text-emerald-600 dark:text-emerald-400">
                         Prompt Copied!
                       </span>
                     </>
                   ) : (
                     <>
-                      <Copy size={14} className="text-pilot-blue" />
+                      <Copy size={14} className="text-pilot-blue shrink-0" />
                       <span>Copy System Prompt</span>
                     </>
                   )}
@@ -2354,10 +2787,10 @@ export default function OrganizationProfile() {
                       "Book 1-on-1 Human Assistance & Consultation Session for AI Pilot Setup."
                     )
                   }
-                  className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black transition-all shadow-md shadow-purple-600/20 cursor-pointer"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-black transition-all shadow-md shadow-purple-600/20 cursor-pointer whitespace-nowrap"
                   title="Schedule a 30-min strategy & onboarding call with our team"
                 >
-                  <Headphones size={15} />
+                  <Headphones size={15} className="shrink-0" />
                   <span>Book Human Assistance</span>
                 </button>
               </div>
@@ -2365,62 +2798,94 @@ export default function OrganizationProfile() {
           </div>
 
           {/* Stepper Progress Bar */}
-          <div className="bg-bg-card border border-border-main rounded-3xl p-4 sm:p-6 shadow-xs">
-            <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2 scrollbar-none">
-              {STEPS.map((step, idx) => {
+          <div className="bg-bg-card border border-border-main rounded-3xl p-4 sm:p-6 shadow-xs space-y-4 w-full min-w-0 max-w-full overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-black text-text-primary uppercase tracking-wider text-[11px]">
+                  Setup Progress: Step {currentStep} of {STEPS.length}
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20">
+                  {Math.round(((currentStep - 1) / (STEPS.length - 1)) * 100)}% Complete
+                </span>
+              </div>
+              <span className="text-text-secondary text-[11px]">
+                {currentStep <= 7 ? "Click any step to review or update settings" : "Subscription & seat management"}
+              </span>
+            </div>
+
+            <div className="w-full bg-bg-secondary rounded-full h-1.5 overflow-hidden">
+              <div
+                className="bg-pilot-blue h-1.5 rounded-full transition-all duration-300"
+                style={{ width: `${Math.max(12, Math.round((currentStep / STEPS.length) * 100))}%` }}
+              />
+            </div>
+
+            <div
+              ref={stepperScrollRef}
+              className="flex items-center gap-2 overflow-x-auto pb-2 pt-1 w-full min-w-0 max-w-full scroll-smooth scrollbar-thin scrollbar-thumb-border-main scrollbar-track-transparent"
+              role="tablist"
+              aria-label="Setup steps"
+            >
+              {STEPS.map((step) => {
                 const StepIcon = step.icon;
                 const isCompleted = step.id < currentStep;
                 const isCurrent = step.id === currentStep;
 
                 return (
-                  <React.Fragment key={step.id}>
-                    <button
-                      onClick={() => setCurrentStep(step.id)}
-                      className={`flex items-center gap-3 p-2.5 sm:px-4 sm:py-3 rounded-2xl transition-all text-left shrink-0 cursor-pointer ${
+                  <button
+                    key={step.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isCurrent}
+                    aria-label={`Step ${step.id}: ${step.title}`}
+                    onClick={() => {
+                      if (step.id === 8) {
+                        setActiveTab("billing");
+                      } else if (activeTab === "billing") {
+                        setActiveTab("wizard");
+                      }
+                      setCurrentStep(step.id);
+                    }}
+                    className={`flex items-center gap-2 p-2 sm:px-3 sm:py-2.5 rounded-2xl transition-all text-left shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pilot-blue ${
+                      isCurrent
+                        ? "bg-pilot-blue text-white shadow-md shadow-pilot-blue/20"
+                        : isCompleted
+                          ? "bg-bg-secondary text-text-primary hover:bg-bg-secondary/80"
+                          : "text-text-secondary/70 hover:text-text-primary hover:bg-bg-secondary/40"
+                    }`}
+                  >
+                    <div
+                      className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${
                         isCurrent
-                          ? "bg-pilot-blue text-white shadow-md shadow-pilot-blue/20"
+                          ? "bg-white/20 text-white"
                           : isCompleted
-                            ? "bg-bg-secondary text-text-primary hover:bg-bg-secondary/80"
-                            : "text-text-secondary/70 hover:text-text-primary hover:bg-bg-secondary/40"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-bg-secondary border border-border-main text-text-secondary"
                       }`}
                     >
-                      <div
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shrink-0 transition-all ${
-                          isCurrent
-                            ? "bg-white/20 text-white"
-                            : isCompleted
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              : "bg-bg-secondary border border-border-main text-text-secondary"
-                        }`}
-                      >
-                        {isCompleted ? (
-                          <Check size={16} />
-                        ) : (
-                          <StepIcon size={16} />
-                        )}
-                      </div>
+                      {isCompleted ? (
+                        <Check size={14} />
+                      ) : (
+                        <StepIcon size={14} />
+                      )}
+                    </div>
 
-                      <div className="hidden sm:block">
-                        <div className="text-[10px] uppercase font-bold tracking-wider opacity-75">
-                          Step 0{step.id}
-                        </div>
-                        <div className="text-xs font-black tracking-tight whitespace-nowrap">
-                          {step.shortTitle}
-                        </div>
+                    <div className="block">
+                      <div className="text-[9px] uppercase font-bold tracking-wider opacity-75">
+                        Step 0{step.id}
                       </div>
-                    </button>
-
-                    {idx < STEPS.length - 1 && (
-                      <div className="hidden md:block flex-1 h-[2px] bg-border-main shrink-0 min-w-4 max-w-12 rounded-full" />
-                    )}
-                  </React.Fragment>
+                      <div className="text-[11px] font-black tracking-tight whitespace-nowrap">
+                        {step.shortTitle}
+                      </div>
+                    </div>
+                  </button>
                 );
               })}
             </div>
           </div>
 
           {/* Current Step Workspace Card */}
-          <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-8 shadow-xs space-y-7">
+          <div className="bg-bg-card border border-border-main rounded-3xl p-5 sm:p-8 shadow-xs space-y-7 w-full min-w-0 max-w-full overflow-hidden">
             {/* Step Header & Template Picker */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-6 border-b border-border-main">
               <div>
@@ -2452,11 +2917,203 @@ export default function OrganizationProfile() {
               </div>
             </div>
 
-            {/* ── STEP 1: IDENTITY & PERSONA ──────────────────────────────── */}
+                        {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 1: BUSINESS PROFILE ───────────────────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
             {currentStep === 1 && (
               <div className="space-y-6 animate-fadeIn">
-                {/* ── GOOGLE GEMINI API KEY CONFIGURATION ───────────────── */}
-                <div className="p-6 rounded-3xl bg-gradient-to-br from-bg-secondary/70 via-bg-secondary/40 to-bg-card border border-border-main space-y-4 shadow-2xs">
+                {/* Step 1 Introduction & Organization Notice */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-pilot-blue/10 border border-pilot-blue/20 text-xs text-text-primary flex items-start gap-3">
+                  <Building2 size={18} className="text-pilot-blue shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-bold block text-text-primary">Step 1: Define Your Company Profile & AI Tone</span>
+                    <p className="text-text-secondary leading-relaxed">
+                      Enter your official company brand name, what your business does, and the conversational persona of your AI sales assistant. These details form the core personality and knowledge your AI references when speaking with customers across all representative channels.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column: Brand Name & Persona */}
+                  <div className="space-y-5">
+                    {/* Brand Name Input */}
+                    <div className="p-5 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="brand-name-input" className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                          Company / Brand Name <span className="text-red-500 font-bold">* Required</span>
+                        </label>
+                        <span className="text-[10px] font-bold text-pilot-blue bg-pilot-blue/10 px-2 py-0.5 rounded-md border border-pilot-blue/20">
+                          Auto-filled from profile
+                        </span>
+                      </div>
+                      <input
+                        id="brand-name-input"
+                        type="text"
+                        value={aiSettings.companyName}
+                        onChange={(e) =>
+                          setAiSettings({
+                            ...aiSettings,
+                            companyName: e.target.value,
+                          })
+                        }
+                        placeholder={org.name || "e.g. SalesBuster AI"}
+                        aria-invalid={!aiSettings.companyName?.trim()}
+                        className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-semibold"
+                      />
+                      {!aiSettings.companyName?.trim() && (
+                        <p className="text-[11px] text-red-500 font-semibold" role="alert">
+                          Please enter your company or brand name.
+                        </p>
+                      )}
+                      <span className="text-[10px] text-text-secondary block">
+                        The official brand name the AI introduces to customers on WhatsApp.
+                      </span>
+                    </div>
+
+                    {/* Agent Persona & Tone Input */}
+                    <div className="p-5 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-3">
+                      <div>
+                        <label htmlFor="agent-persona-input" className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
+                          AI Agent Tone & Role Description
+                        </label>
+                        <input
+                          id="agent-persona-input"
+                          type="text"
+                          value={aiSettings.agentPersona}
+                          onChange={(e) =>
+                            setAiSettings({
+                              ...aiSettings,
+                              agentPersona: e.target.value,
+                            })
+                          }
+                          placeholder="e.g. warm, consultative sales advisor"
+                          className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
+                        />
+                        <span className="text-[10px] text-text-secondary mt-1.5 block">
+                          Controls the AI assistant's personality traits and conversational vocabulary.
+                        </span>
+                      </div>
+
+                      {/* Quick Select Presets */}
+                      <div>
+                        <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block mb-1.5">
+                          Quick Tone Presets:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            "warm, friendly, and consultative sales advisor",
+                            "professional and knowledgeable property advisor",
+                            "helpful, enthusiastic product specialist",
+                            "sophisticated, polished executive consultant",
+                          ].map((preset, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => setAiSettings({ ...aiSettings, agentPersona: preset })}
+                              className={`px-2.5 py-1 text-[11px] rounded-lg border text-left transition-colors cursor-pointer ${
+                                aiSettings.agentPersona === preset
+                                  ? "bg-pilot-blue text-white border-pilot-blue font-bold shadow-2xs"
+                                  : "bg-bg-card border-border-main text-text-secondary hover:text-text-primary hover:border-pilot-blue/40"
+                              }`}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Business Overview & Guardrails */}
+                  <div className="space-y-5">
+                    {/* Company Pitch / Overview */}
+                    <div className="p-5 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-2">
+                      <label htmlFor="business-description-input" className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                        What Your Business Does & Value Proposition
+                      </label>
+                      <textarea
+                        id="business-description-input"
+                        rows={4}
+                        value={aiSettings.businessDescription}
+                        onChange={(e) =>
+                          setAiSettings({
+                            ...aiSettings,
+                            businessDescription: e.target.value,
+                          })
+                        }
+                        placeholder="Briefly describe what your company offers, core target audience, key customer benefits, and USPs (e.g. We provide turnkey residential interior design with 10-year warranty, free 3D design consultations, and on-time handover guarantee)..."
+                        className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all leading-relaxed"
+                      />
+                      <span className="text-[10px] text-text-secondary block">
+                        Gives the AI context about your company strengths when answering customer enquiries.
+                      </span>
+                    </div>
+
+                    {/* Guardrails and Rules */}
+                    <div className="p-5 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="custom-instructions-input" className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                          Mandatory Sales Guardrails & Rules
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAiSettings({
+                              ...aiSettings,
+                              customInstructions: `1. STRICT PRICING: Never guess or quote fixed prices without technical requirements assessment. State that pricing depends on specifications and schedule a callback.\n2. PACING: Ask at most 1-2 questions per message to avoid overwhelming the customer.\n3. HUMAN HANDOFF: If the user asks for a real human, politely acknowledge and transfer them immediately.\n4. FORMATTING: Keep messages under 50-60 words with clean WhatsApp bold (*word*) and friendly emojis.`,
+                            })
+                          }
+                          className="text-[10px] font-bold text-pilot-blue hover:underline cursor-pointer"
+                        >
+                          Reset Rules
+                        </button>
+                      </div>
+                      <textarea
+                        id="custom-instructions-input"
+                        rows={4}
+                        value={aiSettings.customInstructions}
+                        onChange={(e) =>
+                          setAiSettings({
+                            ...aiSettings,
+                            customInstructions: e.target.value,
+                          })
+                        }
+                        className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-mono leading-relaxed"
+                      />
+                      <span className="text-[10px] text-text-secondary block">
+                        Defines strict pricing guidelines (e.g. never guess fixed quotes), callback triggers, and handoff rules.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-bg-secondary/60 border border-border-main text-[11px] text-text-secondary flex items-center gap-2">
+                  <Info size={14} className="text-pilot-blue shrink-0" />
+                  <span>
+                    <strong>Organization-wide effect:</strong> These business profile details guide the AI across all customer WhatsApp conversations in your workspace.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 2: AI CONNECTION & QUOTA ─────────────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {currentStep === 2 && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* Organization-Wide Setting Notice */}
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-3">
+                  <AlertTriangle size={18} className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                  <div className="space-y-0.5">
+                    <span className="font-bold block text-sm">Organization-Wide AI Connection</span>
+                    <span className="text-[11px] opacity-90 leading-relaxed block">
+                      This Google Gemini API key powers real-time automated WhatsApp replies, dynamic lead qualification, and audio call recordings analysis across all sales representatives in your organization.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Gemini API Key Card */}
+                <div className="p-6 rounded-3xl bg-bg-secondary/40 border border-border-main space-y-4 shadow-2xs">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
@@ -2468,12 +3125,11 @@ export default function OrganizationProfile() {
                             Google Gemini API Key
                           </h3>
                           <span className="text-[10px] font-black text-red-500 uppercase">
-                            * Mandatory
+                            * Required
                           </span>
                         </div>
                         <p className="text-[11px] text-text-secondary mt-0.5">
-                          Each organization must provide their own Gemini API
-                          key for automated sales chat and RAG embeddings.
+                          Each organization provides their own Gemini key from Google AI Studio.
                         </p>
                       </div>
                     </div>
@@ -2481,20 +3137,30 @@ export default function OrganizationProfile() {
                     {aiSettings.geminiApiKey?.trim() ? (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                         <CheckCircle2 size={13} />
-                        <span>Configured & Encrypted</span>
+                        <span>Key Configured</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                         <AlertTriangle size={13} />
-                        <span>API Key Required</span>
+                        <span>Key Required</span>
                       </span>
                     )}
                   </div>
 
                   <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold">
+                      <label htmlFor="gemini-api-key-input" className="text-text-primary">
+                        Google Gemini API Key
+                      </label>
+                      <span className="text-[11px] text-text-secondary font-mono">
+                        Format: AIzaSy...
+                      </span>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row gap-2.5">
                       <div className="relative flex-1">
                         <input
+                          id="gemini-api-key-input"
                           type={showApiKey ? "text" : "password"}
                           value={aiSettings.geminiApiKey || ""}
                           onChange={(e) => {
@@ -2506,48 +3172,53 @@ export default function OrganizationProfile() {
                           }}
                           placeholder="AIzaSy..."
                           className="w-full bg-bg-card border border-border-main text-text-primary text-xs font-mono rounded-xl pl-3.5 pr-10 py-3 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
+                          aria-label="Google Gemini API Key"
+                          aria-invalid={Boolean(aiSettings.geminiApiKey?.trim()) && !geminiKeyLooksValid}
+                          required
                         />
                         <button
                           type="button"
                           onClick={() => setShowApiKey(!showApiKey)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary p-1 cursor-pointer"
+                          aria-label={showApiKey ? "Hide Gemini API key" : "Show Gemini API key"}
                           title={showApiKey ? "Hide Key" : "Show Key"}
                         >
-                          {showApiKey ? (
-                            <EyeOff size={15} />
-                          ) : (
-                            <Eye size={15} />
-                          )}
+                          {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
                         </button>
                       </div>
 
                       <button
                         type="button"
                         onClick={handleTestApiKey}
-                        disabled={
-                          testingKey || !aiSettings.geminiApiKey?.trim()
-                        }
-                        className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-bg-card hover:bg-bg-secondary border border-border-main text-xs font-bold text-text-primary hover:border-pilot-blue/50 transition-all disabled:opacity-50 cursor-pointer shrink-0 shadow-2xs"
+                        disabled={testingKey || !aiSettings.geminiApiKey?.trim()}
+                        className="px-5 py-3 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer shrink-0"
                       >
                         {testingKey ? (
-                          <RefreshCw
-                            size={14}
-                            className="animate-spin text-pilot-blue"
-                          />
+                          <>
+                            <RefreshCw size={14} className="animate-spin" />
+                            <span>Validating Key…</span>
+                          </>
                         ) : (
-                          <Sparkles size={14} className="text-pilot-blue" />
+                          <>
+                            <ShieldCheck size={14} />
+                            <span>Test API Key</span>
+                          </>
                         )}
-                        <span>{testingKey ? "Verifying..." : "Test Key"}</span>
                       </button>
                     </div>
 
-                    {/* Test result message */}
+                    {aiSettings.geminiApiKey?.trim() && !geminiKeyLooksValid && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400" role="status">
+                        Check the key format. Google Gemini keys usually start with “AIza”. You can verify it in Google AI Studio.
+                      </p>
+                    )}
+
                     {keyTestResult && (
                       <div
-                        className={`p-3 rounded-xl text-xs font-bold flex items-center justify-between gap-2 animate-fadeIn ${
+                        className={`p-3 rounded-xl text-xs flex items-center justify-between gap-2.5 animate-fadeIn ${
                           keyTestResult.success
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                            : "bg-red-500/10 text-red-500 border border-red-500/20"
+                            ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                            : "bg-red-500/10 border border-red-500/30 text-red-500"
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -2561,7 +3232,8 @@ export default function OrganizationProfile() {
                         <button
                           type="button"
                           onClick={() => setKeyTestResult(null)}
-                          className="p-1 hover:opacity-75"
+                          aria-label="Dismiss API key verification message"
+                          className="p-1 hover:opacity-75 cursor-pointer"
                         >
                           <X size={13} />
                         </button>
@@ -2570,10 +3242,9 @@ export default function OrganizationProfile() {
 
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-1 text-[11px] text-text-secondary">
                       <div className="flex items-center gap-1.5">
-                        <Lock size={12} className="text-emerald-500" />
+                        <Lock size={12} className="text-emerald-500 shrink-0" />
                         <span>
-                          Encrypted with AES-256-GCM. Never shared with other
-                          organizations.
+                          Encrypted with AES-256-GCM. Never shared with other organizations.
                         </span>
                       </div>
 
@@ -2589,650 +3260,18 @@ export default function OrganizationProfile() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
-                        Brand Name / Display Name
-                      </label>
-                      <span className="text-[10px] font-bold text-pilot-blue bg-pilot-blue/10 px-2 py-0.5 rounded-md border border-pilot-blue/20">
-                        Auto-filled
-                      </span>
-                    </div>
-                    <input
-                      type="text"
-                      value={aiSettings.companyName}
-                      onChange={(e) =>
-                        setAiSettings({
-                          ...aiSettings,
-                          companyName: e.target.value,
-                        })
-                      }
-                      placeholder={org.name || "e.g. SalesBuster AI"}
-                      className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-medium"
-                    />
-                    <span className="text-[10px] text-text-secondary mt-1.5 block">
-                      The official brand name the AI assistant introduces on
-                      WhatsApp. Automatically pre-filled from your organization
-                      profile.
-                    </span>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
-                      Custom Agent Role Description
-                    </label>
-                    <input
-                      type="text"
-                      value={aiSettings.agentPersona}
-                      onChange={(e) =>
-                        setAiSettings({
-                          ...aiSettings,
-                          agentPersona: e.target.value,
-                        })
-                      }
-                      placeholder="e.g. warm, consultative sales advisor"
-                      className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
-                    />
-                    <span className="text-[10px] text-text-secondary mt-1.5 block">
-                      Controls the AI assistant's personality traits and
-                      conversational vocabulary.
-                    </span>
-                  </div>
-                </div>
-
-                {/* Company Pitch / Overview */}
-                <div>
-                  <label className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
-                    Company Overview & Value Proposition
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={aiSettings.businessDescription}
-                    onChange={(e) =>
-                      setAiSettings({
-                        ...aiSettings,
-                        businessDescription: e.target.value,
-                      })
-                    }
-                    placeholder="Briefly describe what your company offers, core target audience, and key customer benefits..."
-                    className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all leading-relaxed"
-                  />
-                  <span className="text-[10px] text-text-secondary mt-1.5 block">
-                    Gives the AI context about your business when answering
-                    broad customer enquiries.
-                  </span>
-                </div>
-
-                {/* Guardrails and Rules */}
-                <div>
-                  <label className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
-                    Mandatory Sales Guardrails & Instructions
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={aiSettings.customInstructions}
-                    onChange={(e) =>
-                      setAiSettings({
-                        ...aiSettings,
-                        customInstructions: e.target.value,
-                      })
-                    }
-                    className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-mono leading-relaxed"
-                  />
-                  <span className="text-[10px] text-text-secondary mt-1.5 block">
-                    Defines strict pricing guidelines (e.g. never guess fixed
-                    quotes), callback triggers, and handoff rules.
-                  </span>
-                </div>
-
-                {/* ── AUTOMATED WHATSAPP WELCOME GREETING ───────────────── */}
-                <div className="p-6 rounded-3xl bg-gradient-to-br from-bg-secondary/70 via-bg-secondary/40 to-bg-card border border-border-main space-y-4 shadow-2xs">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-500 flex items-center justify-center shrink-0">
-                        <MessageCircle size={18} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
-                            Automated Welcome Greeting
-                          </h3>
-                          <span className="text-[10px] font-bold text-teal-500 bg-teal-500/10 px-2 py-0.5 rounded-full border border-teal-500/20">
-                            Instant WhatsApp Lead Response
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-text-secondary mt-0.5">
-                          Sent automatically to prospective customers when an enquiry arrives via Website, Meta Ads, Call, or Mobile App.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
-                    <div className="space-y-3.5">
-                      <div>
-                        <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
-                          Insert Dynamic Placeholders
-                        </label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[
-                            { key: "name", label: "{{name}}" },
-                            { key: "firstName", label: "{{firstName}}" },
-                            { key: "service", label: "{{service}}" },
-                            { key: "company", label: "{{company}}" },
-                            { key: "city", label: "{{city}}" },
-                            { key: "phone", label: "{{phone}}" },
-                          ].map((item) => (
-                            <button
-                              key={item.key}
-                              type="button"
-                              onClick={() => {
-                                const current =
-                                  aiSettings.welcomeMessageTemplate ||
-                                  DEFAULT_WELCOME_TEMPLATE;
-                                setAiSettings({
-                                  ...aiSettings,
-                                  welcomeMessageTemplate: `${current} {{${item.key}}}`,
-                                });
-                              }}
-                              className="px-2 py-1 text-[11px] font-semibold bg-bg-secondary/70 hover:bg-teal-500/20 text-text-primary hover:text-teal-600 rounded-lg border border-border-main transition-colors cursor-pointer"
-                              title={`Insert ${item.label}`}
-                            >
-                              + {item.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
-                            Message Template
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setAiSettings({
-                                ...aiSettings,
-                                welcomeMessageTemplate: DEFAULT_WELCOME_TEMPLATE,
-                              })
-                            }
-                            className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            Reset Default
-                          </button>
-                        </div>
-                        <textarea
-                          rows={6}
-                          value={
-                            aiSettings.welcomeMessageTemplate !== undefined &&
-                            aiSettings.welcomeMessageTemplate !== ""
-                              ? aiSettings.welcomeMessageTemplate
-                              : DEFAULT_WELCOME_TEMPLATE
-                          }
-                          onChange={(e) =>
-                            setAiSettings({
-                              ...aiSettings,
-                              welcomeMessageTemplate: e.target.value,
-                            })
-                          }
-                          placeholder="Type your organization's custom WhatsApp welcome greeting..."
-                          className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all font-mono leading-relaxed resize-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
-                          Fallback Service Name
-                        </label>
-                        <input
-                          type="text"
-                          value={aiSettings.welcomeMessageFallbackService || ""}
-                          onChange={(e) =>
-                            setAiSettings({
-                              ...aiSettings,
-                              welcomeMessageFallbackService: e.target.value,
-                            })
-                          }
-                          placeholder={
-                            aiSettings.services?.[0]?.name ||
-                            "e.g. Solutions & Services"
-                          }
-                          className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
-                        />
-                        <span className="text-[10px] text-text-secondary mt-1 block">
-                          Substituted into {"{{service}}"} if the enquiry does not specify a specific service.
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Preview Bubble */}
-                    <div className="flex flex-col justify-between p-4 rounded-2xl bg-[#0b141a] border border-border-main text-white shadow-inner min-h-[260px]">
-                      <div className="pb-2.5 border-b border-white/10 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-teal-600 flex items-center justify-center font-bold text-[10px]">
-                          {(
-                            aiSettings.companyName ||
-                            orgData?.name ||
-                            "O"
-                          )[0].toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-white truncate">
-                            {aiSettings.companyName ||
-                              orgData?.name ||
-                              "Our Company"}
-                          </div>
-                          <div className="text-[9px] text-white/50">
-                            WhatsApp Preview
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="my-auto py-2">
-                        <div className="max-w-[95%] ml-auto bg-[#005c4b] text-white text-xs p-3 rounded-2xl rounded-tr-sm shadow-md whitespace-pre-line leading-relaxed">
-                          {(
-                            aiSettings.welcomeMessageTemplate ||
-                            DEFAULT_WELCOME_TEMPLATE
-                          )
-                            .replace(/\{\{?\s*name\s*\}?\}/gi, "John Doe")
-                            .replace(/\{\{?\s*firstname\s*\}?\}/gi, "John")
-                            .replace(
-                              /\{\{?\s*service\s*\}?\}/gi,
-                              aiSettings.welcomeMessageFallbackService ||
-                                aiSettings.services?.[0]?.name ||
-                                "our services",
-                            )
-                            .replace(
-                              /\{\{?\s*company(name)?\s*\}?\}/gi,
-                              aiSettings.companyName ||
-                                orgData?.name ||
-                                "Our Company",
-                            )
-                            .replace(/\{\{?\s*city\s*\}?\}/gi, "New York")
-                            .replace(
-                              /\{\{?\s*phone\s*\}?\}/gi,
-                              "+91 98765 43210",
-                            )
-                            .replace(
-                              /\{\{?\s*source\s*\}?\}/gi,
-                              "Website Form",
-                            )}
-                          <div className="mt-1 flex items-center justify-end gap-1 text-[9px] text-white/60">
-                            <span>Just now</span>
-                            <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 text-[10px] text-white/40 text-center border-t border-white/5">
-                        Live preview demonstrating placeholder substitution
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── CARD: Automated Missed Call WhatsApp Message Configuration ── */}
-                <div className="p-5 md:p-6 rounded-2xl bg-bg-card border border-border-main space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border-main">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
-                        <PhoneMissed className="w-5 h-5 text-rose-500" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
-                            Automated Missed Call WhatsApp Message
-                          </h3>
-                          <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
-                            Dual-SIM & Line Aware
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-text-secondary mt-0.5">
-                          Automatically messages callers on WhatsApp when a call to your sales representatives is missed or unanswered.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Master Enable Toggle */}
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <span className="text-xs font-bold text-text-primary">
-                        {aiSettings.missedCallMessageEnabled ? "Active" : "Disabled"}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setAiSettings({
-                            ...aiSettings,
-                            missedCallMessageEnabled: !aiSettings.missedCallMessageEnabled,
-                          })
-                        }
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          aiSettings.missedCallMessageEnabled
-                            ? "bg-rose-500"
-                            : "bg-border-main"
-                        }`}
-                        title={
-                          aiSettings.missedCallMessageEnabled
-                            ? "Disable Automated Missed Call Messages"
-                            : "Enable Automated Missed Call Messages"
-                        }
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            aiSettings.missedCallMessageEnabled
-                              ? "translate-x-5"
-                              : "translate-x-0"
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-
-                  {aiSettings.missedCallMessageEnabled && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
-                      <div className="space-y-4">
-                        {/* Tab Switcher for Editing */}
-                        <div className="flex p-1 bg-bg-secondary/60 rounded-xl border border-border-main gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setMissedCallEditingTab("diff")}
-                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                              missedCallEditingTab === "diff"
-                                ? "bg-bg-card text-rose-500 shadow-sm border border-border-main"
-                                : "text-text-secondary hover:text-text-primary"
-                            }`}
-                          >
-                            <PhoneMissed className="w-3.5 h-3.5" />
-                            Alternate Line (SIM 2)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMissedCallEditingTab("same")}
-                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                              missedCallEditingTab === "same"
-                                ? "bg-bg-card text-teal-600 shadow-sm border border-border-main"
-                                : "text-text-secondary hover:text-text-primary"
-                            }`}
-                          >
-                            <PhoneCall className="w-3.5 h-3.5" />
-                            Same Line (SIM 1)
-                          </button>
-                        </div>
-
-                        {missedCallEditingTab === "diff" ? (
-                          <div className="space-y-3">
-                            <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 text-xs text-text-secondary">
-                              <span className="font-bold text-rose-500">Cross-SIM Scenario:</span> Dispatched when the customer calls a different SIM/number than your active WhatsApp connection. Informs the customer that they reached your other line.
-                            </div>
-
-                            <div>
-                              <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
-                                Insert Dynamic Placeholders
-                              </label>
-                              <div className="flex flex-wrap gap-1.5">
-                                {[
-                                  { key: "name", label: "{{name}}" },
-                                  { key: "number", label: "{{number}}", highlight: true },
-                                  { key: "company", label: "{{company}}" },
-                                  { key: "service", label: "{{service}}" },
-                                ].map((item) => (
-                                  <button
-                                    key={item.key}
-                                    type="button"
-                                    onClick={() => {
-                                      const current =
-                                        aiSettings.missedCallDifferentNumberTemplate ||
-                                        DEFAULT_MISSED_CALL_DIFF_TEMPLATE;
-                                      setAiSettings({
-                                        ...aiSettings,
-                                        missedCallDifferentNumberTemplate: `${current} {{${item.key}}}`,
-                                      });
-                                    }}
-                                    className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition-colors cursor-pointer ${
-                                      item.highlight
-                                        ? "bg-rose-500/10 text-rose-500 border-rose-500/30 hover:bg-rose-500/20"
-                                        : "bg-bg-secondary/70 hover:bg-teal-500/20 text-text-primary hover:text-teal-600 border-border-main"
-                                    }`}
-                                    title={`Insert ${item.label}`}
-                                  >
-                                    + {item.label} {item.highlight ? "★ (Received SIM)" : ""}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
-                                  Cross-Line Message Template
-                                </label>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setAiSettings({
-                                      ...aiSettings,
-                                      missedCallDifferentNumberTemplate: DEFAULT_MISSED_CALL_DIFF_TEMPLATE,
-                                    })
-                                  }
-                                  className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer"
-                                >
-                                  <RotateCcw className="w-3 h-3" />
-                                  Reset Default
-                                </button>
-                              </div>
-                              <textarea
-                                rows={5}
-                                value={
-                                  aiSettings.missedCallDifferentNumberTemplate !== undefined &&
-                                  aiSettings.missedCallDifferentNumberTemplate !== ""
-                                    ? aiSettings.missedCallDifferentNumberTemplate
-                                    : DEFAULT_MISSED_CALL_DIFF_TEMPLATE
-                                }
-                                onChange={(e) =>
-                                  setAiSettings({
-                                    ...aiSettings,
-                                    missedCallDifferentNumberTemplate: e.target.value,
-                                  })
-                                }
-                                placeholder="e.g. Hello {{name}}! You have contacted {{number}}, this is also my number..."
-                                className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all font-mono leading-relaxed resize-none"
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="p-3 rounded-xl bg-teal-500/5 border border-teal-500/20 text-xs text-text-secondary">
-                              <span className="font-bold text-teal-600">Same-SIM Scenario:</span> Dispatched when the customer calls the exact same number that is connected to WhatsApp. Standard greeting without attaching any secondary number.
-                            </div>
-
-                            <div>
-                              <label className="block text-xs font-black text-text-primary mb-1 uppercase tracking-wider">
-                                Insert Dynamic Placeholders
-                              </label>
-                              <div className="flex flex-wrap gap-1.5">
-                                {[
-                                  { key: "name", label: "{{name}}" },
-                                  { key: "company", label: "{{company}}" },
-                                  { key: "service", label: "{{service}}" },
-                                ].map((item) => (
-                                  <button
-                                    key={item.key}
-                                    type="button"
-                                    onClick={() => {
-                                      const current =
-                                        aiSettings.missedCallMessageTemplate ||
-                                        DEFAULT_MISSED_CALL_SAME_TEMPLATE;
-                                      setAiSettings({
-                                        ...aiSettings,
-                                        missedCallMessageTemplate: `${current} {{${item.key}}}`,
-                                      });
-                                    }}
-                                    className="px-2 py-1 text-[11px] font-semibold bg-bg-secondary/70 hover:bg-teal-500/20 text-text-primary hover:text-teal-600 rounded-lg border border-border-main transition-colors cursor-pointer"
-                                    title={`Insert ${item.label}`}
-                                  >
-                                    + {item.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <label className="block text-xs font-black text-text-primary uppercase tracking-wider">
-                                  Same-Line Message Template
-                                </label>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setAiSettings({
-                                      ...aiSettings,
-                                      missedCallMessageTemplate: DEFAULT_MISSED_CALL_SAME_TEMPLATE,
-                                    })
-                                  }
-                                  className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer"
-                                >
-                                  <RotateCcw className="w-3 h-3" />
-                                  Reset Default
-                                </button>
-                              </div>
-                              <textarea
-                                rows={5}
-                                value={
-                                  aiSettings.missedCallMessageTemplate !== undefined &&
-                                  aiSettings.missedCallMessageTemplate !== ""
-                                    ? aiSettings.missedCallMessageTemplate
-                                    : DEFAULT_MISSED_CALL_SAME_TEMPLATE
-                                }
-                                onChange={(e) =>
-                                  setAiSettings({
-                                    ...aiSettings,
-                                    missedCallMessageTemplate: e.target.value,
-                                  })
-                                }
-                                placeholder="e.g. Hello {{name}}! We received your call, but we couldn't connect..."
-                                className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-mono leading-relaxed resize-none"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* WhatsApp Live Preview Box */}
-                      <div className="flex flex-col justify-between p-4 rounded-2xl bg-[#0b141a] border border-border-main text-white shadow-inner min-h-[260px]">
-                        <div>
-                          <div className="pb-2.5 border-b border-white/10 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-rose-600 flex items-center justify-center font-bold text-[10px]">
-                                {(
-                                  aiSettings.companyName ||
-                                  orgData?.name ||
-                                  "O"
-                                )[0].toUpperCase()}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-white truncate">
-                                  {aiSettings.companyName ||
-                                    orgData?.name ||
-                                    "Our Company"}
-                                </div>
-                                <div className="text-[9px] text-white/50">
-                                  Missed Call Auto-Reply
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Preview Mode Selector */}
-                            <div className="flex items-center gap-1 bg-white/10 p-0.5 rounded-lg text-[10px]">
-                              <button
-                                type="button"
-                                onClick={() => setMissedCallPreviewTab("diff")}
-                                className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
-                                  missedCallPreviewTab === "diff"
-                                    ? "bg-rose-500 text-white"
-                                    : "text-white/60 hover:text-white"
-                                }`}
-                              >
-                                Called SIM 2
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setMissedCallPreviewTab("same")}
-                                className={`px-2 py-0.5 rounded-md font-semibold transition-colors ${
-                                  missedCallPreviewTab === "same"
-                                    ? "bg-teal-600 text-white"
-                                    : "text-white/60 hover:text-white"
-                                }`}
-                              >
-                                Called SIM 1
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="py-3">
-                            <div className="max-w-[95%] ml-auto bg-[#005c4b] text-white text-xs p-3 rounded-2xl rounded-tr-sm shadow-md whitespace-pre-line leading-relaxed">
-                              {missedCallPreviewTab === "diff"
-                                ? (
-                                    aiSettings.missedCallDifferentNumberTemplate ||
-                                    DEFAULT_MISSED_CALL_DIFF_TEMPLATE
-                                  )
-                                    .replace(/\{\{\s*name\s*\}\}/gi, "John Doe")
-                                    .replace(
-                                      /\{\{\s*number\s*\}\}/gi,
-                                      "+91 98765 00002",
-                                    )
-                                    .replace(
-                                      /\{\{\s*company\s*\}\}/gi,
-                                      aiSettings.companyName ||
-                                        orgData?.name ||
-                                        "Our Company",
-                                    )
-                                    .replace(
-                                      /\{\{\s*service\s*\}\}/gi,
-                                      aiSettings.services?.[0]?.name ||
-                                        "General Enquiry",
-                                    )
-                                : (
-                                    aiSettings.missedCallMessageTemplate ||
-                                    DEFAULT_MISSED_CALL_SAME_TEMPLATE
-                                  )
-                                    .replace(/\{\{\s*name\s*\}\}/gi, "John Doe")
-                                    .replace(
-                                      /\{\{\s*company\s*\}\}/gi,
-                                      aiSettings.companyName ||
-                                        orgData?.name ||
-                                        "Our Company",
-                                    )
-                                    .replace(
-                                      /\{\{\s*service\s*\}\}/gi,
-                                      aiSettings.services?.[0]?.name ||
-                                        "General Enquiry",
-                                    )}
-                              <div className="mt-1 flex items-center justify-end gap-1 text-[9px] text-white/60">
-                                <span>Just now</span>
-                                <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="pt-2 text-[10px] text-white/40 text-center border-t border-white/5">
-                          {missedCallPreviewTab === "diff"
-                            ? "Previewing cross-SIM notice sent to customer who called SIM 2"
-                            : "Previewing standard greeting sent when caller dialed your WhatsApp SIM"}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                {/* Daily Quota & Usage Monitor Card */}
+                {renderDailyAiUsageCard(true)}
               </div>
             )}
 
-            {/* ── STEP 2: PRODUCTS & SERVICES ─────────────────────────────── */}
-            {currentStep === 2 && (
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 3: PRODUCTS & SERVICES ────────────────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {currentStep === 3 && (
               <div className="space-y-6 animate-fadeIn">
-                {/* Step 2 Pro Guidance Callout */}
+                {/* Step 3 Pro Guidance Callout */}
                 <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div className="flex items-start gap-3">
                     <div className="p-2 rounded-xl bg-pilot-blue/10 text-pilot-blue shrink-0 mt-0.5">
@@ -3243,9 +3282,7 @@ export default function OrganizationProfile() {
                         Catalog & Offering Matching
                       </div>
                       <p className="text-text-secondary leading-relaxed">
-                        When a customer reaches out via WhatsApp, the AI maps
-                        their request to these services and keywords, and tags
-                        the lead in your CRM.
+                        When a customer reaches out via WhatsApp, the AI maps their request to these products, services, and keywords, and tags the lead in your CRM.
                       </p>
                     </div>
                   </div>
@@ -3269,8 +3306,7 @@ export default function OrganizationProfile() {
                       Catalog Offerings ({aiSettings.services.length})
                     </h3>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      The AI automatically matches incoming customer messages
-                      against these products and keywords.
+                      The AI automatically matches incoming customer messages against these products and keywords.
                     </p>
                   </div>
 
@@ -3288,6 +3324,7 @@ export default function OrganizationProfile() {
                       </div>
                       <button
                         type="button"
+                        aria-label={aiSettings.serviceImagesAutoSendEnabled !== false ? "Pause auto-sending service photos" : "Enable auto-sending service photos"}
                         onClick={() => {
                           const updated = {
                             ...aiSettings,
@@ -3329,6 +3366,7 @@ export default function OrganizationProfile() {
                     </button>
 
                     <button
+                      type="button"
                       onClick={handleOpenAddServiceModal}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-all shadow-xs shrink-0 cursor-pointer"
                     >
@@ -3348,11 +3386,11 @@ export default function OrganizationProfile() {
                       No Catalog Services Configured Yet
                     </h4>
                     <p className="text-xs text-text-secondary max-w-md mx-auto">
-                      Add your products or services so the AI knows what you
-                      sell and can guide your customers effectively.
+                      Add your products or services so the AI knows what you sell and can guide your customers effectively.
                     </p>
                     <div className="flex items-center justify-center gap-2.5 pt-1">
                       <button
+                        type="button"
                         onClick={openServicesImportModal}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-bg-card border border-border-main text-text-primary text-xs font-bold hover:bg-bg-secondary transition-colors cursor-pointer"
                       >
@@ -3360,6 +3398,7 @@ export default function OrganizationProfile() {
                         <span>Import Services JSON</span>
                       </button>
                       <button
+                        type="button"
                         onClick={handleOpenAddServiceModal}
                         className="px-4 py-2 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-colors cursor-pointer"
                       >
@@ -3388,16 +3427,20 @@ export default function OrganizationProfile() {
                             </div>
                             <div className="flex items-center gap-1">
                               <button
+                                type="button"
                                 onClick={() => handleOpenEditServiceModal(idx)}
-                                className="text-text-secondary hover:text-pilot-blue p-1 rounded-lg hover:bg-pilot-blue/10 transition-colors"
+                                className="text-text-secondary hover:text-pilot-blue p-1 rounded-lg hover:bg-pilot-blue/10 transition-colors cursor-pointer"
                                 title="Edit Service & Images"
+                                aria-label={`Edit ${svc.name}`}
                               >
                                 <Edit2 size={14} />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => handleRemoveService(idx)}
-                                className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
+                                className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
                                 title="Delete Service"
+                                aria-label={`Remove ${svc.name}`}
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -3408,63 +3451,44 @@ export default function OrganizationProfile() {
                           </p>
                         </div>
 
-                        <div className="space-y-3">
-                          <div>
-                            <span className="text-[10px] font-bold text-text-secondary uppercase block mb-1.5">
-                              Intent Keywords:
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {svc.keywords && svc.keywords.length > 0 ? (
-                                svc.keywords.map((kw, kidx) => (
-                                  <span
-                                    key={kidx}
-                                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-bg-card border border-border-main text-pilot-blue"
-                                  >
-                                    #{kw}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-[10px] text-text-secondary italic">
-                                  No keywords tagged
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Attached Service Photos Preview */}
-                          {svc.images && svc.images.length > 0 && (
-                            <div className="pt-2.5 border-t border-border-main/50 space-y-1.5">
-                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-pilot-blue">
-                                <ImageIcon size={12} />
-                                <span>
-                                  {svc.images.length} Service Image{svc.images.length > 1 ? "s" : ""} Attached
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                                {svc.images.map((img, i) => (
-                                  <div
-                                    key={i}
-                                    className="relative group/thumb shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-border-main bg-bg-card shadow-2xs"
-                                  >
-                                    <img
-                                      src={
-                                        img.url?.startsWith("http")
-                                          ? img.url
-                                          : `${BACKEND_URL}${img.url}`
-                                      }
-                                      alt={img.description || `Service photo ${i + 1}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                    {img.description && (
-                                      <div className="absolute inset-0 bg-black/75 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center p-1 text-[8px] text-white text-center leading-tight line-clamp-3">
-                                        {img.description}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
+                        <div className="space-y-2 pt-2 border-t border-border-main/60">
+                          {Array.isArray(svc.images) && svc.images.length > 0 && (
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                              {svc.images.map((img, imgIdx) => (
+                                <div
+                                  key={imgIdx}
+                                  className="w-10 h-10 rounded-lg overflow-hidden border border-border-main shrink-0 bg-bg-card relative group/img"
+                                  title={img.title || img.description || "Service Photo"}
+                                >
+                                  <img
+                                    src={img.url}
+                                    alt={img.title || "Service photo"}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                              <span className="text-[10px] text-text-secondary font-medium pl-1 shrink-0">
+                                {svc.images.length} {svc.images.length === 1 ? "photo" : "photos"}
+                              </span>
                             </div>
                           )}
+
+                          <div className="flex flex-wrap gap-1">
+                            {(Array.isArray(svc.keywords)
+                              ? svc.keywords
+                              : (svc.keywords || "").split(",")
+                            )
+                              .map((k) => k.trim())
+                              .filter(Boolean)
+                              .map((kw, kidx) => (
+                                <span
+                                  key={kidx}
+                                  className="text-[10px] px-2 py-0.5 rounded-md bg-bg-card border border-border-main text-text-secondary"
+                                >
+                                  #{kw}
+                                </span>
+                              ))}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -3473,185 +3497,144 @@ export default function OrganizationProfile() {
 
                 {/* Add / Edit Service Modal */}
                 {showAddServiceModal && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
-                    <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-lg w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn" role="presentation">
+                    <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-lg w-full max-h-[90vh] flex flex-col justify-between shadow-2xl space-y-4" role="dialog" aria-modal="true" aria-labelledby="service-modal-title">
                       <div className="flex justify-between items-center pb-2 border-b border-border-main">
-                        <div className="flex items-center gap-2">
-                          <Layers size={18} className="text-pilot-blue" />
-                          <h3 className="text-sm font-black text-text-primary">
-                            {editingServiceIndex !== null
-                              ? "Edit Product or Service"
-                              : "Add Product or Service"}
-                          </h3>
-                        </div>
+                        <h3 id="service-modal-title" className="text-sm font-black text-text-primary">
+                          {editingServiceIndex !== null
+                            ? "Edit Service & Photos"
+                            : "Add Catalog Service"}
+                        </h3>
                         <button
+                          type="button"
                           onClick={() => {
                             setShowAddServiceModal(false);
                             setEditingServiceIndex(null);
                           }}
-                          className="p-1 text-text-secondary hover:text-text-primary rounded-lg cursor-pointer"
+                          className="p-1 text-text-secondary hover:text-text-primary rounded-lg transition-colors cursor-pointer"
+                          aria-label="Close service modal"
                         >
                           <X size={16} />
                         </button>
                       </div>
 
-                      <div className="space-y-3.5">
+                      <div className="space-y-4 overflow-y-auto pr-1 flex-1">
+                        {serviceFormError && (
+                          <p className="text-xs text-red-600 dark:text-red-400 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20" role="alert">
+                            {serviceFormError}
+                          </p>
+                        )}
                         <div>
-                          <label className="block text-xs font-bold text-text-primary mb-1">
-                            Service / Offering Name *
+                          <label htmlFor="service-name" className="block text-xs font-bold text-text-primary mb-1">
+                            Service / Product Name *
                           </label>
                           <input
+                            id="service-name"
                             type="text"
                             value={newService.name}
                             onChange={(e) =>
-                              setNewService({
-                                ...newService,
-                                name: e.target.value,
-                              })
+                              (setServiceFormError(""), setNewService({ ...newService, name: e.target.value }))
                             }
-                            placeholder="e.g. Gir Cow / 3 BHK Luxury Flat / MRL Passenger Lift"
-                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue font-medium"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-text-primary mb-1">
-                            Description for AI Assistant *
-                          </label>
-                          <textarea
-                            rows={3}
-                            value={newService.description}
-                            onChange={(e) =>
-                              setNewService({
-                                ...newService,
-                                description: e.target.value,
-                              })
-                            }
-                            placeholder="Describe features, suitability, and benefits so the AI can explain it to customers..."
-                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue leading-relaxed"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-text-primary mb-1">
-                            Intent Keywords (comma-separated)
-                          </label>
-                          <input
-                            type="text"
-                            value={newService.keywords}
-                            onChange={(e) =>
-                              setNewService({
-                                ...newService,
-                                keywords: e.target.value,
-                              })
-                            }
-                            placeholder="e.g. gir cow, dairy cattle, a2 milk, ongole"
+                            placeholder="e.g. Turnkey Interior Design"
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           />
                         </div>
 
-                        {/* Images & Descriptions for WhatsApp Dispatch */}
-                        <div className="pt-2 border-t border-border-main/60 space-y-3">
-                          <div className="flex items-center justify-between p-3 rounded-2xl bg-bg-secondary/40 border border-border-main">
-                            <div>
-                              <div className="text-xs font-bold text-text-primary">
-                                Auto-Send Photos for this Service
-                              </div>
-                              <div className="text-[10px] text-text-secondary mt-0.5">
-                                When turned off, the AI responds without sending media attachments.
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setNewService((prev) => ({
-                                  ...prev,
-                                  sendImagesEnabled:
-                                    prev.sendImagesEnabled === false,
-                                }))
-                              }
-                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                newService.sendImagesEnabled !== false
-                                  ? "bg-pilot-blue"
-                                  : "bg-border-main"
-                              }`}
-                              title={
-                                newService.sendImagesEnabled !== false
-                                  ? "Disable photo sending for this service"
-                                  : "Enable photo sending for this service"
-                              }
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                  newService.sendImagesEnabled !== false
-                                    ? "translate-x-4"
-                                    : "translate-x-0"
-                                }`}
-                              />
-                            </button>
-                          </div>
+                        <div>
+                          <label htmlFor="service-description" className="block text-xs font-bold text-text-primary mb-1">
+                            Description *
+                          </label>
+                          <textarea
+                            id="service-description"
+                            rows={3}
+                            value={newService.description}
+                            onChange={(e) =>
+                              (setServiceFormError(""), setNewService({
+                                ...newService,
+                                description: e.target.value,
+                              }))
+                            }
+                            placeholder="What this service includes, scope, or standard customer packages..."
+                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
+                          />
+                        </div>
 
+                        <div>
+                          <label htmlFor="service-keywords" className="block text-xs font-bold text-text-primary mb-1">
+                            Customer Keywords (comma-separated) *
+                          </label>
+                          <input
+                            id="service-keywords"
+                            type="text"
+                            value={newService.keywords}
+                            onChange={(e) =>
+                              (setServiceFormError(""), setNewService({
+                                ...newService,
+                                keywords: e.target.value,
+                              }))
+                            }
+                            placeholder="e.g. interior, design, renovation, modular kitchen, luxury home"
+                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
+                          />
+                          <span className="text-[10px] text-text-secondary mt-1 block">
+                            Keywords customers use in messages that indicate interest in this service.
+                          </span>
+                        </div>
+
+                        {/* WhatsApp Photo Attachments */}
+                        <div className="pt-2 border-t border-border-main space-y-3">
                           <div className="flex items-center justify-between">
                             <div>
-                              <label className="block text-xs font-bold text-text-primary">
-                                Service Images & Descriptions
-                              </label>
+                              <span className="text-xs font-bold text-text-primary block">
+                                WhatsApp Photo Attachments
+                              </span>
                               <span className="text-[10px] text-text-secondary">
-                                Sent automatically to WhatsApp users when inquiring about this service.
+                                Sent to customers who enquire about this service.
                               </span>
                             </div>
-                            <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-secondary hover:bg-bg-secondary/70 border border-border-main text-pilot-blue text-xs font-bold cursor-pointer transition-colors shadow-2xs shrink-0">
+
+                            <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pilot-blue/10 hover:bg-pilot-blue/20 text-pilot-blue text-xs font-bold transition-colors cursor-pointer">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={handleServiceImageUpload}
+                                disabled={serviceImageUploading}
+                                className="hidden"
+                              />
                               {serviceImageUploading ? (
                                 <RefreshCw size={13} className="animate-spin" />
                               ) : (
                                 <Upload size={13} />
                               )}
-                              <span>
-                                {serviceImageUploading
-                                  ? "Uploading..."
-                                  : "Add Photos"}
-                              </span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                disabled={serviceImageUploading}
-                                onChange={handleServiceImageUpload}
-                                className="hidden"
-                              />
+                              <span>{serviceImageUploading ? "Uploading…" : "Add Photos"}</span>
                             </label>
                           </div>
 
-                          {newService.images && newService.images.length > 0 ? (
-                            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                          {/* Photos List */}
+                          {Array.isArray(newService.images) && newService.images.length > 0 ? (
+                            <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
                               {newService.images.map((img, imgIdx) => (
                                 <div
                                   key={imgIdx}
-                                  className="flex items-start gap-3 p-2.5 rounded-xl bg-bg-secondary/40 border border-border-main shadow-2xs"
+                                  className="p-2.5 rounded-xl bg-bg-secondary/60 border border-border-main flex items-start gap-3"
                                 >
-                                  <div className="w-14 h-14 rounded-lg overflow-hidden shrink-0 border border-border-main bg-black/10">
-                                    <img
-                                      src={
-                                        img.url?.startsWith("http")
-                                          ? img.url
-                                          : `${BACKEND_URL}${img.url}`
-                                      }
-                                      alt={`Service photo ${imgIdx + 1}`}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  </div>
-                                  <div className="flex-1 space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-[10px] font-bold text-text-secondary uppercase">
-                                        Photo #{imgIdx + 1} WhatsApp Caption
+                                  <img
+                                    src={img.url}
+                                    alt={img.title || "Photo thumbnail"}
+                                    className="w-14 h-14 rounded-lg object-cover border border-border-main shrink-0"
+                                  />
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-xs font-bold text-text-primary truncate">
+                                        {img.title || `Photo #${imgIdx + 1}`}
                                       </span>
                                       <button
                                         type="button"
-                                        onClick={() =>
-                                          handleRemoveServiceImage(imgIdx)
-                                        }
+                                        onClick={() => handleRemoveServiceImage(imgIdx)}
                                         className="text-text-secondary hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
                                         title="Remove photo"
+                                        aria-label="Remove photo"
                                       >
                                         <Trash2 size={12} />
                                       </button>
@@ -3665,7 +3648,7 @@ export default function OrganizationProfile() {
                                           e.target.value,
                                         )
                                       }
-                                      placeholder="Caption sent with this photo on WhatsApp (e.g. Pure Gir Cow, high milk yield, pedigree certified)..."
+                                      placeholder="Caption sent with this photo on WhatsApp..."
                                       className="w-full bg-bg-card border border-border-main text-text-primary text-[11px] rounded-lg p-2 outline-none focus:border-pilot-blue resize-none"
                                     />
                                   </div>
@@ -3687,6 +3670,7 @@ export default function OrganizationProfile() {
 
                       <div className="flex justify-end gap-2 pt-2 border-t border-border-main">
                         <button
+                          type="button"
                           onClick={() => {
                             setShowAddServiceModal(false);
                             setEditingServiceIndex(null);
@@ -3696,9 +3680,9 @@ export default function OrganizationProfile() {
                           Cancel
                         </button>
                         <button
+                          type="button"
                           onClick={handleSaveService}
-                          disabled={!newService.name.trim()}
-                          className="px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+                          className="px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
                         >
                           Save Service
                         </button>
@@ -3709,10 +3693,12 @@ export default function OrganizationProfile() {
               </div>
             )}
 
-            {/* ── STEP 3: LEAD QUALIFICATION SCHEMA ───────────────────────── */}
-            {currentStep === 3 && (
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 4: LEAD QUESTIONS & QUALIFICATION ─────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {currentStep === 4 && (
               <div className="space-y-6 animate-fadeIn">
-                {/* Step 3 Pro Guidance Callout */}
+                {/* Step 4 Guidance Callout */}
                 <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div className="flex items-start gap-3">
                     <div className="p-2 rounded-xl bg-pilot-blue/10 text-pilot-blue shrink-0 mt-0.5">
@@ -3720,13 +3706,10 @@ export default function OrganizationProfile() {
                     </div>
                     <div className="space-y-0.5 text-xs">
                       <div className="font-bold text-text-primary">
-                        How Dynamic Qualification Works
+                        How Lead Qualification Works
                       </div>
                       <p className="text-text-secondary leading-relaxed">
-                        The AI agent asks these qualification questions
-                        organically over the WhatsApp conversation, avoiding
-                        rigid interrogation and maximizing customer response
-                        rates.
+                        The AI agent asks these qualification questions organically over the WhatsApp conversation, avoiding rigid interrogation and maximizing customer response rates.
                       </p>
                     </div>
                   </div>
@@ -3744,17 +3727,14 @@ export default function OrganizationProfile() {
                   </button>
                 </div>
 
-                {/* Lead Qualification Criteria Header */}
+                {/* Lead Questions Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
                     <h3 className="text-sm font-black text-text-primary">
-                      Lead Qualification Criteria (
-                      {aiSettings.qualificationFields.length})
+                      Lead Qualification Questions ({aiSettings.qualificationFields.length})
                     </h3>
                     <p className="text-xs text-text-secondary mt-0.5">
-                      Standard criteria your AI extracts to qualify leads.
-                      Customize, edit, delete, or add questions to suit your
-                      business.
+                      Standard criteria your AI extracts to qualify leads. Customize, edit, delete, or add questions to suit your business.
                     </p>
                   </div>
 
@@ -3770,6 +3750,7 @@ export default function OrganizationProfile() {
                     </button>
 
                     <button
+                      type="button"
                       onClick={() => {
                         setEditingFieldIndex(null);
                         setNewField({
@@ -3790,32 +3771,33 @@ export default function OrganizationProfile() {
                   </div>
                 </div>
 
-                {/* Custom Fields List */}
+                {/* Questions Grid */}
                 {aiSettings.qualificationFields.length === 0 ? (
                   <div className="p-10 rounded-3xl bg-bg-secondary/40 border border-dashed border-border-main text-center space-y-3">
                     <div className="w-12 h-12 rounded-2xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center mx-auto">
                       <ListFilter size={22} />
                     </div>
                     <h4 className="text-sm font-bold text-text-primary">
-                      No Custom Questions Configured
+                      No Lead Questions Configured
                     </h4>
                     <p className="text-xs text-text-secondary max-w-md mx-auto">
-                      Add business-specific criteria (e.g. budget, timeframe,
-                      product specifications) to capture key lead requirements.
+                      Add business-specific criteria (e.g. location, budget, timeframe, project specifications) to capture key lead requirements.
                     </p>
                     <div className="flex items-center justify-center gap-2.5 pt-1">
                       <button
+                        type="button"
                         onClick={openQualificationImportModal}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-bg-card border border-border-main text-text-primary text-xs font-bold hover:bg-bg-secondary transition-colors cursor-pointer"
                       >
                         <FileJson size={14} className="text-pilot-blue" />
-                        <span>Import Criteria JSON</span>
+                        <span>Import Questions JSON</span>
                       </button>
                       <button
+                        type="button"
                         onClick={() => setShowAddFieldModal(true)}
                         className="px-4 py-2 rounded-xl bg-pilot-blue text-white text-xs font-bold hover:bg-pilot-blue-hover transition-colors cursor-pointer"
                       >
-                        Add First Field
+                        Add First Question
                       </button>
                     </div>
                   </div>
@@ -3838,39 +3820,41 @@ export default function OrganizationProfile() {
                             </div>
                             <div className="flex items-center gap-1">
                               <button
+                                type="button"
                                 onClick={() => handleEditField(idx)}
-                                className="text-text-secondary hover:text-pilot-blue p-1 rounded-lg hover:bg-pilot-blue/10 transition-colors"
+                                className="text-text-secondary hover:text-pilot-blue p-1 rounded-lg hover:bg-pilot-blue/10 transition-colors cursor-pointer"
                                 title="Edit Question"
+                                aria-label={`Edit qualification question ${field.label}`}
                               >
                                 <Edit2 size={14} />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => handleRemoveField(idx)}
-                                className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors"
-                                title="Delete Field"
+                                className="text-text-secondary hover:text-red-500 p-1 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                                title="Delete Question"
+                                aria-label={`Remove qualification question ${field.label}`}
                               >
                                 <Trash2 size={14} />
                               </button>
                             </div>
                           </div>
 
-                          <span className="text-[10px] font-mono text-text-secondary block">
-                            Key:{" "}
-                            <span className="font-bold text-text-primary">
-                              {field.key}
-                            </span>
-                          </span>
+                          <div className="text-[11px] font-mono text-text-secondary">
+                            Key: <span className="text-text-primary font-bold">{field.key}</span>
+                          </div>
 
-                          <p className="text-xs text-text-secondary leading-relaxed">
-                            {field.description ||
-                              "No extraction guidance specified."}
-                          </p>
+                          {field.description && (
+                            <p className="text-xs text-text-secondary leading-relaxed pt-1">
+                              {field.description}
+                            </p>
+                          )}
                         </div>
 
-                        {field.options && field.options.length > 0 && (
-                          <div>
-                            <span className="text-[10px] font-bold text-text-secondary uppercase block mb-1">
-                              Allowed Options:
+                        {Array.isArray(field.options) && field.options.length > 0 && (
+                          <div className="pt-2 border-t border-border-main/60">
+                            <span className="text-[10px] uppercase font-bold text-text-secondary block mb-1">
+                              Allowed Choices:
                             </span>
                             <div className="flex flex-wrap gap-1">
                               {field.options.map((opt, oidx) => (
@@ -3889,114 +3873,112 @@ export default function OrganizationProfile() {
                   </div>
                 )}
 
-                {/* Add Field Modal */}
+                {/* Add / Edit Field Modal */}
                 {showAddFieldModal && (
-                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
-                    <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-lg w-full space-y-4 shadow-xl">
+                  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn" role="presentation">
+                    <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4" role="dialog" aria-modal="true" aria-labelledby="question-modal-title">
                       <div className="flex justify-between items-center pb-2 border-b border-border-main">
-                        <div className="flex items-center gap-2">
-                          <ListFilter size={18} className="text-pilot-blue" />
-                          <h3 className="text-sm font-black text-text-primary">
-                            {editingFieldIndex !== null
-                              ? "Edit Qualification Field"
-                              : "Add Qualification Field"}
-                          </h3>
-                        </div>
+                        <h3 id="question-modal-title" className="text-sm font-black text-text-primary">
+                          {editingFieldIndex !== null
+                            ? "Edit Qualification Question"
+                            : "Add Custom Question"}
+                        </h3>
                         <button
+                          type="button"
                           onClick={() => {
                             setEditingFieldIndex(null);
                             setShowAddFieldModal(false);
                           }}
-                          className="p-1 text-text-secondary hover:text-text-primary rounded-lg"
+                          className="p-1 text-text-secondary hover:text-text-primary rounded-lg transition-colors cursor-pointer"
+                          aria-label="Close question modal"
                         >
                           <X size={16} />
                         </button>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-bold text-text-primary mb-1">
-                              Question / Display Label *
-                            </label>
-                            <input
-                              type="text"
-                              value={newField.label}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setNewField({
-                                  ...newField,
-                                  label: val,
-                                  key:
-                                    newField.key ||
-                                    val
-                                      .toLowerCase()
-                                      .replace(/[^a-z0-9]/g, "_"),
-                                });
-                              }}
-                              placeholder="e.g. Budget Range / BHK"
-                              className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
-                            />
-                          </div>
+                      <div className="space-y-3.5">
+                        {fieldFormError && (
+                          <p className="text-xs text-red-600 dark:text-red-400 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20" role="alert">
+                            {fieldFormError}
+                          </p>
+                        )}
 
-                          <div>
-                            <label className="block text-xs font-bold text-text-primary mb-1">
-                              Field Key (Identifier) *
-                            </label>
-                            <input
-                              type="text"
-                              value={newField.key}
-                              onChange={(e) =>
-                                setNewField({
-                                  ...newField,
-                                  key: e.target.value,
-                                })
-                              }
-                              placeholder="e.g. budget_range"
-                              className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue font-mono"
-                            />
-                          </div>
+                        <div>
+                          <label htmlFor="field-label" className="block text-xs font-bold text-text-primary mb-1">
+                            Question Display Label *
+                          </label>
+                          <input
+                            id="field-label"
+                            type="text"
+                            value={newField.label}
+                            onChange={(e) => {
+                              setFieldFormError("");
+                              const val = e.target.value;
+                              const autoKey = val
+                                .toLowerCase()
+                                .replace(/[^a-zA-Z0-9 ]/g, "")
+                                .replace(/\s+(.)/g, (_, c) => c.toUpperCase())
+                                .trim();
+                              setNewField({
+                                ...newField,
+                                label: val,
+                                key: editingFieldIndex === null ? autoKey : newField.key,
+                              });
+                            }}
+                            placeholder="e.g. Preferred Location"
+                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
+                          />
                         </div>
 
                         <div>
-                          <label className="block text-xs font-bold text-text-primary mb-1">
-                            Field Data Type
+                          <label htmlFor="field-key" className="block text-xs font-bold text-text-primary mb-1">
+                            Identifier Key (camelCase) *
+                          </label>
+                          <input
+                            id="field-key"
+                            type="text"
+                            value={newField.key}
+                            onChange={(e) =>
+                              (setFieldFormError(""), setNewField({ ...newField, key: e.target.value }))
+                            }
+                            placeholder="e.g. preferredLocation"
+                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs font-mono rounded-xl p-3 outline-none focus:border-pilot-blue"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="field-type" className="block text-xs font-bold text-text-primary mb-1">
+                            Expected Answer Type
                           </label>
                           <select
+                            id="field-type"
                             value={newField.type}
                             onChange={(e) =>
                               setNewField({ ...newField, type: e.target.value })
                             }
-                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
+                            className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue cursor-pointer"
                           >
-                            <option value="string">
-                              Text String (Freeform)
-                            </option>
-                            <option value="number">
-                              Numeric (Quantity / Amount)
-                            </option>
-                            <option value="select">
-                              Dropdown Select (Predefined Choices)
-                            </option>
-                            <option value="boolean">
-                              Yes / No (Boolean Flag)
-                            </option>
+                            <option value="string">Text (Open text response)</option>
+                            <option value="number">Numeric (e.g. budget, quantity)</option>
+                            <option value="select">Dropdown (Specific list of choices)</option>
+                            <option value="boolean">Yes / No (Boolean)</option>
                           </select>
                         </div>
 
                         {newField.type === "select" && (
                           <div>
-                            <label className="block text-xs font-bold text-text-primary mb-1">
+                            <label htmlFor="qualification-options" className="block text-xs font-bold text-text-primary mb-1">
                               Choices (comma-separated) *
                             </label>
                             <input
+                              id="qualification-options"
                               type="text"
                               value={newField.options}
                               onChange={(e) =>
-                                setNewField({
+                                (setFieldFormError(""), setNewField({
                                   ...newField,
                                   options: e.target.value,
-                                })
+                                }))
                               }
                               placeholder="e.g. 2 BHK, 3 BHK, 4 BHK, Villa"
                               className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
@@ -4005,10 +3987,11 @@ export default function OrganizationProfile() {
                         )}
 
                         <div>
-                          <label className="block text-xs font-bold text-text-primary mb-1">
+                          <label htmlFor="field-description" className="block text-xs font-bold text-text-primary mb-1">
                             Extraction Guidance for AI
                           </label>
                           <textarea
+                            id="field-description"
                             rows={2}
                             value={newField.description}
                             onChange={(e) =>
@@ -4017,7 +4000,7 @@ export default function OrganizationProfile() {
                                 description: e.target.value,
                               })
                             }
-                            placeholder="Explain what to ask the customer or how to extract this information..."
+                            placeholder="Explain what to ask the customer or how to extract this information naturally..."
                             className="w-full bg-bg-secondary/50 border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-pilot-blue"
                           />
                         </div>
@@ -4025,24 +4008,21 @@ export default function OrganizationProfile() {
 
                       <div className="flex justify-end gap-2 pt-2 border-t border-border-main">
                         <button
+                          type="button"
                           onClick={() => {
                             setEditingFieldIndex(null);
                             setShowAddFieldModal(false);
                           }}
-                          className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors"
+                          className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors cursor-pointer"
                         >
                           Cancel
                         </button>
                         <button
+                          type="button"
                           onClick={handleAddField}
-                          disabled={
-                            !newField.label.trim() || !newField.key.trim()
-                          }
-                          className="px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50"
+                          className="px-4 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
                         >
-                          {editingFieldIndex !== null
-                            ? "Save Changes"
-                            : "Save Field"}
+                          {editingFieldIndex !== null ? "Save Changes" : "Save Field"}
                         </button>
                       </div>
                     </div>
@@ -4051,24 +4031,551 @@ export default function OrganizationProfile() {
               </div>
             )}
 
-            {/* ── STEP 4: KNOWLEDGE BASE (QDRANT RAG) ──────────────────────── */}
-            {currentStep === 4 && (
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 5: CUSTOMER MESSAGES & GREETINGS ─────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {currentStep === 5 && (
               <div className="space-y-6 animate-fadeIn">
-                {/* Qdrant Partition Banner */}
+                {/* Customer-Facing Notice Banner */}
+                <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-700 dark:text-blue-300 flex items-start gap-3">
+                  <Info size={16} className="text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Customer-Facing Setting</span>
+                    <span className="text-[11px] opacity-90 leading-relaxed">
+                      Changes made in this step are sent directly to real prospective customers on WhatsApp when they reach out or when an inbound call is missed. Use the live preview on the right to verify your message formatting before saving.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                  {/* Left Column: Message Editors (7 cols) */}
+                  <div className="xl:col-span-7 space-y-6">
+                    {/* Welcome Greeting Card */}
+                    <div className="p-6 rounded-3xl bg-bg-secondary/40 border border-border-main space-y-4 shadow-2xs">
+                      <div className="flex items-center justify-between pb-3 border-b border-border-main">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0">
+                            <MessageCircle size={18} />
+                          </div>
+                          <div>
+                            <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                              Automated Welcome Greeting
+                            </h3>
+                            <p className="text-[11px] text-text-secondary mt-0.5">
+                              Dispatched instantly when a new lead initiates a WhatsApp conversation.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Dynamic Placeholders */}
+                      <div>
+                        <span className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
+                          Insert Dynamic Placeholders
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { key: "name", label: "{{name}}", desc: "Customer Name" },
+                            { key: "company", label: "{{company}}", desc: "Brand Name" },
+                            { key: "service", label: "{{service}}", desc: "Matched Service" },
+                          ].map((item) => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => {
+                                const current = aiSettings.welcomeMessageTemplate || DEFAULT_WELCOME_TEMPLATE;
+                                setAiSettings({
+                                  ...aiSettings,
+                                  welcomeMessageTemplate: `${current} {{${item.key}}}`,
+                                });
+                              }}
+                              className="px-2.5 py-1 text-xs font-medium rounded-lg bg-bg-card hover:bg-teal-500/10 hover:text-teal-600 border border-border-main transition-colors cursor-pointer"
+                              title={`Insert ${item.desc}`}
+                            >
+                              + {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Welcome Message Textarea */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label htmlFor="welcome-template-input" className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                            Welcome Message Template
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAiSettings({
+                                ...aiSettings,
+                                welcomeMessageTemplate: DEFAULT_WELCOME_TEMPLATE,
+                              })
+                            }
+                            className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Reset Default
+                          </button>
+                        </div>
+                        <textarea
+                          id="welcome-template-input"
+                          rows={6}
+                          value={
+                            aiSettings.welcomeMessageTemplate !== undefined &&
+                            aiSettings.welcomeMessageTemplate !== ""
+                              ? aiSettings.welcomeMessageTemplate
+                              : DEFAULT_WELCOME_TEMPLATE
+                          }
+                          onChange={(e) =>
+                            setAiSettings({
+                              ...aiSettings,
+                              welcomeMessageTemplate: e.target.value,
+                            })
+                          }
+                          placeholder={DEFAULT_WELCOME_TEMPLATE}
+                          className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-mono leading-relaxed resize-none"
+                        />
+                      </div>
+
+                      {/* Fallback Service Selection */}
+                      <div>
+                        <label htmlFor="fallback-service-select" className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
+                          Fallback Service (for general greetings)
+                        </label>
+                        <select
+                          id="fallback-service-select"
+                          value={aiSettings.welcomeMessageFallbackService || ""}
+                          onChange={(e) =>
+                            setAiSettings({
+                              ...aiSettings,
+                              welcomeMessageFallbackService: e.target.value,
+                            })
+                          }
+                          className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all cursor-pointer font-medium"
+                        >
+                          <option value="">Default to first catalog service</option>
+                          {aiSettings.services.map((s, idx) => (
+                            <option key={idx} value={s.name}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-[10px] text-text-secondary mt-1.5 block">
+                          Used in place of <code className="text-teal-600 font-mono">{"{{service}}"}</code> if the initial message does not specify a product.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Missed-Call Messages Card */}
+                    <div className="p-6 rounded-3xl bg-bg-secondary/40 border border-border-main space-y-4 shadow-2xs">
+                      <div className="flex items-center justify-between pb-3 border-b border-border-main">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
+                            <PhoneMissed size={18} />
+                          </div>
+                          <div>
+                            <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                              Automated Missed-Call Messages
+                            </h3>
+                            <p className="text-[11px] text-text-secondary mt-0.5">
+                              Auto-replies via WhatsApp when an incoming customer call is missed.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Master Toggle */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-text-primary">
+                            {aiSettings.missedCallMessageEnabled ? "Active" : "Disabled"}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={aiSettings.missedCallMessageEnabled ? "Disable Missed Call Messages" : "Enable Missed Call Messages"}
+                            onClick={() =>
+                              setAiSettings({
+                                ...aiSettings,
+                                missedCallMessageEnabled: !aiSettings.missedCallMessageEnabled,
+                              })
+                            }
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              aiSettings.missedCallMessageEnabled ? "bg-rose-500" : "bg-border-main"
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                aiSettings.missedCallMessageEnabled ? "translate-x-5" : "translate-x-0"
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+
+                      {aiSettings.missedCallMessageEnabled ? (
+                        <div className="space-y-4">
+                          {/* Tabs for Missed Call Types */}
+                          <div className="flex p-1 bg-bg-card rounded-xl border border-border-main gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMissedCallEditingTab("diff");
+                                setCustomerMessagePreviewTab("missed_diff");
+                              }}
+                              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                missedCallEditingTab === "diff"
+                                  ? "bg-rose-500 text-white shadow-xs"
+                                  : "text-text-secondary hover:text-text-primary"
+                              }`}
+                            >
+                              <PhoneMissed className="w-3.5 h-3.5" />
+                              Alternate Line (SIM 2)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMissedCallEditingTab("same");
+                                setCustomerMessagePreviewTab("missed_same");
+                              }}
+                              className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                missedCallEditingTab === "same"
+                                  ? "bg-teal-600 text-white shadow-xs"
+                                  : "text-text-secondary hover:text-text-primary"
+                              }`}
+                            >
+                              <PhoneCall className="w-3.5 h-3.5" />
+                              Same Line (SIM 1)
+                            </button>
+                          </div>
+
+                          {missedCallEditingTab === "diff" ? (
+                            <div className="space-y-3">
+                              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-700 dark:text-rose-300">
+                                <strong>Alternate SIM Notice:</strong> Sent when the customer calls a different phone number than your WhatsApp connection, explaining that they reached your other line.
+                              </div>
+
+                              <div>
+                                <span className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
+                                  Insert Placeholders
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {[
+                                    { key: "name", label: "{{name}}" },
+                                    { key: "number", label: "{{number}}", highlight: true },
+                                    { key: "company", label: "{{company}}" },
+                                    { key: "service", label: "{{service}}" },
+                                  ].map((item) => (
+                                    <button
+                                      key={item.key}
+                                      type="button"
+                                      onClick={() => {
+                                        const current = aiSettings.missedCallDifferentNumberTemplate || DEFAULT_MISSED_CALL_DIFF_TEMPLATE;
+                                        setAiSettings({
+                                          ...aiSettings,
+                                          missedCallDifferentNumberTemplate: `${current} {{${item.key}}}`,
+                                        });
+                                      }}
+                                      className={`px-2 py-1 text-[11px] font-semibold rounded-lg border transition-colors cursor-pointer ${
+                                        item.highlight
+                                          ? "bg-rose-500/10 text-rose-600 border-rose-500/30 hover:bg-rose-500/20"
+                                          : "bg-bg-card hover:bg-rose-500/10 text-text-primary border-border-main"
+                                      }`}
+                                    >
+                                      + {item.label} {item.highlight ? "★ (Received SIM)" : ""}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <label htmlFor="missed-call-diff-template" className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                                    Alternate SIM Message Template
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setAiSettings({
+                                        ...aiSettings,
+                                        missedCallDifferentNumberTemplate: DEFAULT_MISSED_CALL_DIFF_TEMPLATE,
+                                      })
+                                    }
+                                    className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Reset Default
+                                  </button>
+                                </div>
+                                <textarea
+                                  id="missed-call-diff-template"
+                                  rows={5}
+                                  value={
+                                    aiSettings.missedCallDifferentNumberTemplate !== undefined &&
+                                    aiSettings.missedCallDifferentNumberTemplate !== ""
+                                      ? aiSettings.missedCallDifferentNumberTemplate
+                                      : DEFAULT_MISSED_CALL_DIFF_TEMPLATE
+                                  }
+                                  onChange={(e) =>
+                                    setAiSettings({
+                                      ...aiSettings,
+                                      missedCallDifferentNumberTemplate: e.target.value,
+                                    })
+                                  }
+                                  placeholder={DEFAULT_MISSED_CALL_DIFF_TEMPLATE}
+                                  className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all font-mono leading-relaxed resize-none"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/20 text-xs text-teal-700 dark:text-teal-300">
+                                <strong>Same SIM Notice:</strong> Sent when the customer calls the exact same mobile number connected to WhatsApp.
+                              </div>
+
+                              <div>
+                                <span className="block text-xs font-black text-text-primary mb-1.5 uppercase tracking-wider">
+                                  Insert Placeholders
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {[
+                                    { key: "name", label: "{{name}}" },
+                                    { key: "company", label: "{{company}}" },
+                                    { key: "service", label: "{{service}}" },
+                                  ].map((item) => (
+                                    <button
+                                      key={item.key}
+                                      type="button"
+                                      onClick={() => {
+                                        const current = aiSettings.missedCallMessageTemplate || DEFAULT_MISSED_CALL_SAME_TEMPLATE;
+                                        setAiSettings({
+                                          ...aiSettings,
+                                          missedCallMessageTemplate: `${current} {{${item.key}}}`,
+                                        });
+                                      }}
+                                      className="px-2 py-1 text-[11px] font-semibold rounded-lg bg-bg-card hover:bg-teal-500/10 text-text-primary border border-border-main transition-colors cursor-pointer"
+                                    >
+                                      + {item.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <label htmlFor="missed-call-same-template" className="block text-xs font-black text-text-primary uppercase tracking-wider">
+                                    Same SIM Message Template
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setAiSettings({
+                                        ...aiSettings,
+                                        missedCallMessageTemplate: DEFAULT_MISSED_CALL_SAME_TEMPLATE,
+                                      })
+                                    }
+                                    className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Reset Default
+                                  </button>
+                                </div>
+                                <textarea
+                                  id="missed-call-same-template"
+                                  rows={5}
+                                  value={
+                                    aiSettings.missedCallMessageTemplate !== undefined &&
+                                    aiSettings.missedCallMessageTemplate !== ""
+                                      ? aiSettings.missedCallMessageTemplate
+                                      : DEFAULT_MISSED_CALL_SAME_TEMPLATE
+                                  }
+                                  onChange={(e) =>
+                                    setAiSettings({
+                                      ...aiSettings,
+                                      missedCallMessageTemplate: e.target.value,
+                                    })
+                                  }
+                                  placeholder={DEFAULT_MISSED_CALL_SAME_TEMPLATE}
+                                  className="w-full bg-bg-card border border-border-main text-text-primary text-xs rounded-xl p-3.5 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-mono leading-relaxed resize-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-2xl bg-bg-card border border-border-main text-center text-xs text-text-secondary">
+                          Automated missed-call replies are currently turned off. Toggle the switch above to activate them.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Realistic WhatsApp Phone Preview (5 cols) */}
+                  <div className="xl:col-span-5 sticky top-6">
+                    <div className="bg-bg-card border border-border-main rounded-3xl p-5 shadow-sm space-y-4">
+                      {/* Preview Controls */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-text-primary uppercase tracking-wider flex items-center gap-1.5">
+                          <Eye size={14} className="text-emerald-500" />
+                          <span>WhatsApp Live Preview</span>
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                          Realistic Demo
+                        </span>
+                      </div>
+
+                      {/* Preview Tab Selector */}
+                      <div className="flex p-1 bg-bg-secondary rounded-xl border border-border-main gap-1 text-[11px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setCustomerMessagePreviewTab("welcome")}
+                          className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer ${
+                            customerMessagePreviewTab === "welcome"
+                              ? "bg-bg-card text-emerald-600 shadow-2xs font-bold"
+                              : "text-text-secondary hover:text-text-primary"
+                          }`}
+                        >
+                          Welcome
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCustomerMessagePreviewTab("missed_diff")}
+                          className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer ${
+                            customerMessagePreviewTab === "missed_diff"
+                              ? "bg-bg-card text-rose-500 shadow-2xs font-bold"
+                              : "text-text-secondary hover:text-text-primary"
+                          }`}
+                        >
+                          Alternate SIM
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCustomerMessagePreviewTab("missed_same")}
+                          className={`flex-1 py-1.5 px-2 rounded-lg transition-all cursor-pointer ${
+                            customerMessagePreviewTab === "missed_same"
+                              ? "bg-bg-card text-teal-600 shadow-2xs font-bold"
+                              : "text-text-secondary hover:text-text-primary"
+                          }`}
+                        >
+                          Same SIM
+                        </button>
+                      </div>
+
+                      {/* Phone Container Mock */}
+                      <div className="rounded-2xl border-2 border-slate-800 dark:border-slate-700 overflow-hidden shadow-lg bg-[#0c1317]">
+                        {/* WhatsApp Top Header Bar */}
+                        <div className="bg-[#1f2c34] text-white px-3.5 py-3 flex items-center justify-between border-b border-slate-700/60">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <ArrowLeft size={16} className="text-slate-300 shrink-0" />
+                            <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-xs text-white shrink-0">
+                              {(aiSettings.companyName || org.name || "S").charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1">
+                                <span className="font-bold text-xs text-slate-100 truncate">
+                                  {aiSettings.companyName || org.name || "Our Business"}
+                                </span>
+                                <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                              </div>
+                              <span className="text-[10px] text-slate-400 block leading-tight">
+                                online
+                              </span>
+                            </div>
+                          </div>
+                          <Phone size={15} className="text-slate-300 shrink-0" />
+                        </div>
+
+                        {/* WhatsApp Chat Canvas */}
+                        <div className="p-4 min-h-[260px] max-h-[340px] overflow-y-auto space-y-3 bg-[#0b141a]/95 text-slate-200 text-xs">
+                          {/* Centered Date Pill */}
+                          <div className="text-center">
+                            <span className="px-2.5 py-0.5 rounded-md bg-[#182229] text-[10px] text-slate-400 font-medium shadow-xs">
+                              TODAY
+                            </span>
+                          </div>
+
+                          {/* Customer Incoming Query (for realistic context) */}
+                          <div className="flex justify-start">
+                            <div className="max-w-[85%] rounded-2xl rounded-tl-xs p-3 bg-[#202c33] text-slate-200 shadow-xs space-y-1">
+                              <p className="text-[11px] leading-relaxed">
+                                {customerMessagePreviewTab === "welcome"
+                                  ? "Hi, I saw your advertisement and wanted more details about your services."
+                                  : "📞 Missed voice call from customer"}
+                              </p>
+                              <span className="text-[9px] text-slate-400 text-right block">
+                                10:41 AM
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Outgoing Automated Reply Bubble */}
+                          <div className="flex justify-end">
+                            <div className="max-w-[90%] rounded-2xl rounded-tr-xs p-3 bg-[#005c4b] text-slate-100 shadow-md space-y-1.5 relative">
+                              <div className="text-[11.5px] leading-relaxed whitespace-pre-wrap font-sans select-none">
+                                {customerMessagePreviewTab === "welcome" &&
+                                  renderFormattedWhatsAppText(
+                                    getWhatsAppPreviewText(
+                                      aiSettings.welcomeMessageTemplate || DEFAULT_WELCOME_TEMPLATE,
+                                      "welcome"
+                                    )
+                                  )}
+                                {customerMessagePreviewTab === "missed_diff" &&
+                                  renderFormattedWhatsAppText(
+                                    getWhatsAppPreviewText(
+                                      aiSettings.missedCallDifferentNumberTemplate || DEFAULT_MISSED_CALL_DIFF_TEMPLATE,
+                                      "missed_diff"
+                                    )
+                                  )}
+                                {customerMessagePreviewTab === "missed_same" &&
+                                  renderFormattedWhatsAppText(
+                                    getWhatsAppPreviewText(
+                                      aiSettings.missedCallMessageTemplate || DEFAULT_MISSED_CALL_SAME_TEMPLATE,
+                                      "missed_same"
+                                    )
+                                  )}
+                              </div>
+
+                              <div className="flex items-center justify-end gap-1 pt-1 text-[9px] text-emerald-200/80">
+                                <span>10:42 AM</span>
+                                <CheckCheck size={13} className="text-sky-400" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* WhatsApp Message Input Bar Mock */}
+                        <div className="bg-[#202c33] px-3 py-2 flex items-center justify-between text-slate-400 border-t border-slate-700/60 text-xs">
+                          <span className="text-slate-400 text-[11px]">Message</span>
+                          <Smile size={16} />
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-bg-secondary text-[11px] text-text-secondary flex items-center gap-2">
+                        <Info size={13} className="text-pilot-blue shrink-0" />
+                        <span>
+                          Customer placeholders like <code className="text-pilot-blue font-bold">{"{{name}}"}</code> are automatically populated from the lead's contact record.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 6: COMPANY KNOWLEDGE DOCUMENTS ────────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {currentStep === 6 && (
+              <div className="space-y-6 animate-fadeIn">
+                {/* Knowledge Base Header Banner */}
                 <div className="p-5 rounded-2xl bg-bg-secondary/50 border border-border-main flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Database size={16} className="text-pilot-blue" />
+                      <BookOpen size={16} className="text-pilot-blue" />
                       <h4 className="text-xs font-black text-text-primary">
-                        Dedicated Qdrant Vector Collection
+                        Company Knowledge Library
                       </h4>
                     </div>
                     <p className="text-xs text-text-secondary">
-                      Isolated multi-tenant vector space using{" "}
-                      <span className="font-bold text-text-primary">
-                        gemini-embedding-2
-                      </span>{" "}
-                      (768-dim).
+                      Searchable reference library used by your AI assistant to accurately answer customer questions and product FAQs.
                     </p>
                   </div>
 
@@ -4078,7 +4585,7 @@ export default function OrganizationProfile() {
                   </span>
                 </div>
 
-                {/* AI Knowledge Base Generator System Prompt Card */}
+                {/* AI Knowledge Base Generator Prompt Card */}
                 <KBGeneratorPromptCard
                   businessName={aiSettings.companyName || org.name}
                 />
@@ -4108,7 +4615,7 @@ export default function OrganizationProfile() {
                     </div>
                     <span className="text-xs font-bold text-text-primary">
                       {uploadingDoc
-                        ? "Chunking & Indexing into Qdrant..."
+                        ? "Reading & processing document for AI search..."
                         : "Click or drag & drop files here"}
                     </span>
                     <span className="text-[11px] text-text-secondary mt-1">
@@ -4120,14 +4627,12 @@ export default function OrganizationProfile() {
                 {/* Indexed Documents Table */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
-                    Indexed Knowledge Documents (
-                    {aiSettings.knowledgeDocs.length})
+                    Indexed Knowledge Documents ({aiSettings.knowledgeDocs.length})
                   </h4>
 
                   {aiSettings.knowledgeDocs.length === 0 ? (
                     <div className="p-6 rounded-2xl bg-bg-secondary/40 border border-border-main text-center text-xs text-text-secondary">
-                      No documents indexed yet. Upload your product brochures,
-                      spec sheets, or pricing FAQs above.
+                      No documents indexed yet. Upload your product brochures, spec sheets, or pricing FAQs above to give your AI authoritative reference material.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -4152,7 +4657,7 @@ export default function OrganizationProfile() {
                                 </span>
                                 <span>&bull;</span>
                                 <span className="text-pilot-blue font-bold">
-                                  {doc.chunkCount || 12} vector chunks
+                                  {doc.chunkCount || 12} searchable sections
                                 </span>
                               </div>
                             </div>
@@ -4163,9 +4668,11 @@ export default function OrganizationProfile() {
                               Indexed
                             </span>
                             <button
+                              type="button"
                               onClick={() => handleDeleteDoc(doc.docId)}
-                              className="text-text-secondary hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                              className="text-text-secondary hover:text-red-500 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
                               title="Delete Document"
+                              aria-label={`Remove knowledge document ${doc.filename || doc.originalName || "document"}`}
                             >
                               <Trash2 size={15} />
                             </button>
@@ -4178,8 +4685,10 @@ export default function OrganizationProfile() {
               </div>
             )}
 
-            {/* ── STEP 5: REVIEW, PROMPT INSPECTOR & PLAYGROUND ───────────── */}
-            {currentStep === 5 && (
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 7: REVIEW & TEST AI ASSISTANT ─────────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {currentStep === 7 && (
               <div className="space-y-6 animate-fadeIn">
                 {/* Pre-flight Requirement Verification Card */}
                 <div className="p-5 rounded-2xl border border-border-main bg-bg-secondary/40 space-y-3">
@@ -4187,127 +4696,129 @@ export default function OrganizationProfile() {
                     <div className="flex items-center gap-2">
                       <ShieldCheck size={18} className="text-emerald-500" />
                       <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
-                        Pre-Activation Checklist
+                        Pre-Activation Requirements Checklist
                       </h4>
                     </div>
                     <span
                       className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                        aiSettings.companyName?.trim() &&
                         aiSettings.geminiApiKey?.trim() &&
-                        aiSettings.services.length > 0 &&
-                        aiSettings.qualificationFields.length > 0 &&
-                        aiSettings.companyName.trim()
+                        aiSettings.services?.length > 0 &&
+                        aiSettings.qualificationFields?.length > 0
                           ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
                           : "bg-amber-500/10 text-amber-500 border border-amber-500/20"
                       }`}
                     >
-                      {aiSettings.geminiApiKey?.trim() &&
-                      aiSettings.services.length > 0 &&
-                      aiSettings.qualificationFields.length > 0 &&
-                      aiSettings.companyName.trim()
+                      {aiSettings.companyName?.trim() &&
+                      aiSettings.geminiApiKey?.trim() &&
+                      aiSettings.services?.length > 0 &&
+                      aiSettings.qualificationFields?.length > 0
                         ? "Ready to Activate"
-                        : "Requirements Missing"}
+                        : "Requirements Incomplete"}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                    {/* Item 1: Business Profile */}
                     <div
-                      onClick={() =>
-                        !aiSettings.geminiApiKey?.trim() && setCurrentStep(1)
-                      }
+                      onClick={() => !aiSettings.companyName?.trim() && setCurrentStep(1)}
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                        aiSettings.companyName?.trim()
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
+                      }`}
+                    >
+                      <div>
+                        <span className="font-bold text-text-primary block">
+                          1. Business Profile
+                        </span>
+                        <span className="text-[10px] text-text-secondary truncate block max-w-[120px]">
+                          {aiSettings.companyName || "Name required"}
+                        </span>
+                      </div>
+                      {aiSettings.companyName?.trim() ? (
+                        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+                      ) : (
+                        <span className="text-[10px] font-bold text-red-500 underline">
+                          Fix in Step 1
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Item 2: AI Connection */}
+                    <div
+                      onClick={() => !aiSettings.geminiApiKey?.trim() && setCurrentStep(2)}
                       className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
                         aiSettings.geminiApiKey?.trim()
                           ? "bg-emerald-500/5 border-emerald-500/20"
                           : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
                       }`}
                     >
-                      <span className="font-bold text-text-primary">
-                        Gemini API Key
-                      </span>
+                      <div>
+                        <span className="font-bold text-text-primary block">
+                          2. Gemini API Key
+                        </span>
+                        <span className="text-[10px] text-text-secondary block">
+                          {aiSettings.geminiApiKey?.trim() ? "Configured" : "Key missing"}
+                        </span>
+                      </div>
                       {aiSettings.geminiApiKey?.trim() ? (
-                        <CheckCircle2
-                          size={15}
-                          className="text-emerald-500 shrink-0"
-                        />
+                        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
                       ) : (
-                        <span className="text-[10px] font-bold text-red-400">
-                          Step 1 Required
+                        <span className="text-[10px] font-bold text-red-500 underline">
+                          Fix in Step 2
                         </span>
                       )}
                     </div>
 
+                    {/* Item 3: Catalog Services */}
                     <div
-                      onClick={() =>
-                        !aiSettings.companyName.trim() && setCurrentStep(1)
-                      }
+                      onClick={() => aiSettings.services?.length === 0 && setCurrentStep(3)}
                       className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                        aiSettings.companyName.trim()
+                        aiSettings.services?.length > 0
                           ? "bg-emerald-500/5 border-emerald-500/20"
                           : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
                       }`}
                     >
-                      <span className="font-bold text-text-primary">
-                        Company Identity
-                      </span>
-                      {aiSettings.companyName.trim() ? (
-                        <CheckCircle2
-                          size={15}
-                          className="text-emerald-500 shrink-0"
-                        />
+                      <div>
+                        <span className="font-bold text-text-primary block">
+                          3. Services Catalog
+                        </span>
+                        <span className="text-[10px] text-text-secondary block">
+                          {aiSettings.services?.length || 0} configured
+                        </span>
+                      </div>
+                      {aiSettings.services?.length > 0 ? (
+                        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
                       ) : (
-                        <span className="text-[10px] font-bold text-red-400">
-                          Step 1 Required
+                        <span className="text-[10px] font-bold text-red-500 underline">
+                          Fix in Step 3
                         </span>
                       )}
                     </div>
 
+                    {/* Item 4: Lead Questions */}
                     <div
-                      onClick={() =>
-                        aiSettings.services.length === 0 && setCurrentStep(2)
-                      }
+                      onClick={() => aiSettings.qualificationFields?.length === 0 && setCurrentStep(4)}
                       className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                        aiSettings.services.length > 0
+                        aiSettings.qualificationFields?.length > 0
                           ? "bg-emerald-500/5 border-emerald-500/20"
                           : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
                       }`}
                     >
-                      <span className="font-bold text-text-primary">
-                        Services Catalog ({aiSettings.services.length})
-                      </span>
-                      {aiSettings.services.length > 0 ? (
-                        <CheckCircle2
-                          size={15}
-                          className="text-emerald-500 shrink-0"
-                        />
-                      ) : (
-                        <span className="text-[10px] font-bold text-red-400">
-                          Min 1 Required
+                      <div>
+                        <span className="font-bold text-text-primary block">
+                          4. Lead Questions
                         </span>
-                      )}
-                    </div>
-
-                    <div
-                      onClick={() =>
-                        aiSettings.qualificationFields.length === 0 &&
-                        setCurrentStep(3)
-                      }
-                      className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
-                        aiSettings.qualificationFields.length > 0
-                          ? "bg-emerald-500/5 border-emerald-500/20"
-                          : "bg-red-500/5 border-red-500/30 cursor-pointer hover:bg-red-500/10"
-                      }`}
-                    >
-                      <span className="font-bold text-text-primary">
-                        Questions Schema (
-                        {aiSettings.qualificationFields.length})
-                      </span>
-                      {aiSettings.qualificationFields.length > 0 ? (
-                        <CheckCircle2
-                          size={15}
-                          className="text-emerald-500 shrink-0"
-                        />
+                        <span className="text-[10px] text-text-secondary block">
+                          {aiSettings.qualificationFields?.length || 0} questions
+                        </span>
+                      </div>
+                      {aiSettings.qualificationFields?.length > 0 ? (
+                        <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
                       ) : (
-                        <span className="text-[10px] font-bold text-red-400">
-                          Min 1 Required
+                        <span className="text-[10px] font-bold text-red-500 underline">
+                          Fix in Step 4
                         </span>
                       )}
                     </div>
@@ -4320,7 +4831,7 @@ export default function OrganizationProfile() {
                     <span className="text-[10px] uppercase font-bold text-text-secondary block">
                       Agent Persona
                     </span>
-                    <span className="text-xs font-black text-pilot-blue mt-1 block truncate">
+                    <span className="text-xs font-black text-pilot-blue mt-1 block truncate" title={aiSettings.agentPersona}>
                       {aiSettings.companyName || org.name || "Configured"}
                     </span>
                   </div>
@@ -4330,16 +4841,16 @@ export default function OrganizationProfile() {
                       Catalog Services
                     </span>
                     <span className="text-lg font-black text-text-primary mt-0.5 block">
-                      {aiSettings.services.length}
+                      {aiSettings.services?.length || 0}
                     </span>
                   </div>
 
                   <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main text-center">
                     <span className="text-[10px] uppercase font-bold text-text-secondary block">
-                      Custom Questions
+                      Lead Questions
                     </span>
                     <span className="text-lg font-black text-text-primary mt-0.5 block">
-                      {aiSettings.qualificationFields.length}
+                      {aiSettings.qualificationFields?.length || 0}
                     </span>
                   </div>
 
@@ -4348,7 +4859,7 @@ export default function OrganizationProfile() {
                       Knowledge Docs
                     </span>
                     <span className="text-lg font-black text-text-primary mt-0.5 block">
-                      {aiSettings.knowledgeDocs.length}
+                      {aiSettings.knowledgeDocs?.length || 0}
                     </span>
                   </div>
                 </div>
@@ -4365,8 +4876,9 @@ export default function OrganizationProfile() {
 
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={copyPromptText}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-card border border-border-main text-xs font-bold text-text-secondary hover:text-text-primary transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-card border border-border-main text-xs font-bold text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
                       >
                         {copiedPrompt ? (
                           <Check size={13} className="text-emerald-500" />
@@ -4376,6 +4888,7 @@ export default function OrganizationProfile() {
                         <span>{copiedPrompt ? "Copied" : "Copy"}</span>
                       </button>
                       <button
+                        type="button"
                         onClick={() =>
                           setShowPromptInspector(!showPromptInspector)
                         }
@@ -4394,10 +4907,7 @@ export default function OrganizationProfile() {
                     </pre>
                   ) : (
                     <p className="text-xs text-text-secondary leading-relaxed">
-                      Your prompt is compiled dynamically from your Persona,
-                      Services Catalog, Qualification Criteria, and Knowledge
-                      Base chunks. Click "Expand Full Prompt" above to review
-                      before testing.
+                      Your prompt is compiled dynamically from your Persona, Services Catalog, Lead Questions, and Knowledge Base documents. Click "Expand Full Prompt" above to review before testing.
                     </p>
                   )}
                 </div>
@@ -4409,12 +4919,12 @@ export default function OrganizationProfile() {
                       Ready to Test Your Custom Sales AI?
                     </h4>
                     <p className="text-xs text-text-secondary">
-                      Simulate real customer inquiries and test qualification in
-                      the interactive WhatsApp playground.
+                      Simulate real customer inquiries and test qualification in the interactive WhatsApp playground before activating.
                     </p>
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => navigate("/test-ai")}
                     className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-md shadow-pilot-blue/20 shrink-0 cursor-pointer"
                   >
@@ -4425,48 +4935,99 @@ export default function OrganizationProfile() {
               </div>
             )}
 
-            {/* ── Persistent Step Navigation Footer ───────────────────────── */}
-            <div className="flex justify-between items-center pt-6 border-t border-border-main">
-              {currentStep > 1 ? (
-                <button
-                  onClick={() => setCurrentStep(currentStep - 1)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary hover:text-text-primary transition-colors cursor-pointer"
-                >
-                  <ChevronLeft size={16} />
-                  <span>Back</span>
-                </button>
-              ) : (
-                <div />
-              )}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {/* ── STEP 8: SUBSCRIPTION & SEATS ───────────────────────────── */}
+            {/* ═════════════════════════════════════════════════════════════ */}
+            {currentStep === 8 && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="p-4 rounded-2xl bg-pilot-blue/10 border border-pilot-blue/20 text-xs text-text-primary flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <Building2 size={16} className="text-pilot-blue shrink-0" />
+                    <span>
+                      <strong>Billing & Seat Management:</strong> Kept separate from AI configuration so licensing changes do not interrupt your assistant's setup.
+                    </span>
+                  </div>
+                </div>
+                {renderSubscriptionAndSeatsContent()}
+              </div>
+            )}
 
-              <div className="flex items-center gap-2">
+            {/* ── Persistent Step Navigation Footer ───────────────────────── */}
+            <div className="sticky bottom-0 z-20 -mx-5 sm:-mx-8 px-5 sm:px-8 py-3.5 sm:py-4 bg-bg-card/95 backdrop-blur border-t border-border-main flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 w-auto min-w-0">
+              <div className="flex items-center gap-2 text-xs text-text-secondary min-w-0" aria-live="polite">
+                {aiSaving ? (
+                  <><Loader2 size={14} className="animate-spin text-pilot-blue shrink-0" /><span>Saving changes…</span></>
+                ) : saveToast ? (
+                  <><Info size={14} className="text-pilot-blue shrink-0" /><span className="truncate">{saveToast}</span></>
+                ) : (
+                  <span className="truncate">Save to apply these settings across your organization.</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap justify-between md:justify-end shrink-0">
+                {currentStep > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(currentStep - 1)}
+                    className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2.5 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary hover:text-text-primary transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft size={16} className="shrink-0" />
+                    <span>Previous</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
                 <button
+                  type="button"
                   onClick={() => handleSaveStep()}
                   disabled={aiSaving}
-                  className="px-4 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs font-bold text-text-primary hover:bg-bg-secondary/70 transition-colors cursor-pointer"
+                  className="px-3.5 sm:px-4 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs font-bold text-text-primary hover:bg-bg-secondary/70 transition-colors cursor-pointer"
+                  title="Save changes to your organization without navigating to the next step"
                 >
                   {aiSaving ? "Saving..." : "Save Draft"}
                 </button>
 
-                {currentStep < STEPS.length ? (
+                {currentStep < 7 ? (
                   <button
+                    type="button"
                     onClick={() => handleSaveStep(null, currentStep + 1)}
                     disabled={aiSaving}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-sm shadow-pilot-blue/20 cursor-pointer"
+                    className="flex items-center gap-1.5 px-4 sm:px-5 py-2.5 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-sm shadow-pilot-blue/20 cursor-pointer"
                   >
-                    <span>Save & Continue</span>
-                    <ChevronRight size={16} />
+                    <span>Save & Continue to Step {currentStep + 1}</span>
+                    <span className="hidden xl:inline font-normal opacity-85">({STEPS[currentStep]?.shortTitle || ""})</span>
+                    <ChevronRight size={16} className="shrink-0" />
                   </button>
+                ) : currentStep === 7 ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(8)}
+                      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer"
+                    >
+                      <span>Subscription & Seats</span>
+                      <ChevronRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleFinishSetup}
+                      disabled={aiSaving}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm cursor-pointer"
+                    >
+                      <CheckCheck size={16} />
+                      <span>
+                        {aiSaving ? "Activating..." : "Finish & Activate AI"}
+                      </span>
+                    </button>
+                  </div>
                 ) : (
                   <button
-                    onClick={handleFinishSetup}
-                    disabled={aiSaving}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-all shadow-sm cursor-pointer"
+                    type="button"
+                    onClick={() => setCurrentStep(1)}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                   >
-                    <CheckCheck size={16} />
-                    <span>
-                      {aiSaving ? "Activating..." : "Finish & Activate AI"}
-                    </span>
+                    <span>Return to Step 1</span>
                   </button>
                 )}
               </div>
@@ -4489,7 +5050,7 @@ export default function OrganizationProfile() {
                           Import Services Catalog (JSON)
                         </h3>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20">
-                          Step 2 Catalog
+                          Step 3 Catalog
                         </span>
                       </div>
                       <p className="text-xs text-text-secondary mt-0.5">
@@ -5515,212 +6076,22 @@ export default function OrganizationProfile() {
       )}
       {activeTab === "billing" && (
         <div className="space-y-6 animate-fadeIn">
-          <div className="bg-bg-card border border-border-main rounded-3xl p-6 sm:p-8 shadow-xs">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pilot-blue to-blue-700 text-white flex items-center justify-center font-black text-2xl shadow-sm">
-                  {(org.name || "S").charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2.5">
-                    <h2 className="text-xl font-black text-text-primary">
-                      {org.name || "Client Organization"}
-                    </h2>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                      {org.status ? org.status.toUpperCase() : "ACTIVE"}
-                    </span>
-                  </div>
-                </div>
-              </div>
+          {renderSubscriptionAndSeatsContent()}
+        </div>
+      )}
 
-              <div className="text-right sm:border-l border-border-main sm:pl-6">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary block">
-                  Subscription Validity
-                </span>
-                <span className="text-sm font-black text-text-primary block mt-0.5">
-                  {formatDate(org.subscriptionEndDate)}
-                </span>
-                <span
-                  className={`text-[11px] font-bold ${isExpired ? "text-red-500" : "text-emerald-600"}`}
-                >
-                  {isExpired
-                    ? "Subscription Expired"
-                    : `${remainingDays} days remaining`}
-                </span>
-              </div>
+      {(deleteServiceTarget || deleteFieldTarget || deleteDocTarget) && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="presentation">
+          <section className="w-full max-w-md rounded-2xl border border-border-main bg-bg-card p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+            <h2 id="delete-confirm-title" className="text-base font-bold text-text-primary">Remove this item?</h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              <strong className="text-text-primary">{deleteServiceTarget?.service?.name || deleteFieldTarget?.field?.label || deleteDocTarget?.filename}</strong> will be removed from your organization’s AI configuration. This may affect how the AI identifies services, qualifies leads, or answers questions using this document.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => { setDeleteServiceTarget(null); setDeleteFieldTarget(null); setDeleteDocTarget(null); }} className="rounded-xl border border-border-main px-4 py-2 text-sm font-semibold text-text-primary hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pilot-blue">Cancel</button>
+              <button type="button" onClick={() => { if (deleteServiceTarget) handleConfirmDeleteService(); else if (deleteFieldTarget) handleConfirmDeleteField(); else handleConfirmDeleteDoc(); }} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400">Remove item</button>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 mt-6 border-t border-border-main text-xs">
-              <div className="flex items-center gap-2.5 text-text-secondary">
-                <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue">
-                  <Mail size={14} />
-                </div>
-                <span className="text-text-primary font-medium truncate">
-                  {org.email || "No email"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2.5 text-text-secondary">
-                <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue">
-                  <Phone size={14} />
-                </div>
-                <span className="text-text-primary font-medium">
-                  {org.mobile || "No phone"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2.5 text-text-secondary">
-                <div className="p-2 rounded-xl bg-bg-secondary text-pilot-blue">
-                  <Globe size={14} />
-                </div>
-                <span className="text-text-primary font-medium truncate">
-                  {org.website || "No website"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-border-main">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-pilot-blue" />
-                  <h3 className="font-bold text-xs text-text-primary">
-                    Seat Utilization & Licensing
-                  </h3>
-                </div>
-                <span className="text-xs font-black text-pilot-blue">
-                  {usedSeats} / {totalSeats} Used
-                </span>
-              </div>
-
-              <div className="w-full bg-bg-secondary rounded-full h-3 overflow-hidden">
-                <div
-                  className="bg-pilot-blue h-3 rounded-full transition-all duration-500"
-                  style={{ width: `${seatPercentage}%` }}
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 pt-2 text-center">
-                <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                  <div className="text-[10px] text-text-secondary font-bold uppercase">
-                    Total Seats
-                  </div>
-                  <div className="text-base font-black text-text-primary mt-0.5">
-                    {totalSeats}
-                  </div>
-                </div>
-                <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                  <div className="text-[10px] text-text-secondary font-bold uppercase">
-                    Active Reps
-                  </div>
-                  <div className="text-base font-black text-pilot-blue mt-0.5">
-                    {usedSeats}
-                  </div>
-                </div>
-                <div className="p-3 bg-bg-secondary/40 rounded-xl border border-border-main">
-                  <div className="text-[10px] text-text-secondary font-bold uppercase">
-                    Available
-                  </div>
-                  <div className="text-base font-black text-emerald-600 mt-0.5">
-                    {remainingSeats}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-border-main">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-pilot-blue" />
-                  <h3 className="font-bold text-xs text-text-primary">
-                    Billing & Commercial Model
-                  </h3>
-                </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pilot-blue/10 text-pilot-blue uppercase">
-                  {org.subscriptionPlan || "MONTHLY"}
-                </span>
-              </div>
-
-              <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between py-1.5 border-b border-border-main/50">
-                  <span className="text-text-secondary">
-                    Subscription Plan:
-                  </span>
-                  <span className="font-bold text-text-primary uppercase">
-                    {org.subscriptionPlan
-                      ? `${org.subscriptionPlan} Seat-Wise`
-                      : "Monthly Seat-Wise"}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1.5 border-b border-border-main/50">
-                  <span className="text-text-secondary">Rate Per Seat:</span>
-                  <span className="font-bold text-text-primary">
-                    ₹{org.pricingPerSeat || 599} /{" "}
-                    {org.subscriptionPlan === "annually"
-                      ? "year"
-                      : org.subscriptionPlan === "quarterly"
-                        ? "quarter"
-                        : "month"}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-text-secondary">
-                    Current Billing Cycle:
-                  </span>
-                  <span className="font-medium text-text-primary">
-                    {formatDate(org.subscriptionStartDate)} &rarr;{" "}
-                    {formatDate(org.subscriptionEndDate)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* WhatsApp Connection Mode */}
-            <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-border-main">
-                <div className="flex items-center gap-2">
-                  <MessageCircle className="w-4 h-4 text-emerald-500" />
-                  <h3 className="font-bold text-xs text-text-primary">
-                    WhatsApp Connection
-                  </h3>
-                </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                  (org.whatsappLineLimit || 1) >= 2
-                    ? "bg-emerald-500/10 text-emerald-600"
-                    : "bg-slate-500/10 text-slate-600"
-                }`}>
-                  {(org.whatsappLineLimit || 1) >= 2 ? "DUAL LINE" : "SINGLE LINE"}
-                </span>
-              </div>
-
-              <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between py-1.5 border-b border-border-main/50">
-                  <span className="text-text-secondary">
-                    Connection Mode:
-                  </span>
-                  <span className="font-bold text-text-primary">
-                    {(org.whatsappLineLimit || 1) >= 2 ? "Dual Lines (2 Devices)" : "Single Line (1 Device)"}
-                  </span>
-                </div>
-                <div className="flex justify-between py-1.5">
-                  <span className="text-text-secondary">
-                    Max Devices:
-                  </span>
-                  <span className="font-bold text-text-primary">
-                    {org.whatsappLineLimit || 1}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-secondary/50 border border-border-main">
-                <Info className="w-3.5 h-3.5 text-text-secondary shrink-0 mt-0.5" />
-                <p className="text-[10px] text-text-secondary leading-relaxed">
-                  WhatsApp connection mode is managed by your system administrator. Contact support to upgrade or change your connection plan.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {renderDailyAiUsageCard(false)}
+          </section>
         </div>
       )}
 
@@ -5785,19 +6156,23 @@ export default function OrganizationProfile() {
                 </label>
                 <div className="relative">
                   <input
+                    id="daily-quota-limit"
                     type="number"
-                    min="10"
-                    max="1000000"
-                    step="50"
+                    min="100"
+                    max="100000"
+                    step="1"
                     value={customDailyLimit}
-                    onChange={(e) => setCustomDailyLimit(e.target.value)}
+                    onChange={(e) => { setCustomDailyLimit(e.target.value); setQuotaLimitError(""); }}
                     placeholder="e.g. 1500"
+                    aria-invalid={Boolean(quotaLimitError)}
+                    aria-describedby={quotaLimitError ? "daily-quota-error" : undefined}
                     className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-base font-bold font-mono rounded-2xl px-4 py-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
                   />
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-text-secondary">
                     calls / day
                   </span>
                 </div>
+                {quotaLimitError && <p id="daily-quota-error" className="text-[11px] text-red-600 dark:text-red-400 mt-1" role="alert">{quotaLimitError}</p>}
                 <span className="text-[11px] text-text-secondary mt-1.5 block">
                   Counters automatically refresh back to 0 every day at 00:00
                   UTC.

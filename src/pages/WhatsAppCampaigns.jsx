@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -20,6 +20,10 @@ import {
   Users,
   ShieldAlert,
   Calendar,
+  X,
+  ArrowUpDown,
+  RefreshCw,
+  Layers,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
@@ -34,10 +38,15 @@ export default function WhatsAppCampaigns() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("newest"); // "newest", "oldest", "recipients", "delivery"
   const [search, setSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [cloudStatus, setCloudStatus] = useState(null);
   const [checkingCloudStatus, setCheckingCloudStatus] = useState(true);
+
+  // Custom action confirmation modal state: { type: 'run_now'|'pause'|'resume', campaign: Object }
+  const [actionConfirm, setActionConfirm] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     checkCloudStatus(true);
@@ -143,33 +152,25 @@ export default function WhatsAppCampaigns() {
     navigate("/whatsapp/campaigns/create");
   };
 
-  const handleStart = async (e, id) => {
-    e.stopPropagation();
-    try {
-      await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.START(id));
-      fetchCampaigns();
-    } catch (err) {
-      alert(err.response?.data?.message || "Failed to start campaign.");
-    }
-  };
+  const executeConfirmedAction = async () => {
+    if (!actionConfirm) return;
+    const { type, campaign } = actionConfirm;
+    setActionLoading(true);
 
-  const handlePause = async (e, id) => {
-    e.stopPropagation();
     try {
-      await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.PAUSE(id));
-      fetchCampaigns();
+      if (type === "run_now" || type === "start") {
+        await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.START(campaign._id));
+      } else if (type === "pause") {
+        await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.PAUSE(campaign._id));
+      } else if (type === "resume") {
+        await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.RESUME(campaign._id));
+      }
+      setActionConfirm(null);
+      await fetchCampaigns();
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to pause campaign.");
-    }
-  };
-
-  const handleResume = async (e, id) => {
-    e.stopPropagation();
-    try {
-      await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.RESUME(id));
-      fetchCampaigns();
-    } catch (err) {
-      alert(err.response?.data?.message || "Failed to resume campaign.");
+      alert(err.response?.data?.message || `Failed to ${type} campaign.`);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -187,14 +188,54 @@ export default function WhatsAppCampaigns() {
   const avgReadRate =
     totalDelivered > 0 ? Math.round((totalRead / totalDelivered) * 100) : 0;
 
-  const filteredCampaigns = campaigns.filter((c) => {
-    const matchStatus = statusFilter === "All" || c.status === statusFilter;
-    const matchSearch =
-      !search ||
-      c.name?.toLowerCase().includes(search.toLowerCase()) ||
-      c.templateName?.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchSearch;
-  });
+  // Counts by status
+  const counts = useMemo(() => {
+    const map = {
+      All: campaigns.length,
+      Scheduled: 0,
+      Running: 0,
+      Draft: 0,
+      Completed: 0,
+      Paused: 0,
+      Cancelled: 0,
+    };
+    campaigns.forEach((c) => {
+      if (map[c.status] !== undefined) {
+        map[c.status] += 1;
+      }
+    });
+    return map;
+  }, [campaigns]);
+
+  // Filtering & Sorting
+  const filteredAndSortedCampaigns = useMemo(() => {
+    let list = campaigns.filter((c) => {
+      const matchStatus = statusFilter === "All" || c.status === statusFilter;
+      const matchSearch =
+        !search ||
+        c.name?.toLowerCase().includes(search.toLowerCase()) ||
+        c.templateName?.toLowerCase().includes(search.toLowerCase());
+      return matchStatus && matchSearch;
+    });
+
+    return list.sort((a, b) => {
+      if (sortBy === "newest") {
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      }
+      if (sortBy === "oldest") {
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      }
+      if (sortBy === "recipients") {
+        return (b.totalRecipients || 0) - (a.totalRecipients || 0);
+      }
+      if (sortBy === "delivery") {
+        const rateA = a.sentCount ? (a.deliveredCount || 0) / a.sentCount : 0;
+        const rateB = b.sentCount ? (b.deliveredCount || 0) / b.sentCount : 0;
+        return rateB - rateA;
+      }
+      return 0;
+    });
+  }, [campaigns, statusFilter, search, sortBy]);
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full">
@@ -205,17 +246,17 @@ export default function WhatsAppCampaigns() {
             <Send className="w-7 h-7 text-purple-600 dark:text-purple-400" />
             <span>WhatsApp Marketing Campaigns</span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Official Meta WhatsApp Business Cloud API bulk broadcasts and tracking
+          <p className="text-[8px] text-slate-500 dark:text-slate-400 mt-1">
+            Official Meta WhatsApp Business Cloud API bulk broadcasts, dynamic scheduling, and real-time conversion tracking
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* Cloud API Connection Indicator */}
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2 cursor-pointer ${
               checkingCloudStatus
                 ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500"
                 : cloudStatus?.isConfigured
@@ -244,7 +285,7 @@ export default function WhatsAppCampaigns() {
           <button
             type="button"
             onClick={() => navigate("/whatsapp/templates")}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <FileText className="w-3.5 h-3.5 text-purple-500" />
             <span>Templates</span>
@@ -253,7 +294,7 @@ export default function WhatsAppCampaigns() {
           <button
             type="button"
             onClick={handleNewCampaign}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5"
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Campaign</span>
@@ -285,7 +326,7 @@ export default function WhatsAppCampaigns() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0"
+            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
           >
             <Radio className="w-3.5 h-3.5" />
             <span>Setup Cloud API Now</span>
@@ -293,7 +334,7 @@ export default function WhatsAppCampaigns() {
         </div>
       )}
 
-      {/* KPI Cards */}
+      {/* Executive KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
@@ -346,42 +387,81 @@ export default function WhatsAppCampaigns() {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search campaigns by name or template..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+      {/* Filter & Navigation Bar */}
+      <div className="space-y-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+        {/* Status Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
           {[
             "All",
             "Scheduled",
             "Running",
-            "Draft",
             "Completed",
             "Paused",
+            "Draft",
             "Cancelled",
           ].map((status) => (
             <button
               key={status}
               type="button"
               onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
                 statusFilter === status
-                  ? "bg-purple-600 text-white"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800"
               }`}
             >
-              {status}
+              <span>{status}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                  statusFilter === status
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                {counts[status] || 0}
+              </span>
             </button>
           ))}
+        </div>
+
+        {/* Search & Sort Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search campaigns by name or template..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              Sort:
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-200 outline-none"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="recipients">Most Recipients</option>
+              <option value="delivery">Highest Delivery Rate</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -391,12 +471,12 @@ export default function WhatsAppCampaigns() {
           {[1, 2, 3].map((n) => (
             <div
               key={n}
-              className="h-24 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse border border-slate-200 dark:border-slate-700"
+              className="h-28 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse border border-slate-200 dark:border-slate-700"
             />
           ))}
         </div>
-      ) : filteredCampaigns.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8">
+      ) : filteredAndSortedCampaigns.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 shadow-xs">
           {!cloudStatus?.isConfigured ? (
             <>
               <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center mb-3">
@@ -411,7 +491,7 @@ export default function WhatsAppCampaigns() {
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}
-                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5 shadow-sm"
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 <Radio className="w-3.5 h-3.5" />
                 <span>Setup WhatsApp Cloud API</span>
@@ -426,13 +506,14 @@ export default function WhatsAppCampaigns() {
                 No Campaigns Found
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4">
-                Start a new broadcast campaign to reach your leads using approved
-                WhatsApp templates.
+                {search || statusFilter !== "All"
+                  ? "No campaigns match your current filters. Try resetting search or status tabs."
+                  : "Start a new broadcast campaign to reach your leads using official approved WhatsApp templates."}
               </p>
               <button
                 type="button"
                 onClick={handleNewCampaign}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Create First Campaign</span>
@@ -442,7 +523,7 @@ export default function WhatsAppCampaigns() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredCampaigns.map((campaign) => {
+          {filteredAndSortedCampaigns.map((campaign) => {
             const total = campaign.totalRecipients || 1;
             const sent = campaign.sentCount || 0;
             const percent = Math.min(100, Math.round((sent / total) * 100));
@@ -451,13 +532,13 @@ export default function WhatsAppCampaigns() {
               <div
                 key={campaign._id}
                 onClick={() => navigate(`/whatsapp/campaigns/${campaign._id}`)}
-                className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500/40 dark:hover:border-purple-500/40 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col md:flex-row md:items-center justify-between gap-4"
+                className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-purple-500/40 dark:hover:border-purple-500/40 shadow-xs hover:shadow-md transition-all cursor-pointer group flex flex-col md:flex-row md:items-center justify-between gap-4"
               >
                 {/* Left: Info */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 ${
                         campaign.status === "Running"
                           ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
                           : campaign.status === "Scheduled"
@@ -478,7 +559,7 @@ export default function WhatsAppCampaigns() {
                       <span>{campaign.status}</span>
                     </span>
 
-                    <span className="text-xs text-slate-400 font-medium">
+                    <span className="text-xs text-slate-400 font-medium truncate max-w-xs">
                       Template: {campaign.templateName}
                     </span>
                   </div>
@@ -489,7 +570,7 @@ export default function WhatsAppCampaigns() {
 
                   {/* Scheduled Recurrence & Target Criteria Details */}
                   {campaign.status === "Scheduled" ? (
-                    <div className="flex flex-wrap items-center gap-2 text-xs mt-1.5">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="inline-flex items-center gap-1 font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md">
                         <Clock className="w-3 h-3" />
                         {campaign.scheduleType === "recurring"
@@ -518,19 +599,27 @@ export default function WhatsAppCampaigns() {
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-4 text-xs text-slate-400 mt-1">
+                    <div className="flex items-center gap-4 text-xs text-slate-400">
                       <span>
                         Created: {new Date(campaign.createdAt).toLocaleDateString()}
                       </span>
                       <span>•</span>
-                      <span>By: {campaign.createdByName || "Agent"}</span>
+                      <span>By: {campaign.createdByName || "Sales Rep"}</span>
+                      {campaign.deliveredCount > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {campaign.deliveredCount} Delivered
+                          </span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
 
-                {/* Middle: Progress Bar */}
-                <div className="w-full md:w-56 shrink-0">
-                  <div className="flex items-center justify-between text-xs mb-1">
+                {/* Middle: Progress Bar & Metrics */}
+                <div className="w-full md:w-56 shrink-0 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-slate-700 dark:text-slate-300">
                       {sent} / {campaign.totalRecipients} Sent
                     </span>
@@ -556,9 +645,12 @@ export default function WhatsAppCampaigns() {
                   {campaign.status === "Scheduled" && (
                     <button
                       type="button"
-                      onClick={(e) => handleStart(e, campaign._id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActionConfirm({ type: "run_now", campaign });
+                      }}
                       title="Trigger immediate run without waiting for schedule"
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1 shadow-xs"
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
                     >
                       <Play className="w-3 h-3" />
                       <span>Run Now</span>
@@ -568,8 +660,11 @@ export default function WhatsAppCampaigns() {
                   {campaign.status === "Draft" && (
                     <button
                       type="button"
-                      onClick={(e) => handleStart(e, campaign._id)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1 shadow-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActionConfirm({ type: "start", campaign });
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
                     >
                       <Play className="w-3 h-3" />
                       <span>Start</span>
@@ -579,8 +674,11 @@ export default function WhatsAppCampaigns() {
                   {campaign.status === "Running" && (
                     <button
                       type="button"
-                      onClick={(e) => handlePause(e, campaign._id)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center gap-1 shadow-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActionConfirm({ type: "pause", campaign });
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
                     >
                       <Pause className="w-3 h-3" />
                       <span>Pause</span>
@@ -590,8 +688,11 @@ export default function WhatsAppCampaigns() {
                   {campaign.status === "Paused" && (
                     <button
                       type="button"
-                      onClick={(e) => handleResume(e, campaign._id)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1 shadow-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActionConfirm({ type: "resume", campaign });
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
                     >
                       <Play className="w-3 h-3" />
                       <span>Resume</span>
@@ -617,6 +718,57 @@ export default function WhatsAppCampaigns() {
           fetchCampaigns();
         }}
       />
+
+      {/* Action Confirmation Modal */}
+      {actionConfirm && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto">
+              {actionConfirm.type === "pause" ? (
+                <Pause className="w-6 h-6" />
+              ) : (
+                <Play className="w-6 h-6" />
+              )}
+            </div>
+            <div className="text-center">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white capitalize">
+                {actionConfirm.type === "run_now"
+                  ? "Launch Scheduled Campaign Now?"
+                  : `${actionConfirm.type} Campaign?`}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                {actionConfirm.type === "run_now"
+                  ? `This will bypass the scheduled run time and immediately dispatch "${actionConfirm.campaign.name}" to matching leads at safe sending speed.`
+                  : actionConfirm.type === "pause"
+                  ? `Pausing "${actionConfirm.campaign.name}" will temporarily halt outgoing message dispatches. You can resume at any time.`
+                  : `Resume dispatching messages for "${actionConfirm.campaign.name}".`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setActionConfirm(null)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeConfirmedAction}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {actionLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>
+                  {actionConfirm.type === "run_now"
+                    ? "Confirm Run Now"
+                    : `Confirm ${actionConfirm.type}`}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

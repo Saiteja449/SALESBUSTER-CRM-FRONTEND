@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -7,49 +7,75 @@ import {
   User,
   Calendar,
   CheckCircle,
+  CheckCircle2,
   Plus,
   X,
-  Circle,
   MapPin,
   MessageSquare,
   Building2,
   ChevronDown,
-  ChevronUp,
   Upload,
   Mic,
   FileAudio,
   RotateCcw,
   Copy,
   Check,
-  Loader2,
   Sparkles,
   AlertCircle,
+  AlertTriangle,
+  Clock,
+  PhoneMissed,
+  XCircle,
+  DollarSign,
+  ClipboardList,
+  Edit2,
+  Share2,
+  Flame,
+  CheckSquare,
+  Square,
+  Layers,
+  Inbox,
+  ExternalLink,
 } from "lucide-react";
 import axios from "axios";
 import { API_BASE_URL, BACKEND_URL, ENABLE_AI_AUDIO_ANALYSIS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
-import { formatDate, getServiceColor, getRepName, getLocalTodayDateString } from "../utils/helpers.js";
+import { formatDate, formatTime, formatDateTime, getServiceColor, getRepName, getLocalTodayDateString } from "../utils/helpers.js";
 import { socket } from "../utils/socket.js";
 import DatePicker from "../components/DatePicker.jsx";
 import RecordingsSidebar from "../components/leads/RecordingsSidebar.jsx";
 
 export default function LeadDetails() {
-  const { allUsers, currentUser } = useAuth();
+  const { allUsers = [], currentUser, isManager } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
   const {
-    leads,
-    setLeads,
+    leads = [],
     updateLead,
-    followups,
+    followups = [],
     addFollowup,
     toggleFollowupDone,
-    activeServices,
-    qualificationFields,
+    activeServices = [],
+    qualificationFields = [],
   } = useLeads();
 
-  const currentLead = leads.find((l) => l.id === id);
+  const currentLead = useMemo(() => {
+    return leads.find((l) => String(l.id) === String(id) || String(l._id) === String(id));
+  }, [leads, id]);
+
+  const isManagerRole = Boolean(
+    isManager ||
+    ["sales manager", "super_admin", "admin", "super admin"].includes(
+      (currentUser?.role || "").toLowerCase()
+    ) ||
+    currentUser?.isOrgOwner
+  );
+
+  // Active Workspace Tab
+  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "history" | "update"
+  const [historyFilter, setHistoryFilter] = useState("all"); // "all" | "pending" | "completed"
+  const [copiedPhone, setCopiedPhone] = useState(false);
 
   // Notes state
   const [editingNotes, setEditingNotes] = useState(false);
@@ -77,7 +103,7 @@ export default function LeadDetails() {
         appointmentDate: currentLead.appointmentDate || "",
         appointmentTime: currentLead.appointmentTime || "",
         assignedTo: currentLead.assignedTo || "",
-        importantLead: currentLead.importantLead || false,
+        importantLead: Boolean(currentLead.importantLead),
         comments: "",
       });
       setNotesText(currentLead.notes || "");
@@ -99,31 +125,156 @@ export default function LeadDetails() {
   const [newAct, setNewAct] = useState({
     type: "Call Completed",
     content: "",
-    author: currentUser?.name || "Alex Mercer",
+    author: currentUser?.name || "Representative",
   });
 
   const [followupType, setFollowupType] = useState("Call");
-
   const [isRecordingsSidebarOpen, setIsRecordingsSidebarOpen] = useState(false);
+  const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
 
+  const todayStr = useMemo(() => getLocalTodayDateString(), []);
+
+  // Multi-modal Status Badge (Semantic icon + text)
+  const renderStatusBadge = (statusName) => {
+    const s = (statusName || "New").toLowerCase().trim();
+    switch (s) {
+      case "new":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+            <Sparkles className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>New</span>
+          </span>
+        );
+      case "missed call":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+            <PhoneMissed className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>Missed Call</span>
+          </span>
+        );
+      case "follow up":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+            <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>Follow Up</span>
+          </span>
+        );
+      case "converted":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>Converted</span>
+          </span>
+        );
+      case "not attended":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>Not Attended</span>
+          </span>
+        );
+      case "price issue":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/25">
+            <DollarSign className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>Price Issue</span>
+          </span>
+        );
+      case "not interested":
+      case "lost":
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30">
+            <XCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>{statusName || "Lost"}</span>
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-brand-secondary/40 text-brand-primary border border-brand-secondary/60">
+            <CheckCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            <span>{statusName}</span>
+          </span>
+        );
+    }
+  };
+
+  // Follow-up Urgency Indicator helper
+  const getFollowUpStatus = (lead) => {
+    if (!lead?.nextFollowUp) {
+      return {
+        type: "none",
+        label: "No Follow-up Scheduled",
+        icon: <Calendar className="w-4 h-4 text-brand-primary/50" />,
+        badgeClass: "bg-brand-secondary/30 text-brand-primary/70 border-brand-secondary",
+      };
+    }
+
+    const fwDate = lead.nextFollowUp;
+    const isOverdue = fwDate < todayStr && lead.status === "Follow Up";
+    const isToday = fwDate === todayStr;
+
+    if (isOverdue) {
+      return {
+        type: "overdue",
+        label: `Overdue (${formatDate(fwDate)})`,
+        date: fwDate,
+        time: lead.followupTime || lead.appointmentTime || "",
+        icon: <AlertTriangle className="w-4 h-4 text-red-500" />,
+        badgeClass: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 font-bold",
+      };
+    }
+
+    if (isToday) {
+      return {
+        type: "today",
+        label: `Today${lead.followupTime ? ` at ${lead.followupTime}` : ""}`,
+        date: fwDate,
+        time: lead.followupTime || lead.appointmentTime || "",
+        icon: <Clock className="w-4 h-4 text-amber-500" />,
+        badgeClass: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold",
+      };
+    }
+
+    return {
+      type: "upcoming",
+      label: `Scheduled: ${formatDate(fwDate)}${lead.followupTime ? ` at ${lead.followupTime}` : ""}`,
+      date: fwDate,
+      time: lead.followupTime || lead.appointmentTime || "",
+      icon: <Calendar className="w-4 h-4 text-teal-600" />,
+      badgeClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/30 font-semibold",
+    };
+  };
+
+  // Fallback / Missing lead state
   if (!currentLead) {
     return (
-      <div className="p-4 text-center">
-        <div className="bg-red-500/10 text-red-500 p-4 rounded-lg mb-4">
-          Lead not found in the sales directory database.
+      <div className="p-4 md:p-8 max-w-xl mx-auto text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-brand-secondary/40 text-brand-primary/60 flex items-center justify-center mx-auto">
+          <Inbox className="w-7 h-7" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-brand-primary">
+            Lead Record Not Found
+          </h2>
+          <p className="text-xs text-brand-primary/60 mt-1 max-w-sm mx-auto">
+            The customer lead you requested could not be located in your organization's directory. It may have been reassigned, deleted, or the ID is invalid.
+          </p>
         </div>
         <button
+          type="button"
           onClick={() => navigate("/leads")}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-brand-primary rounded-lg hover:bg-blue-700 transition-colors mx-auto"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-pilot-blue hover:bg-pilot-blue-hover text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
         >
-          <ArrowLeft size={18} />
-          Back to Directory
+          <ArrowLeft className="w-4 h-4" />
+          <span>Return to Leads Directory</span>
         </button>
       </div>
     );
   }
 
-  const leadFollowups = followups.filter((f) => f.leadId === currentLead.id);
+  const leadFollowups = followups.filter(
+    (f) => String(f.leadId) === String(currentLead.id || currentLead._id)
+  );
 
   const combinedHistory = leadFollowups
     .map((f) => {
@@ -131,61 +282,52 @@ export default function LeadDetails() {
       const creationDateStr = f.createdAt || new Date().toISOString();
       const creationD = new Date(creationDateStr);
       return {
-        id: f.id,
+        id: f.id || f._id,
         isFollowup: !f.done,
-        type: f.type,
-        priority: f.priority,
+        done: Boolean(f.done),
+        type: f.type || "Call",
+        priority: f.priority || "Medium",
         rawDate: creationD.getTime(),
         scheduledDate: f.date,
         scheduledTime: f.time || "",
-        notes: f.notes,
-        author: f.author || currentLead.assignedTo || "System",
+        notes: f.notes || "",
+        author: f.author || getRepName(currentLead.assignedTo, allUsers) || "System",
         createdAt: creationDateStr,
       };
     })
     .sort((a, b) => b.rawDate - a.rawDate);
 
-  // Move Status directly
-  const handleStatusChange = async (e) => {
-    try {
-      const nextStatus = e.target.value;
-      await updateLead(
-        currentLead.id,
-        { status: nextStatus },
-        currentUser?.name || "System",
-      );
-    } catch (error) {
-      console.error(error);
-      alert("Failed to update status");
-    }
-  };
+  const filteredHistory = combinedHistory.filter((item) => {
+    if (historyFilter === "pending") return !item.done;
+    if (historyFilter === "completed") return item.done;
+    return true;
+  });
 
-  // Change assignee directly
+  const fwStatus = getFollowUpStatus(currentLead);
+  const serviceColor = getServiceColor(currentLead.service || "General Enquiry");
+
+  // Reassign directly (Managers only)
   const handleAssigneeChange = async (e) => {
     try {
       const nextAssignee = e.target.value;
       await updateLead(
-        currentLead.id,
+        currentLead.id || currentLead._id,
         { assignedTo: nextAssignee },
-        currentUser?.name || "System",
+        currentUser?.name || "System"
       );
     } catch (error) {
       console.error(error);
-      alert("Failed to update assignee");
+      alert("Failed to update representative assignment.");
     }
   };
 
-  // Handle lead form submit
+  // Handle lead update submit
   const handleUpdateLeadFormSubmit = async (e) => {
     e.preventDefault();
 
     if (formData.status === "Follow Up") {
-      if (
-        !formData.nextFollowUp ||
-        !followupType ||
-        !formData.comments.trim()
-      ) {
-        alert("Please supply a valid Follow Up Date, Type, and Comments.");
+      if (!formData.nextFollowUp || !followupType || !formData.comments.trim()) {
+        alert("Please supply a valid Follow Up Date, Channel Type, and Comments.");
         return;
       }
     }
@@ -204,44 +346,43 @@ export default function LeadDetails() {
     }
 
     const authorName = currentUser?.name || "System";
+    setIsSubmittingUpdate(true);
 
     try {
-      await updateLead(currentLead.id, updatedFields, authorName);
+      await updateLead(currentLead.id || currentLead._id, updatedFields, authorName);
 
-      // If "Follow Up" is selected, automatically schedule a follow-up task
       if (formData.status === "Follow Up") {
         addFollowup({
-          leadId: currentLead.id,
+          leadId: currentLead.id || currentLead._id,
           leadName: currentLead.name,
-
           type: followupType,
           date: formData.nextFollowUp,
           time: formData.appointmentTime || "11:00 AM",
           priority: formData.importantLead ? "High" : "Medium",
           notes:
-            formData.comments ||
-            `Routine followup scheduled via ${followupType}`,
+            formData.comments || `Routine followup scheduled via ${followupType}`,
           author: authorName,
         });
       }
 
-      // Reset local comments box after submitting
       setFormData((prev) => ({ ...prev, comments: "" }));
-      alert("Customer lead records were updated successfully.");
-      navigate("/leads");
+      alert("Lead records updated successfully.");
+      setActiveTab("overview");
     } catch (error) {
       console.error(error);
       alert("Failed to update lead records.");
+    } finally {
+      setIsSubmittingUpdate(false);
     }
   };
 
-  // Save general profile notes
+  // Save notes
   const handleSaveNotes = async () => {
     try {
       await updateLead(
-        currentLead.id,
+        currentLead.id || currentLead._id,
         { notes: notesText },
-        currentUser?.name || "Alex Mercer",
+        currentUser?.name || "System"
       );
       setEditingNotes(false);
     } catch (error) {
@@ -250,7 +391,7 @@ export default function LeadDetails() {
     }
   };
 
-  // Save rescheduled follow up
+  // Schedule follow-up
   const handleSaveFollowup = async (e) => {
     e.preventDefault();
     if (!newFw.date || !newFw.type || !newFw.notes.trim()) {
@@ -259,18 +400,20 @@ export default function LeadDetails() {
     }
     try {
       addFollowup({
-        leadId: currentLead.id,
+        leadId: currentLead.id || currentLead._id,
         leadName: currentLead.name,
-
         type: newFw.type,
         date: newFw.date,
         time: newFw.time,
         priority: newFw.priority,
         notes: newFw.notes,
-        author: currentUser?.name || "Alex Mercer",
+        author: currentUser?.name || "Representative",
       });
-      // Record as lead's next follow up date
-      await updateLead(currentLead.id, { nextFollowUp: newFw.date });
+      await updateLead(currentLead.id || currentLead._id, {
+        nextFollowUp: newFw.date,
+        followupTime: newFw.time,
+        status: "Follow Up",
+      });
       setFollowupOpen(false);
       setNewFw({
         type: "Call",
@@ -281,20 +424,19 @@ export default function LeadDetails() {
       });
     } catch (error) {
       console.error(error);
-      alert("Failed to update follow-up date");
+      alert("Failed to schedule follow-up");
     }
   };
 
-  // Log active sales interaction
+  // Log activity
   const handleSaveActivity = (e) => {
     e.preventDefault();
-    if (!newAct.content) {
-      alert("Please provide the activity details content.");
+    if (!newAct.content.trim()) {
+      alert("Please provide the activity notes content.");
       return;
     }
-    // Changed to manual addFollowup for user-initiated activity logs from the modal
     addFollowup({
-      leadId: currentLead.id,
+      leadId: currentLead.id || currentLead._id,
       leadName: currentLead.name,
       type: newAct.type,
       date: getLocalTodayDateString(),
@@ -311,741 +453,937 @@ export default function LeadDetails() {
     setNewAct({
       type: "Call Completed",
       content: "",
-      author: currentUser?.name || "Alex Mercer",
+      author: currentUser?.name || "Representative",
     });
   };
 
-  const getStatusBg = (status) => {
-    switch (status) {
-      case "New":
-        return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-      case "Follow Up":
-        return "bg-amber-500/10 text-amber-500 border-amber-500/20";
-      case "Not Interested":
-        return "bg-red-500/10 text-red-500 border-red-500/20";
-      case "Converted":
-        return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
-      default:
-        return "bg-brand-secondary/30 text-brand-primary border-brand-secondary";
-    }
-  };
-
-  const getSourceBg = (source) => {
-    if (source === "Website Chat") {
-      return "bg-cyan-500/15 text-cyan-400 border-cyan-500/30 font-semibold";
-    }
-    return "bg-brand-secondary/30/50 text-brand-primary/70 border-brand-secondary";
+  const handleCopyPhone = () => {
+    if (!currentLead.phone) return;
+    navigator.clipboard?.writeText(currentLead.phone);
+    setCopiedPhone(true);
+    setTimeout(() => setCopiedPhone(false), 1500);
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <button
-        onClick={() => navigate("/leads")}
-        className="flex items-center gap-2 text-brand-primary/70 hover:text-brand-primary transition-colors font-medium mb-2"
-      >
-        <ArrowLeft size={18} />
-        Back to Customer List
-      </button>
+    <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto w-full">
+      {/* ── Back Navigation ────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => navigate("/leads")}
+          className="inline-flex items-center gap-2 text-xs md:text-sm font-bold text-brand-primary/70 hover:text-brand-primary transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none rounded-lg px-2 py-1"
+          aria-label="Return to leads directory"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Leads Directory</span>
+        </button>
 
-      <div className="flex flex-col gap-6">
-        {/* 1. Lead Primary Profile Card */}
-        <div className="bg-brand-light border border-brand-secondary rounded-xl p-5 shadow-sm">
-          <div className="flex items-center gap-4 mb-5">
-            <div className="w-12 h-12 rounded-full bg-blue-600 text-brand-primary flex items-center justify-center font-bold text-xl shrink-0">
-              {currentLead.name
-                ? currentLead.name.substring(0, 1).toUpperCase()
-                : "C"}
+        <span className="text-[11px] text-brand-primary/50">
+          Lead ID: {currentLead.id || currentLead._id}
+        </span>
+      </div>
+
+      {/* ── 1. Hero Summary Card at Top ────────────────────────────────── */}
+      <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-6 shadow-xs">
+        {/* Top Header Row: Name, Status & Tags */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-brand-secondary/40">
+          <div className="flex items-start gap-3.5 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-extrabold text-lg shrink-0 shadow-xs">
+              {currentLead.name ? currentLead.name.substring(0, 1).toUpperCase() : "L"}
             </div>
+
             <div className="min-w-0">
-              <h2 className="text-lg font-bold text-brand-primary truncate">
-                {currentLead.name}
-              </h2>
-              <p className="text-sm text-brand-primary/70 truncate">
-                Registered on {formatDate(currentLead.createdAt)}
-              </p>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl md:text-2xl font-extrabold text-brand-primary tracking-tight truncate">
+                  {currentLead.name || "Unnamed Prospect"}
+                </h1>
+
+                {currentLead.importantLead && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>Hot Lead</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs">
+                {renderStatusBadge(currentLead.status)}
+
+                <span
+                  className="px-2.5 py-1 rounded-full text-xs font-bold text-white shadow-2xs"
+                  style={{ backgroundColor: serviceColor }}
+                >
+                  {currentLead.service || "General Enquiry"}
+                </span>
+
+                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-brand-secondary/40 text-brand-primary border border-brand-secondary">
+                  Source: {currentLead.source || "Direct Entry"}
+                </span>
+
+                {(currentLead.appointmentDate || currentLead.tags?.includes("Demo Booked")) && (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                    📅 Demo Booked: {currentLead.appointmentDate} {currentLead.appointmentTime || ""}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 mb-6">
-            <span
-              className={`px-2.5 py-1 rounded-md text-xs font-bold border ${getStatusBg(currentLead.status)}`}
-            >
-              {currentLead.status}
+          {/* Follow-up Urgency Pill */}
+          <div className="flex flex-col sm:items-end gap-1 shrink-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-primary/60">
+              Follow-up Status
             </span>
-            <span
-              className="px-2.5 py-1 rounded-md text-xs font-bold text-white shadow-xs"
-              style={{
-                backgroundColor: getServiceColor(
-                  currentLead.service || "General Enquiry",
-                ),
-              }}
+            <div
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs ${fwStatus.badgeClass}`}
             >
-              {currentLead.service || "General Enquiry"}
-            </span>
-            <span
-              className={`px-2.5 py-1 rounded-md text-xs font-medium border ${getSourceBg(currentLead.source)}`}
-            >
-              {currentLead.source}
-            </span>
-            {(currentLead.appointmentDate || currentLead.tags?.includes("Demo Booked")) && (
-              <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                📅 Demo Booked{currentLead.appointmentDate ? `: ${currentLead.appointmentDate}` : ""} {currentLead.appointmentTime || ""}
+              {fwStatus.icon}
+              <span>{fwStatus.label}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Contact Details & Assignment Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-4 text-xs">
+          {/* Phone */}
+          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-bg-main/50 border border-brand-secondary/40">
+            <Phone className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-brand-primary/50 uppercase block">
+                Phone Number
               </span>
-            )}
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <a
+                  href={`tel:${currentLead.phone}`}
+                  className="font-bold text-brand-primary hover:text-emerald-600 truncate"
+                  title="Click to dial"
+                >
+                  {currentLead.phone || "No phone"}
+                </a>
+                {currentLead.phone && (
+                  <button
+                    type="button"
+                    onClick={handleCopyPhone}
+                    className="p-1 text-brand-primary/50 hover:text-brand-primary transition-colors cursor-pointer"
+                    title="Copy phone number"
+                    aria-label="Copy phone number"
+                  >
+                    {copiedPhone ? (
+                      <Check className="w-3 h-3 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Email */}
+          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-bg-main/50 border border-brand-secondary/40">
+            <Mail className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-brand-primary/50 uppercase block">
+                Email Address
+              </span>
+              {currentLead.email ? (
+                <a
+                  href={`mailto:${currentLead.email}`}
+                  className="font-semibold text-brand-primary hover:text-purple-600 truncate block mt-0.5"
+                  title="Send email"
+                >
+                  {currentLead.email}
+                </a>
+              ) : (
+                <span className="text-brand-primary/50 block mt-0.5">Not provided</span>
+              )}
+            </div>
+          </div>
+
+          {/* Company */}
+          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-bg-main/50 border border-brand-secondary/40">
+            <Building2 className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-brand-primary/50 uppercase block">
+                Company / Org
+              </span>
+              <span className="font-semibold text-brand-primary truncate block mt-0.5">
+                {currentLead.company || currentLead.aiQualification?.company || "Not provided"}
+              </span>
+            </div>
+          </div>
+
+          {/* Assigned Representative */}
+          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-bg-main/50 border border-brand-secondary/40">
+            <User className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-brand-primary/50 uppercase block">
+                Assigned Rep
+              </span>
+              {isManagerRole ? (
+                <select
+                  value={
+                    allUsers.find(
+                      (u) =>
+                        u.id === currentLead.assignedTo ||
+                        u._id === currentLead.assignedTo ||
+                        u.name?.toLowerCase() === String(currentLead.assignedTo).toLowerCase()
+                    )?.id ||
+                    currentLead.assignedTo ||
+                    "Unassigned"
+                  }
+                  onChange={handleAssigneeChange}
+                  aria-label="Reassign sales representative"
+                  className="bg-brand-light border border-brand-secondary text-xs font-bold text-brand-primary rounded-lg px-2 py-1 mt-0.5 focus:outline-none focus:border-purple-500 cursor-pointer w-full"
+                >
+                  <option value="Unassigned">Unassigned</option>
+                  {allUsers.map((u) => (
+                    <option key={u.id || u._id} value={u.id || u._id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-semibold text-brand-primary truncate block mt-0.5">
+                  {getRepName(currentLead.assignedTo, allUsers)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Registered Date */}
+          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-bg-main/50 border border-brand-secondary/40">
+            <Calendar className="w-4 h-4 text-brand-primary/50 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-brand-primary/50 uppercase block">
+                Enquired Date
+              </span>
+              <span className="font-semibold text-brand-primary truncate block mt-0.5">
+                {formatDate(currentLead.joinedAt || currentLead.createdAt)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Fast Action Command Bar ──────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-2.5 pt-4 mt-4 border-t border-brand-secondary/40">
+          {currentLead.phone && (
+            <a
+              href={`tel:${currentLead.phone}`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
+              aria-label={`Dial ${currentLead.name}`}
+            >
+              <Phone className="w-4 h-4" />
+              <span>Call Client</span>
+            </a>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              navigate("/whatsapp", {
+                state: { selectLeadId: currentLead.id || currentLead._id },
+              })
+            }
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
+            aria-label="Open WhatsApp chat for this lead"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>WhatsApp Chat</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFollowupOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none"
+            aria-label="Schedule a follow-up task"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Schedule Follow-up</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActivityOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-brand-light border border-brand-secondary text-brand-primary hover:bg-brand-secondary/40 shadow-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+            aria-label="Log a completed activity or call note"
+          >
+            <ClipboardList className="w-4 h-4 text-blue-500" />
+            <span>Log Activity / Call</span>
+          </button>
+
+          {ENABLE_AI_AUDIO_ANALYSIS && (
             <button
               type="button"
-              onClick={() =>
-                navigate("/whatsapp", {
-                  state: { selectLeadId: currentLead.id },
-                })
-              }
-              className="px-2.5 py-1 bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 border border-purple-500/30 rounded-md text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+              onClick={() => setIsRecordingsSidebarOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-violet-600/15 hover:bg-violet-600/25 text-violet-700 dark:text-violet-300 border border-violet-500/30 shadow-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none"
+              aria-label="Open AI audio recordings and coaching analysis"
             >
-              <MessageSquare size={14} />
-              {currentLead.source === "Website Chat" ? "Open Chat History" : "Open WhatsApp Chat"}
+              <Mic className="w-4 h-4 text-violet-600" />
+              <span>Recordings & AI Analysis</span>
+              {currentLead.recordings && currentLead.recordings.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-violet-600 text-white text-[10px] font-bold">
+                  {currentLead.recordings.length}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── 2. Dedicated Overdue Alert Banner (If Applicable) ───────────── */}
+      {fwStatus.type === "overdue" && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-red-500/20 text-red-500 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs md:text-sm font-bold text-red-600 dark:text-red-400">
+                Action Required: Overdue Follow-up
+              </h3>
+              <p className="text-xs text-brand-primary/70 mt-0.5">
+                This lead had a follow-up scheduled for{" "}
+                <strong className="text-red-600 dark:text-red-400">
+                  {formatDate(fwStatus.date)}
+                </strong>{" "}
+                that has not been completed.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setFollowupOpen(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none"
+            >
+              Reschedule Follow-up
             </button>
           </div>
-
-          <hr className="border-brand-secondary mb-5" />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="flex items-start gap-3">
-              <Phone className="text-brand-primary/70 mt-0.5" size={18} />
-              <div className="min-w-0">
-                <span className="text-xs text-brand-primary/70 block mb-0.5">
-                  Client Phone
-                </span>
-                <span className="text-sm font-semibold text-brand-primary truncate block">
-                  {currentLead.phone}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Mail className="text-brand-primary/70 mt-0.5" size={18} />
-              <div className="min-w-0">
-                <span className="text-xs text-brand-primary/70 block mb-0.5">
-                  Email Address
-                </span>
-                <span className="text-sm font-semibold text-brand-primary truncate block">
-                  {currentLead.email || "No email profile"}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Building2 className="text-brand-primary/70 mt-0.5" size={18} />
-              <div className="min-w-0">
-                <span className="text-xs text-brand-primary/70 block mb-0.5">
-                  Company
-                </span>
-                <span className="text-sm font-semibold text-brand-primary truncate block">
-                  {currentLead.company || currentLead.aiQualification?.company || "Not specified"}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <User className="text-brand-primary/70 mt-0.5" size={18} />
-              <div className="min-w-0">
-                <span className="text-xs text-brand-primary/70 block mb-0.5">
-                  Sales Representative
-                </span>
-                {currentUser?.role === "Sales Manager" ? (
-                  <select
-                    value={
-                      allUsers.find(
-                        (u) =>
-                          u.id === currentLead.assignedTo ||
-                          u.name?.toLowerCase() ===
-                            String(currentLead.assignedTo).toLowerCase(),
-                      )?.id ||
-                      currentLead.assignedTo ||
-                      ""
-                    }
-                    onChange={handleAssigneeChange}
-                    className="bg-brand-light border border-brand-secondary text-sm font-semibold text-brand-primary rounded px-2 py-1 focus:outline-none focus:border-purple-500 cursor-pointer w-full max-w-[200px]"
-                  >
-                    <option value="Unassigned">Unassigned</option>
-                    {allUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="text-sm font-semibold text-brand-primary truncate block">
-                    {getRepName(currentLead.assignedTo, allUsers)}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Calendar className="text-brand-primary/70 mt-0.5" size={18} />
-              <div className="min-w-0">
-                <span className="block text-xs text-brand-primary/70 mb-1">
-                  Enquired On
-                </span>
-                <span className="text-sm font-semibold text-brand-primary truncate block">
-                  {currentLead.joinedAt
-                    ? formatDate(currentLead.joinedAt)
-                    : "-"}
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
+      )}
 
-        {/* 2. Special Requirements & Logged Notes */}
-        <div className="bg-brand-light border border-brand-secondary rounded-xl p-5 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-brand-primary">
-              Special Requirements & Logged Notes
-            </h3>
-            {editingNotes ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setEditingNotes(false);
-                    setNotesText(currentLead.notes || "");
-                  }}
-                  className="px-3 py-1 text-sm text-brand-primary/70 hover:text-brand-primary transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveNotes}
-                  className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-brand-primary rounded-md transition-colors"
-                >
-                  Save
-                </button>
+      {/* ── 3. Workspace Segmented Navigation ────────────────────────────── */}
+      <div className="flex border-b border-brand-secondary/60 gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("overview")}
+          className={`px-4 py-2.5 text-xs md:text-sm font-bold border-b-2 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none ${
+            activeTab === "overview"
+              ? "border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-500/5 rounded-t-lg"
+              : "border-transparent text-brand-primary/70 hover:text-brand-primary"
+          }`}
+        >
+          Overview & Intelligence
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={`px-4 py-2.5 text-xs md:text-sm font-bold border-b-2 transition-all cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none ${
+            activeTab === "history"
+              ? "border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-500/5 rounded-t-lg"
+              : "border-transparent text-brand-primary/70 hover:text-brand-primary"
+          }`}
+        >
+          <span>Follow-up & Activity History</span>
+          {leadFollowups.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-brand-secondary/50 text-[10px]">
+              {leadFollowups.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("update")}
+          className={`px-4 py-2.5 text-xs md:text-sm font-bold border-b-2 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none ${
+            activeTab === "update"
+              ? "border-purple-600 text-purple-600 dark:text-purple-400 bg-purple-500/5 rounded-t-lg"
+              : "border-transparent text-brand-primary/70 hover:text-brand-primary"
+          }`}
+        >
+          Update Status & Schedule
+        </button>
+      </div>
+
+      {/* ── 4. Tab 1: Overview & Intelligence Workspace ──────────────────── */}
+      {activeTab === "overview" && (
+        <div className="space-y-5">
+          {/* Internal Requirements & Notes Section */}
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-purple-600" />
+                <h3 className="font-bold text-brand-primary text-sm md:text-base">
+                  Special Requirements & Internal Notes
+                </h3>
               </div>
+
+              {editingNotes ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingNotes(false);
+                      setNotesText(currentLead.notes || "");
+                    }}
+                    className="px-3 py-1 text-xs font-semibold text-brand-primary/70 hover:text-brand-primary rounded-lg border border-brand-secondary cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveNotes}
+                    className="px-3 py-1 text-xs font-bold bg-pilot-blue hover:bg-pilot-blue-hover text-white rounded-lg cursor-pointer"
+                  >
+                    Save Notes
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingNotes(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold border border-brand-secondary text-brand-primary hover:bg-brand-secondary/30 rounded-lg transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Edit Notes</span>
+                </button>
+              )}
+            </div>
+
+            {editingNotes ? (
+              <textarea
+                rows={4}
+                className="w-full bg-bg-main border border-brand-secondary text-brand-primary text-xs md:text-sm rounded-xl p-3 focus:outline-none focus:border-pilot-blue resize-y"
+                value={notesText}
+                onChange={(e) => setNotesText(e.target.value)}
+                placeholder="Log internal client requirements, deal value, or context notes..."
+              />
             ) : (
-              <button
-                onClick={() => setEditingNotes(true)}
-                className="px-3 py-1 text-sm border border-brand-secondary text-brand-primary hover:bg-brand-secondary/30 rounded-md transition-colors"
-              >
-                Edit Notes
-              </button>
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                <p className="text-xs md:text-sm text-amber-700 dark:text-amber-400 whitespace-pre-wrap leading-relaxed">
+                  {currentLead.notes ||
+                    "No operational requirements or customer notes recorded yet. Click 'Edit Notes' to add details."}
+                </p>
+              </div>
             )}
           </div>
 
-          {editingNotes ? (
-            <textarea
-              className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 min-h-[100px] outline-none"
-              value={notesText}
-              onChange={(e) => setNotesText(e.target.value)}
-            />
-          ) : (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
-              <p className="text-sm text-amber-600 dark:text-amber-400 italic whitespace-pre-wrap leading-relaxed">
-                {currentLead.notes ||
-                  "No operational context or requirements notes logged. Click 'Edit' to update."}
+          {/* AI Captured Lead Specifications (If available) */}
+          {currentLead.aiQualification &&
+            Object.entries(currentLead.aiQualification).some(
+              ([k, v]) =>
+                !["_id", "__v", "id"].includes(k) &&
+                v !== undefined &&
+                v !== null &&
+                v !== ""
+            ) && (
+              <div className="bg-brand-light border border-purple-500/30 rounded-2xl shadow-xs overflow-hidden">
+                <div className="p-4 border-b border-purple-500/20 bg-purple-500/5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-bold text-purple-600 text-sm md:text-base">
+                      AI Captured Lead Intelligence
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 border border-purple-500/25">
+                    Extracted via WhatsApp
+                  </span>
+                </div>
+
+                <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
+                  {/* Service Intent */}
+                  {(currentLead.aiQualification?.intent || currentLead.service) && (
+                    <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                      <span className="text-[10px] uppercase font-bold text-purple-600 block mb-1">
+                        Service Intent
+                      </span>
+                      <span className="text-xs md:text-sm font-bold text-purple-700 dark:text-purple-300">
+                        {currentLead.service || currentLead.aiQualification?.intent}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Requested Callback */}
+                  {currentLead.aiQualification?.preferredCallDate && (
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 col-span-1 sm:col-span-2">
+                      <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">
+                        Requested Callback Time
+                      </span>
+                      <span className="text-xs md:text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                        {currentLead.aiQualification.preferredCallDate}{" "}
+                        {currentLead.aiQualification.preferredCallTime || ""}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* City */}
+                  {currentLead.aiQualification?.city && (
+                    <div className="p-3 rounded-xl bg-bg-main border border-brand-secondary/40">
+                      <span className="text-[10px] uppercase font-bold text-brand-primary/50 block mb-1">
+                        Location / City
+                      </span>
+                      <span className="font-semibold text-brand-primary capitalize">
+                        {currentLead.aiQualification.city}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Urgency */}
+                  {currentLead.aiQualification?.urgency && (
+                    <div className="p-3 rounded-xl bg-bg-main border border-brand-secondary/40">
+                      <span className="text-[10px] uppercase font-bold text-brand-primary/50 block mb-1">
+                        Urgency Level
+                      </span>
+                      <span className="font-semibold text-brand-primary capitalize">
+                        {currentLead.aiQualification.urgency}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Requirement Summary */}
+                  {currentLead.aiQualification?.issueDescription && (
+                    <div className="p-3 rounded-xl bg-bg-main border border-brand-secondary/40 col-span-1 sm:col-span-2 lg:col-span-4">
+                      <span className="text-[10px] uppercase font-bold text-brand-primary/50 block mb-1">
+                        Requirement Details
+                      </span>
+                      <span className="text-brand-primary leading-relaxed">
+                        {currentLead.aiQualification.issueDescription}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Dynamic Organization Qualification Fields */}
+                  {qualificationFields &&
+                    qualificationFields.map((f) => {
+                      const val = currentLead.aiQualification?.[f.key];
+                      if (val === undefined || val === null || val === "") return null;
+                      return (
+                        <div
+                          key={f.key}
+                          className="p-3 rounded-xl bg-bg-main border border-brand-secondary/40"
+                        >
+                          <span className="text-[10px] uppercase font-bold text-brand-primary/50 block mb-1">
+                            {f.label || f.key}
+                          </span>
+                          <span className="font-semibold text-brand-primary">
+                            {String(val)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+        </div>
+      )}
+
+      {/* ── 5. Tab 2: Follow-up & Activity History ──────────────────────── */}
+      {activeTab === "history" && (
+        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-brand-secondary/40">
+            <div>
+              <h3 className="font-bold text-brand-primary text-base">
+                Follow-Up & Communications Timeline
+              </h3>
+              <p className="text-xs text-brand-primary/60">
+                Track scheduled tasks, call completions, and recorded updates
               </p>
             </div>
-          )}
-        </div>
 
-        {/* AI Captured Details (Conditional) */}
-        {currentLead.aiQualification &&
-          Object.entries(currentLead.aiQualification).some(
-            ([k, v]) =>
-              !["_id", "__v", "id"].includes(k) &&
-              v !== undefined &&
-              v !== null &&
-              v !== "",
-          ) && (
-          <div className="bg-brand-light border border-purple-500/30 rounded-xl shadow-sm overflow-hidden mb-6">
-            <div className="p-4 border-b border-purple-500/20 bg-purple-500/5">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
-                <h3 className="font-bold text-purple-600">AI Captured Lead Specifications</h3>
-                <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded bg-purple-500/10 text-purple-600">
-                  Auto-extracted
-                </span>
-              </div>
-            </div>
-            <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Product / Service Intent */}
-              {(currentLead.aiQualification?.intent || currentLead.service) && (
-                <div className="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30">
-                  <span className="text-[10px] uppercase font-bold text-purple-600 block mb-1">
-                    Service / Product Line
-                  </span>
-                  <span className="text-sm font-bold text-purple-700">
-                    {currentLead.service || currentLead.aiQualification?.intent}
-                  </span>
-                </div>
-              )}
-
-              {/* Dynamic Organization Qualification Fields */}
-              {qualificationFields && qualificationFields.length > 0 ? (
-                qualificationFields.map((f) => {
-                  const val = currentLead.aiQualification?.[f.key];
-                  if (val === undefined || val === null || val === "") return null;
-                  return (
-                    <div
-                      key={f.key}
-                      className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30"
-                    >
-                      <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                        {f.label || f.key}
-                      </span>
-                      <span className="text-sm font-semibold text-brand-primary">
-                        {String(val)}
-                      </span>
-                    </div>
-                  );
-                })
-              ) : (
-                /* Fallback for unconfigured schemas */
-                Object.entries(currentLead.aiQualification)
-                  .filter(
-                    ([k, v]) =>
-                      ![
-                        "intent",
-                        "city",
-                        "preferredCallDate",
-                        "preferredCallTime",
-                        "preferredVisitDate",
-                        "issueDescription",
-                        "urgency",
-                        "interestScore",
-                        "_id",
-                        "__v",
-                        "id",
-                      ].includes(k) &&
-                      v !== undefined &&
-                      v !== null &&
-                      v !== "",
-                  )
-                  .map(([key, val]) => (
-                    <div
-                      key={key}
-                      className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30"
-                    >
-                      <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                        {key.replace(/([A-Z])/g, " $1")}
-                      </span>
-                      <span className="text-sm font-semibold text-brand-primary">
-                        {String(val)}
-                      </span>
-                    </div>
-                  ))
-              )}
-
-              {/* Extra attributes in aiQualification not covered by schema */}
-              {qualificationFields &&
-                qualificationFields.length > 0 &&
-                Object.entries(currentLead.aiQualification)
-                  .filter(
-                    ([k, v]) =>
-                      ![
-                        "intent",
-                        "city",
-                        "preferredCallDate",
-                        "preferredCallTime",
-                        "preferredVisitDate",
-                        "issueDescription",
-                        "urgency",
-                        "interestScore",
-                        "_id",
-                        "__v",
-                        "id",
-                        ...qualificationFields.map((f) => f.key),
-                      ].includes(k) &&
-                      v !== undefined &&
-                      v !== null &&
-                      v !== "",
-                  )
-                  .map(([key, val]) => (
-                    <div
-                      key={key}
-                      className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30"
-                    >
-                      <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                        {key.replace(/([A-Z])/g, " $1")}
-                      </span>
-                      <span className="text-sm font-semibold text-brand-primary">
-                        {String(val)}
-                      </span>
-                    </div>
-                  ))}
-
-              {/* Standard Attributes */}
-              {currentLead.aiQualification?.preferredCallDate && (
-                <div className="bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/30 col-span-2">
-                  <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1">
-                    Requested Callback Time
-                  </span>
-                  <span className="text-sm font-bold text-emerald-700">
-                    {currentLead.aiQualification.preferredCallDate}{" "}
-                    {currentLead.aiQualification.preferredCallTime}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.preferredVisitDate && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Site Visit Date
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary">
-                    {currentLead.aiQualification.preferredVisitDate}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.city && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Location / City
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary capitalize">
-                    {currentLead.aiQualification.city}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.issueDescription && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30 col-span-2">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Requirement Summary
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary">
-                    {currentLead.aiQualification.issueDescription}
-                  </span>
-                </div>
-              )}
-              {currentLead.aiQualification?.urgency && (
-                <div className="bg-brand-secondary/10 p-3 rounded-lg border border-brand-secondary/30">
-                  <span className="text-[10px] uppercase font-bold text-brand-primary/60 block mb-1">
-                    Urgency
-                  </span>
-                  <span className="text-sm font-semibold text-brand-primary capitalize">
-                    {currentLead.aiQualification.urgency}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 2.5 Call Recordings & AI Transcription Section */}
-        {ENABLE_AI_AUDIO_ANALYSIS && (
-          <div className="bg-brand-light border border-brand-secondary rounded-xl shadow-sm mb-6 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0 mt-0.5">
-                <Phone size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-brand-primary flex items-center gap-2 text-base">
-                  Call Recordings & AI Analysis
-                  {currentLead.recordings && currentLead.recordings.length > 0 && (
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 border border-violet-500/20">
-                      {currentLead.recordings.length} {currentLead.recordings.length === 1 ? "recording" : "recordings"}
-                    </span>
-                  )}
-                </h3>
-                <p className="text-xs text-brand-primary/60 mt-1">
-                  Manage audio recordings and view AI-generated insights, transcripts, and coaching.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsRecordingsSidebarOpen(true)}
-              className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-sm font-bold shadow-sm transition-all flex items-center gap-2 shrink-0 cursor-pointer w-full sm:w-auto justify-center"
-            >
-              <Mic size={16} /> Open Recordings panel
-            </button>
-          </div>
-        )}
-        
-        <RecordingsSidebar 
-          isOpen={isRecordingsSidebarOpen} 
-          onClose={() => setIsRecordingsSidebarOpen(false)} 
-          lead={currentLead} 
-        />
-        {/* 3. Update Lead Details Form */}
-        <div className="bg-brand-light border border-brand-secondary rounded-xl shadow-sm">
-          <div className="p-4 border-b border-brand-secondary bg-brand-light/50 rounded-t-xl">
-            <h3 className="font-bold text-brand-primary">
-              Update Lead Details
-            </h3>
-          </div>
-          <div className="p-5">
-            <form onSubmit={handleUpdateLeadFormSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div
-                  className={
-                    formData.status === "Follow Up"
-                      ? "sm:col-span-1"
-                      : "sm:col-span-1"
-                  }
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Filter pills */}
+              <div className="flex rounded-lg border border-brand-secondary/60 p-0.5 bg-bg-main text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setHistoryFilter("all")}
+                  className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                    historyFilter === "all"
+                      ? "bg-purple-600 text-white"
+                      : "text-brand-primary/70 hover:text-brand-primary"
+                  }`}
                 >
-                  <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                    Lead Status
-                  </label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) =>
-                      setFormData({ ...formData, status: e.target.value })
-                    }
-                    className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
-                  >
-                    <option value="New">New</option>
-                    <option value="Follow Up">Follow Up</option>
-                    <option value="Not Interested">Not Interested</option>
-                    <option value="Not Attended">Not Attended</option>
-                    <option value="Price Issue">Price Issue</option>
-                    <option value="Converted">Converted</option>
-                  </select>
-                </div>
-
-                {/* Service Field */}
-                <div className="sm:col-span-1">
-                  <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                    Service Interest
-                  </label>
-                  <select
-                    value={formData.service}
-                    onChange={(e) =>
-                      setFormData({ ...formData, service: e.target.value })
-                    }
-                    className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
-                  >
-                    {activeServices?.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Follow Up Type */}
-                {formData.status === "Follow Up" && (
-                  <div className="sm:col-span-1">
-                    <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                      Follow Up Type
-                    </label>
-                    <select
-                      value={followupType}
-                      onChange={(e) => setFollowupType(e.target.value)}
-                      className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none"
-                    >
-                      <option value="Call">Phone Call</option>
-                      <option value="WhatsApp">WhatsApp Message</option>
-                      <option value="Email">Email Communication</option>
-                      <option value="Meeting">Direct Meeting</option>
-                      <option value="Consultation">
-                        Consultation Assessment
-                      </option>
-                    </select>
-                  </div>
-                )}
-
-                {formData.status === "Follow Up" && (
-                  <div className="sm:col-span-1">
-                    <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                      Follow Up Date
-                    </label>
-                    <DatePicker
-                      value={formData.nextFollowUp}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          nextFollowUp: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                )}
-
-                <div className="sm:col-span-1 flex items-center lg:col-span-3">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <div className="relative flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(formData.importantLead)}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            importantLead: e.target.checked,
-                          })
-                        }
-                        className="peer sr-only"
-                      />
-                      <div className="w-5 h-5 border-2 border-brand-secondary rounded bg-brand-light peer-checked:bg-purple-500 peer-checked:border-purple-500 transition-colors flex items-center justify-center">
-                        <CheckCircle
-                          className="w-3.5 h-3.5 text-brand-light opacity-0 peer-checked:opacity-100"
-                          strokeWidth={3}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-sm font-bold text-brand-primary group-hover:text-brand-primary transition-colors">
-                      🔥 Important Hot Lead
-                    </span>
-                  </label>
-                </div>
-                <div className="sm:col-span-2 lg:col-span-3">
-                  <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                    Comments
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Type customer call summary, special requests, or latest requirement updates here..."
-                    value={formData.comments}
-                    onChange={(e) =>
-                      setFormData({ ...formData, comments: e.target.value })
-                    }
-                    className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 resize-y outline-none"
-                  />
-                </div>
-                <div className="sm:col-span-2 lg:col-span-3 pt-2">
-                  <button
-                    type="submit"
-                    className="w-full bg-purple-500 hover:bg-purple-600 text-brand-light font-bold py-2.5 px-4 rounded-lg transition-colors"
-                  >
-                    Submit Update
-                  </button>
-                </div>
+                  All ({combinedHistory.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryFilter("pending")}
+                  className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                    historyFilter === "pending"
+                      ? "bg-purple-600 text-white"
+                      : "text-brand-primary/70 hover:text-brand-primary"
+                  }`}
+                >
+                  Pending ({combinedHistory.filter((i) => !i.done).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryFilter("completed")}
+                  className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                    historyFilter === "completed"
+                      ? "bg-purple-600 text-white"
+                      : "text-brand-primary/70 hover:text-brand-primary"
+                  }`}
+                >
+                  Completed ({combinedHistory.filter((i) => i.done).length})
+                </button>
               </div>
-            </form>
+
+              <button
+                type="button"
+                onClick={() => setFollowupOpen(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors cursor-pointer"
+              >
+                + Schedule New
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* 4. Upcoming Followups schedule */}
-        {true && (
-          <div className="bg-brand-light border border-purple-500/30 rounded-xl overflow-hidden shadow-sm">
-            <div className="p-5">
-              <div className="flex justify-between items-center mb-5">
-                <h3 className="font-bold text-purple-500">
-                  Follow-Up History & Communications Logs
-                </h3>
-              </div>
+          {filteredHistory.length === 0 ? (
+            <div className="py-12 text-center">
+              <ClipboardList className="w-8 h-8 text-brand-primary/40 mx-auto mb-2" />
+              <p className="text-sm font-bold text-brand-primary">
+                No activity records found
+              </p>
+              <p className="text-xs text-brand-primary/60 mt-1 max-w-sm mx-auto">
+                No follow-ups or activity logs match your current filter. Click "Schedule New" to add a task.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredHistory.map((item) => {
+                const isOverdueItem =
+                  !item.done && item.scheduledDate && item.scheduledDate < todayStr;
+                const isTodayItem =
+                  !item.done && item.scheduledDate && item.scheduledDate === todayStr;
 
-              <div className="space-y-3">
-                {combinedHistory.length === 0 && (
-                  <div className="text-center py-8 border border-dashed border-brand-secondary rounded-lg">
-                    <p className="text-sm text-brand-primary/70">
-                      No follow-up reminders or activities recorded yet.
-                    </p>
-                  </div>
-                )}
-                {combinedHistory.map((f) => (
+                return (
                   <div
-                    key={f.id}
-                    className="p-4 bg-brand-light border border-brand-secondary rounded-xl flex justify-between items-start"
+                    key={item.id}
+                    className={`p-4 rounded-xl border transition-all ${
+                      item.done
+                        ? "bg-bg-main/40 border-brand-secondary/40 opacity-80"
+                        : isOverdueItem
+                          ? "bg-red-500/5 border-red-500/30"
+                          : "bg-bg-main border-brand-secondary"
+                    }`}
                   >
-                    <div className="flex gap-4 items-start w-full">
-                      <div className="min-w-0 flex-grow">
-                        <div className="flex justify-between items-start mb-1.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="text-sm font-bold text-brand-primary">
-                              {f.type}{" "}
-                              {f.isFollowup ? "Engagement Channel" : "Log"}
-                            </h4>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        {/* Checkbox to toggle done */}
+                        <button
+                          type="button"
+                          onClick={() => toggleFollowupDone(item.id, !item.done)}
+                          className="mt-0.5 text-brand-primary/50 hover:text-emerald-600 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                          title={item.done ? "Mark as pending" : "Mark as completed"}
+                          aria-label={item.done ? "Mark as pending" : "Mark as completed"}
+                        >
+                          {item.done ? (
+                            <CheckSquare className="w-5 h-5 text-emerald-500" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
+                        </button>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-xs font-bold ${
+                                item.done ? "line-through text-brand-primary/60" : "text-brand-primary"
+                              }`}
+                            >
+                              {item.type} {item.isFollowup ? "Follow-up" : "Log"}
+                            </span>
+
                             <span
                               className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                                f.priority === "High"
+                                item.priority === "High"
                                   ? "bg-red-500/10 text-red-500 border border-red-500/20"
-                                  : f.priority === "Medium"
+                                  : item.priority === "Medium"
                                     ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
                                     : "bg-brand-secondary/30 text-brand-primary/70 border border-brand-secondary"
                               }`}
                             >
-                              {f.priority}
+                              {item.priority}
                             </span>
+
+                            {isOverdueItem && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 px-1.5 py-0.2 rounded border border-red-500/20">
+                                <AlertTriangle className="w-3 h-3" />
+                                Overdue
+                              </span>
+                            )}
+
+                            {isTodayItem && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                                <Clock className="w-3 h-3" />
+                                Due Today
+                              </span>
+                            )}
+
+                            {item.done && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                                <Check className="w-3 h-3" />
+                                Completed
+                              </span>
+                            )}
                           </div>
 
-                          {f.isFollowup && (
-                            <div className="text-right">
-                              <span className="block text-[10px] font-bold text-brand-primary/70 uppercase tracking-wider">
-                                Scheduled {f.type}
+                          <p className="text-xs text-brand-primary/80 mt-1.5 leading-relaxed italic">
+                            "{item.notes}"
+                          </p>
+
+                          <div className="flex items-center gap-4 mt-2.5 text-[11px] text-brand-primary/60 flex-wrap">
+                            {item.scheduledDate && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5" />
+                                Scheduled: {formatDate(item.scheduledDate)}{" "}
+                                {item.scheduledTime ? `at ${item.scheduledTime}` : ""}
                               </span>
-                              <span className="text-xs font-bold text-purple-600 bg-purple-500/10 px-2 py-1 rounded">
-                                {formatDate(f.scheduledDate)}{" "}
-                                {f.scheduledTime ? `• ${f.scheduledTime}` : ""}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 text-xs text-brand-primary/70 mb-2">
-                          <Calendar size={14} />
-                          <span>
-                            {f.isFollowup ? "Updated on" : "Logged on"}:{" "}
-                            {formatDate(f.createdAt)} •{" "}
-                            {new Date(f.createdAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                        </div>
-
-                        <p className="text-sm italic text-brand-primary mb-3">
-                          "{f.notes}"
-                        </p>
-
-                        <hr className="border-brand-secondary mb-3" />
-
-                        <div className="text-xs font-bold text-purple-500 flex items-center gap-1.5">
-                          <User size={12} />
-                          {f.isFollowup ? "Followed up by" : "Logged by"}:{" "}
-                          {f.author}
+                            )}
+                            <span className="flex items-center gap-1">
+                              <User className="w-3.5 h-3.5 text-purple-500" />
+                              By: {item.author}
+                            </span>
+                            <span>Recorded: {formatDateTime(item.createdAt)}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                ))}
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 6. Tab 3: Update Lead Form ──────────────────────────────────── */}
+      {activeTab === "update" && (
+        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 md:p-6 shadow-xs">
+          <div className="pb-4 mb-4 border-b border-brand-secondary/40">
+            <h3 className="font-bold text-brand-primary text-base">
+              Update Lead Status & Engagement Schedule
+            </h3>
+            <p className="text-xs text-brand-primary/60">
+              Advance the customer across pipeline stages and log follow-up milestones
+            </p>
+          </div>
+
+          <form onSubmit={handleUpdateLeadFormSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Status */}
+              <div>
+                <label
+                  htmlFor="update-lead-status"
+                  className="block text-xs font-bold text-brand-primary mb-1"
+                >
+                  Lead Status *
+                </label>
+                <select
+                  id="update-lead-status"
+                  value={formData.status}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value })
+                  }
+                  className="w-full bg-bg-main border border-brand-secondary rounded-xl p-2.5 text-xs md:text-sm text-brand-primary focus:outline-none focus:border-purple-500 cursor-pointer"
+                >
+                  <option value="New">New</option>
+                  <option value="Follow Up">Follow Up</option>
+                  <option value="Not Interested">Not Interested</option>
+                  <option value="Not Attended">Not Attended</option>
+                  <option value="Price Issue">Price Issue</option>
+                  <option value="Converted">Converted</option>
+                </select>
+              </div>
+
+              {/* Service */}
+              <div>
+                <label
+                  htmlFor="update-lead-service"
+                  className="block text-xs font-bold text-brand-primary mb-1"
+                >
+                  Service Offering
+                </label>
+                <select
+                  id="update-lead-service"
+                  value={formData.service}
+                  onChange={(e) =>
+                    setFormData({ ...formData, service: e.target.value })
+                  }
+                  className="w-full bg-bg-main border border-brand-secondary rounded-xl p-2.5 text-xs md:text-sm text-brand-primary focus:outline-none focus:border-purple-500 cursor-pointer"
+                >
+                  {activeServices?.map((s) => (
+                    <option key={s.code || s.id} value={s.code || s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Follow Up Type (Only when Follow Up) */}
+              {formData.status === "Follow Up" && (
+                <div>
+                  <label
+                    htmlFor="update-lead-fwtype"
+                    className="block text-xs font-bold text-brand-primary mb-1"
+                  >
+                    Follow Up Channel *
+                  </label>
+                  <select
+                    id="update-lead-fwtype"
+                    value={followupType}
+                    onChange={(e) => setFollowupType(e.target.value)}
+                    className="w-full bg-bg-main border border-brand-secondary rounded-xl p-2.5 text-xs md:text-sm text-brand-primary focus:outline-none focus:border-purple-500 cursor-pointer"
+                  >
+                    <option value="Call">Phone Call</option>
+                    <option value="WhatsApp">WhatsApp Message</option>
+                    <option value="Email">Email Communication</option>
+                    <option value="Meeting">Direct Meeting</option>
+                    <option value="Consultation">Consultation Assessment</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Follow Up Date (Only when Follow Up) */}
+              {formData.status === "Follow Up" && (
+                <div>
+                  <label
+                    htmlFor="update-lead-fwdate"
+                    className="block text-xs font-bold text-brand-primary mb-1"
+                  >
+                    Next Follow Up Date *
+                  </label>
+                  <DatePicker
+                    value={formData.nextFollowUp}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        nextFollowUp: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+              )}
+
+              {/* Hot Lead Checkbox */}
+              <div className="sm:col-span-2 lg:col-span-3 flex items-center pt-2">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.importantLead)}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        importantLead: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <span className="text-xs md:text-sm font-bold text-brand-primary group-hover:text-purple-600 transition-colors">
+                    🔥 Mark as Important Hot Lead
+                  </span>
+                </label>
+              </div>
+
+              {/* Comments / Notes */}
+              <div className="sm:col-span-2 lg:col-span-3">
+                <label
+                  htmlFor="update-lead-comments"
+                  className="block text-xs font-bold text-brand-primary mb-1"
+                >
+                  Comments / Transition Summary
+                </label>
+                <textarea
+                  id="update-lead-comments"
+                  rows={3}
+                  placeholder="Summarize conversation findings, objection handling, or next milestone..."
+                  value={formData.comments}
+                  onChange={(e) =>
+                    setFormData({ ...formData, comments: e.target.value })
+                  }
+                  className="w-full bg-bg-main border border-brand-secondary text-brand-primary text-xs md:text-sm rounded-xl p-3 focus:outline-none focus:border-purple-500 resize-y"
+                />
+              </div>
+
+              <div className="sm:col-span-2 lg:col-span-3 pt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("overview")}
+                  className="px-4 py-2 rounded-xl border border-brand-secondary text-xs font-bold text-brand-primary/70 hover:bg-brand-secondary/40 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingUpdate}
+                  className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs md:text-sm rounded-xl transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {isSubmittingUpdate ? "Saving..." : "Submit Updates"}
+                </button>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          </form>
+        </div>
+      )}
 
-      {/* Modals/Dialogs */}
+      {/* ── 7. Schedule Follow-up Modal ─────────────────────────────────── */}
       {followupOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-light/50 backdrop-blur-sm">
-          <div className="bg-brand-light border border-brand-secondary rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-4 border-b border-brand-secondary rounded-t-2xl">
-              <h3 className="font-bold text-brand-primary text-lg">
-                Schedule Agenda Follow-up
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
+        >
+          <div className="bg-bg-card border border-border-main rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-5 border-b border-border-main">
+              <h3 id="schedule-modal-title" className="font-bold text-text-primary text-base">
+                Schedule Follow-up Task
               </h3>
               <button
+                type="button"
                 onClick={() => setFollowupOpen(false)}
-                className="text-brand-primary/70 hover:text-brand-primary transition-colors"
+                className="p-1 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                aria-label="Close schedule modal"
               >
-                <X size={20} />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-5 overflow-y-auto">
-              <form
-                id="schedule-form"
-                onSubmit={handleSaveFollowup}
-                className="space-y-4"
-              >
+              <form id="schedule-form" onSubmit={handleSaveFollowup} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                    Task Type
+                  <label
+                    htmlFor="fw-task-type"
+                    className="block text-xs font-bold text-text-primary mb-1"
+                  >
+                    Engagement Channel *
                   </label>
                   <select
+                    id="fw-task-type"
                     value={newFw.type}
                     onChange={(e) =>
                       setNewFw({ ...newFw, type: e.target.value })
                     }
-                    className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5 outline-none"
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs md:text-sm rounded-xl p-2.5 focus:outline-none focus:border-pilot-blue cursor-pointer"
                   >
-                    <option value="Call">Call</option>
+                    <option value="Call">Phone Call</option>
                     <option value="WhatsApp">WhatsApp Message</option>
                     <option value="Email">Email Communication</option>
                     <option value="Meeting">Direct Meeting</option>
-                    <option value="Consultation">
-                      Consultation Assessment
-                    </option>
+                    <option value="Consultation">Consultation Assessment</option>
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                      Due Date
+                    <label className="block text-xs font-bold text-text-primary mb-1">
+                      Due Date *
                     </label>
                     <DatePicker
                       value={newFw.date}
@@ -1055,73 +1393,184 @@ export default function LeadDetails() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
+                    <label
+                      htmlFor="fw-task-time"
+                      className="block text-xs font-bold text-text-primary mb-1"
+                    >
                       Due Time
                     </label>
                     <input
+                      id="fw-task-time"
                       type="text"
                       placeholder="e.g. 11:30 AM"
                       value={newFw.time}
                       onChange={(e) =>
                         setNewFw({ ...newFw, time: e.target.value })
                       }
-                      className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5 outline-none"
+                      className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs md:text-sm rounded-xl p-2.5 focus:outline-none focus:border-pilot-blue"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                    Priority level
+                  <label
+                    htmlFor="fw-priority"
+                    className="block text-xs font-bold text-text-primary mb-1"
+                  >
+                    Priority Level
                   </label>
                   <select
+                    id="fw-priority"
                     value={newFw.priority}
                     onChange={(e) =>
                       setNewFw({ ...newFw, priority: e.target.value })
                     }
-                    className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5 outline-none"
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs md:text-sm rounded-xl p-2.5 focus:outline-none focus:border-pilot-blue cursor-pointer"
                   >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
+                    <option value="Low">Low Priority</option>
+                    <option value="Medium">Medium Priority</option>
                     <option value="High">High Priority</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-brand-primary/70 mb-1.5">
-                    Action Agenda Notes
+                  <label
+                    htmlFor="fw-notes"
+                    className="block text-xs font-bold text-text-primary mb-1"
+                  >
+                    Action Agenda Notes *
                   </label>
                   <textarea
-                    rows={2}
+                    id="fw-notes"
+                    rows={3}
+                    placeholder="Describe follow-up objective or questions to ask..."
+                    required
                     value={newFw.notes}
                     onChange={(e) =>
                       setNewFw({ ...newFw, notes: e.target.value })
                     }
-                    className="w-full bg-brand-light border border-brand-secondary text-brand-primary text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2.5 resize-y outline-none"
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs md:text-sm rounded-xl p-2.5 resize-none focus:outline-none focus:border-pilot-blue"
                   />
                 </div>
               </form>
             </div>
 
-            <div className="p-4 border-t border-brand-secondary bg-brand-light flex justify-end gap-3">
+            <div className="p-4 border-t border-border-main flex justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setFollowupOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-brand-primary/70 hover:text-brand-primary transition-colors"
+                className="px-4 py-2 text-xs font-bold text-text-secondary hover:text-text-primary rounded-xl border border-border-main transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 form="schedule-form"
-                className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-brand-light text-sm font-bold rounded-lg transition-colors"
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-xs"
               >
-                Schedule
+                Schedule Task
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── 8. Log Activity Modal ────────────────────────────────────────── */}
+      {activityOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="activity-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
+        >
+          <div className="bg-bg-card border border-border-main rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-5 border-b border-border-main">
+              <h3 id="activity-modal-title" className="font-bold text-text-primary text-base">
+                Log Completed Interaction
+              </h3>
+              <button
+                type="button"
+                onClick={() => setActivityOpen(false)}
+                className="p-1 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                aria-label="Close activity log modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto">
+              <form id="activity-form" onSubmit={handleSaveActivity} className="space-y-4">
+                <div>
+                  <label
+                    htmlFor="act-type"
+                    className="block text-xs font-bold text-text-primary mb-1"
+                  >
+                    Interaction Type *
+                  </label>
+                  <select
+                    id="act-type"
+                    value={newAct.type}
+                    onChange={(e) =>
+                      setNewAct({ ...newAct, type: e.target.value })
+                    }
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs md:text-sm rounded-xl p-2.5 focus:outline-none focus:border-pilot-blue cursor-pointer"
+                  >
+                    <option value="Call Completed">Phone Call Completed</option>
+                    <option value="WhatsApp Sent">WhatsApp Message Sent</option>
+                    <option value="Email Sent">Email Sent</option>
+                    <option value="Meeting Held">Meeting Held</option>
+                    <option value="Site Visit">Site Visit Completed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="act-content"
+                    className="block text-xs font-bold text-text-primary mb-1"
+                  >
+                    Activity Summary & Notes *
+                  </label>
+                  <textarea
+                    id="act-content"
+                    rows={4}
+                    placeholder="Summarize discussion points, customer feedback, or outcome..."
+                    required
+                    value={newAct.content}
+                    onChange={(e) =>
+                      setNewAct({ ...newAct, content: e.target.value })
+                    }
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs md:text-sm rounded-xl p-2.5 resize-none focus:outline-none focus:border-pilot-blue"
+                  />
+                </div>
+              </form>
+            </div>
+
+            <div className="p-4 border-t border-border-main flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setActivityOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-text-secondary hover:text-text-primary rounded-xl border border-border-main transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="activity-form"
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-xs"
+              >
+                Save Activity Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 9. Call Audio Recordings Sidebar ─────────────────────────────── */}
+      <RecordingsSidebar
+        isOpen={isRecordingsSidebarOpen}
+        onClose={() => setIsRecordingsSidebarOpen(false)}
+        lead={currentLead}
+      />
     </div>
   );
 }

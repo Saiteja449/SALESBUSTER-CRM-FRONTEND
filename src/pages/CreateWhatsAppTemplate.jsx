@@ -21,6 +21,9 @@ import {
   X,
   Clock,
   ShieldCheck,
+  Eye,
+  Sliders,
+  Check,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 
@@ -57,6 +60,9 @@ const LANGUAGES = [
 export default function CreateWhatsAppTemplate() {
   const navigate = useNavigate();
 
+  // Mobile View Toggle: "editor" or "preview"
+  const [mobileTab, setMobileTab] = useState("editor");
+
   // Basic Info
   const [templateName, setTemplateName] = useState("");
   const [category, setCategory] = useState("MARKETING");
@@ -76,7 +82,6 @@ export default function CreateWhatsAppTemplate() {
   const [footerText, setFooterText] = useState("");
 
   // Buttons
-  const [buttonType, setButtonType] = useState("NONE"); // NONE, QUICK_REPLY, CTA
   const [buttons, setButtons] = useState([]); // [{ type, text, url, phone_number }]
 
   // Form State
@@ -105,9 +110,10 @@ export default function CreateWhatsAppTemplate() {
 
   // Insert next variable {{n}} into bodyText
   const handleInsertVariable = () => {
-    const nextNum = detectedVariables.length > 0
-      ? Math.max(...detectedVariables.map(Number)) + 1
-      : 1;
+    const nextNum =
+      detectedVariables.length > 0
+        ? Math.max(...detectedVariables.map(Number)) + 1
+        : 1;
     setBodyText((prev) => `${prev} {{${nextNum}}}`);
   };
 
@@ -115,6 +121,41 @@ export default function CreateWhatsAppTemplate() {
   const handleInsertFormatting = (char) => {
     setBodyText((prev) => `${prev}${char}text${char}`);
   };
+
+  // Auto-fill demo variable values
+  const handleAutoFillSamples = () => {
+    const demos = ["John", "25% OFF", "Premium Service", "SUMMER2026", "tomorrow"];
+    const newSamples = {};
+    detectedVariables.forEach((vNum, i) => {
+      newSamples[vNum] = demos[i % demos.length];
+    });
+    setSampleVariables(newSamples);
+  };
+
+  // Meta Compliance Warnings
+  const complianceWarnings = useMemo(() => {
+    const warnings = [];
+    if (bodyText) {
+      if (/^\{\{\d+\}\}/.test(bodyText.trim())) {
+        warnings.push("Meta may reject templates starting directly with a variable. Add preceding text like 'Hi {{1}}'.");
+      }
+      if (/\{\{\d+\}\}$/.test(bodyText.trim())) {
+        warnings.push("Meta may reject templates ending directly with a variable without closing punctuation.");
+      }
+      if (/\{\{\d+\}\}\{\{\d+\}\}/.test(bodyText)) {
+        warnings.push("Consecutive variables without spaces (e.g. {{1}}{{2}}) will be rejected by Meta.");
+      }
+      // Check sequence numbers
+      const nums = detectedVariables.map(Number).sort((a, b) => a - b);
+      for (let i = 0; i < nums.length; i++) {
+        if (nums[i] !== i + 1) {
+          warnings.push(`Variable numbers must be sequential starting at {{1}}. Missing {{${i + 1}}}.`);
+          break;
+        }
+      }
+    }
+    return warnings;
+  }, [bodyText, detectedVariables]);
 
   // Sample File selection
   const handleFileChange = (e) => {
@@ -263,7 +304,7 @@ export default function CreateWhatsAppTemplate() {
     };
 
     setSubmitting(true);
-    setSubmitProgress("Uploading media sample & submitting to Meta Graph API...");
+    setSubmitProgress("Submitting template & sample media to Meta Graph API...");
 
     try {
       let res;
@@ -338,10 +379,43 @@ export default function CreateWhatsAppTemplate() {
         </div>
       </div>
 
+      {/* Mobile Mode Switcher */}
+      <div className="flex lg:hidden items-center justify-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+        <button
+          type="button"
+          onClick={() => setMobileTab("editor")}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === "editor"
+              ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs"
+              : "text-slate-600 dark:text-slate-400"
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          <span>Template Editor</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("preview")}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+            mobileTab === "preview"
+              ? "bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs"
+              : "text-slate-600 dark:text-slate-400"
+          }`}
+        >
+          <Eye className="w-3.5 h-3.5" />
+          <span>Live Phone Preview</span>
+        </button>
+      </div>
+
       {/* Main Grid: Form + Live Phone Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Configurator (7 Cols) */}
-        <form onSubmit={handleSubmit} className="lg:col-span-7 space-y-5">
+        <form
+          onSubmit={handleSubmit}
+          className={`lg:col-span-7 space-y-5 ${
+            mobileTab === "preview" ? "hidden lg:block" : "block"
+          }`}
+        >
           {/* Error Banner */}
           {error && (
             <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-3">
@@ -353,6 +427,21 @@ export default function CreateWhatsAppTemplate() {
             </div>
           )}
 
+          {/* Compliance Warnings Banner */}
+          {complianceWarnings.length > 0 && (
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Meta Formatting Rule Warning:</span>
+              </p>
+              {complianceWarnings.map((w, idx) => (
+                <p key={idx} className="pl-5 text-[11px] leading-relaxed">
+                  • {w}
+                </p>
+              ))}
+            </div>
+          )}
+
           {/* Section 1: Basic Information */}
           <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-xs">
             <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -360,7 +449,7 @@ export default function CreateWhatsAppTemplate() {
                 1. Template Basics
               </h2>
               <p className="text-xs text-slate-500">
-                Identifiers and classification for Meta&apos;s review process
+                Identifiers and classification for Meta&apos;s automated review process
               </p>
             </div>
 
@@ -397,7 +486,7 @@ export default function CreateWhatsAppTemplate() {
                         key={cat.id}
                         type="button"
                         onClick={() => setCategory(cat.id)}
-                        className={`p-3 rounded-xl border text-left transition-all ${
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                           active
                             ? "border-purple-600 bg-purple-50/30 dark:bg-purple-950/30 ring-1 ring-purple-600"
                             : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
@@ -453,7 +542,7 @@ export default function CreateWhatsAppTemplate() {
                 </p>
               </div>
               <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400">
-                Media & Text Supported
+                Media &amp; Text Supported
               </span>
             </div>
 
@@ -479,7 +568,7 @@ export default function CreateWhatsAppTemplate() {
                         removeSampleFile();
                       }
                     }}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                       active
                         ? "bg-purple-600 text-white shadow-xs font-bold"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
@@ -495,9 +584,14 @@ export default function CreateWhatsAppTemplate() {
             {/* Conditional Content for Header */}
             {headerType === "TEXT" && (
               <div className="space-y-1.5 pt-2">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Header Text (Max 60 characters)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Header Text
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    {headerText.length} / 60
+                  </span>
+                </div>
                 <input
                   type="text"
                   maxLength={60}
@@ -518,7 +612,7 @@ export default function CreateWhatsAppTemplate() {
                   </p>
                   <p className="text-[11px] leading-relaxed">
                     Meta requires an actual sample {headerType.toLowerCase()} file for review
-                    evaluation. Upload your sample file below. During campaign delivery, you
+                    evaluation. Upload your sample file below. During actual campaign delivery, you
                     can supply personalized files or URLs.
                   </p>
                 </div>
@@ -589,11 +683,15 @@ export default function CreateWhatsAppTemplate() {
                   3. Message Body <span className="text-rose-500">*</span>
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Compose the message content. Use formatting and variables as needed.
+                  Compose the message content. Use variables like {"{{1}}"} for recipient details.
                 </p>
               </div>
 
-              <span className="text-[11px] font-mono text-slate-400">
+              <span
+                className={`text-[11px] font-mono ${
+                  bodyText.length > 1000 ? "text-amber-500 font-bold" : "text-slate-400"
+                }`}
+              >
                 {bodyText.length} / 1024
               </span>
             </div>
@@ -603,7 +701,7 @@ export default function CreateWhatsAppTemplate() {
               <button
                 type="button"
                 onClick={handleInsertVariable}
-                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 transition-all flex items-center gap-1 shadow-2xs"
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
               >
                 <Plus className="w-3 h-3" />
                 <span>Add Variable</span>
@@ -614,7 +712,7 @@ export default function CreateWhatsAppTemplate() {
               <button
                 type="button"
                 onClick={() => handleInsertFormatting("*")}
-                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100"
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 cursor-pointer"
                 title="Bold"
               >
                 *Bold*
@@ -623,7 +721,7 @@ export default function CreateWhatsAppTemplate() {
               <button
                 type="button"
                 onClick={() => handleInsertFormatting("_")}
-                className="px-2.5 py-1 rounded-lg text-xs font-style-italic bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 italic"
+                className="px-2.5 py-1 rounded-lg text-xs font-style-italic bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 italic cursor-pointer"
                 title="Italic"
               >
                 _Italic_
@@ -632,7 +730,7 @@ export default function CreateWhatsAppTemplate() {
               <button
                 type="button"
                 onClick={() => handleInsertFormatting("~")}
-                className="px-2.5 py-1 rounded-lg text-xs line-through bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100"
+                className="px-2.5 py-1 rounded-lg text-xs line-through bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 cursor-pointer"
                 title="Strikethrough"
               >
                 ~Strike~
@@ -658,9 +756,18 @@ export default function CreateWhatsAppTemplate() {
                     <Sparkles className="w-3.5 h-3.5 text-purple-600" />
                     <span>Sample Values for Meta Approval</span>
                   </p>
-                  <span className="text-[10px] text-slate-400">
-                    {detectedVariables.length} variable{detectedVariables.length > 1 ? "s" : ""} detected
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAutoFillSamples}
+                      className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline font-semibold"
+                    >
+                      Auto-fill samples
+                    </button>
+                    <span className="text-[10px] text-slate-400">
+                      ({detectedVariables.length} variable{detectedVariables.length > 1 ? "s" : ""})
+                    </span>
+                  </div>
                 </div>
 
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -736,7 +843,7 @@ export default function CreateWhatsAppTemplate() {
                   type="button"
                   onClick={() => handleAddButton("QUICK_REPLY")}
                   disabled={buttons.length >= 3}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 hover:bg-purple-100 disabled:opacity-50 flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 hover:bg-purple-100 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
                   <span>Quick Reply</span>
@@ -746,7 +853,7 @@ export default function CreateWhatsAppTemplate() {
                   type="button"
                   onClick={() => handleAddButton("URL")}
                   disabled={buttons.length >= 3}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 disabled:opacity-50 flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
                 >
                   <Globe className="w-3 h-3" />
                   <span>Website URL</span>
@@ -756,7 +863,7 @@ export default function CreateWhatsAppTemplate() {
                   type="button"
                   onClick={() => handleAddButton("PHONE_NUMBER")}
                   disabled={buttons.length >= 3}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 disabled:opacity-50 flex items-center gap-1"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
                 >
                   <Phone className="w-3 h-3" />
                   <span>Phone Call</span>
@@ -872,7 +979,11 @@ export default function CreateWhatsAppTemplate() {
         </form>
 
         {/* Right Column: Live WhatsApp Smartphone Mockup (5 Cols) */}
-        <div className="lg:col-span-5 lg:sticky lg:top-6 space-y-4">
+        <div
+          className={`lg:col-span-5 lg:sticky lg:top-6 space-y-4 ${
+            mobileTab === "editor" ? "hidden lg:block" : "block"
+          }`}
+        >
           <div className="bg-slate-900 rounded-[38px] p-3 shadow-2xl border-4 border-slate-800 max-w-sm mx-auto w-full">
             {/* Phone Speaker & Camera Notch */}
             <div className="w-28 h-4 bg-slate-800 rounded-full mx-auto mb-2" />
@@ -1001,12 +1112,11 @@ export default function CreateWhatsAppTemplate() {
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs space-y-2 shadow-xs">
             <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
               <Clock className="w-4 h-4 text-purple-600" />
-              <span>Meta Review & Approval</span>
+              <span>Meta Automated Evaluation</span>
             </h3>
             <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
               Standard utility and marketing templates are typically approved within minutes by
-              Meta&apos;s automated validation engine. Once approved, the template can be used in
-              any broadcast campaign.
+              Meta&apos;s AI evaluation engine. Once approved, the template can be broadcast across any campaign.
             </p>
           </div>
         </div>
@@ -1060,7 +1170,7 @@ export default function CreateWhatsAppTemplate() {
               <button
                 type="button"
                 onClick={() => navigate("/whatsapp/templates")}
-                className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
               >
                 View Templates
               </button>
@@ -1070,7 +1180,7 @@ export default function CreateWhatsAppTemplate() {
                 onClick={() =>
                   navigate(`/whatsapp/campaigns/create?templateId=${successData._id || successData.id}`)
                 }
-                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 transition-all shadow-xs"
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-purple-600 text-white hover:bg-purple-700 transition-all shadow-xs cursor-pointer"
               >
                 Use in Campaign
               </button>

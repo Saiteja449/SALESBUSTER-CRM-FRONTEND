@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -29,18 +29,17 @@ import {
   Smartphone,
   Wifi,
   WifiOff,
+  Flame,
+  ListTodo,
+  ExternalLink,
+  Layers,
 } from "lucide-react";
 import {
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
   Tooltip as RechartsTooltip,
-  Legend,
 } from "recharts";
 import { useDashboard } from "../context/DashboardContext.jsx";
 import { useLeads } from "../context/LeadsContext.jsx";
@@ -49,7 +48,7 @@ import { formatDate, getServiceColor, exportToCSV } from "../utils/helpers.js";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
 
-const CHART_COLORS = ["#28a0a4", "#245070", "#11a139", "#f59e0b", "#36799f"];
+const CHART_COLORS = ["#28a0a4", "#245070", "#11a139", "#f59e0b", "#36799f", "#8b5cf6", "#ec4899"];
 
 const Instagram = ({ className }) => (
   <svg
@@ -61,12 +60,42 @@ const Instagram = ({ className }) => (
     strokeLinecap="round"
     strokeLinejoin="round"
     className={className}
+    aria-hidden="true"
   >
     <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
     <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
     <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
   </svg>
 );
+
+// High-readability Chart Tooltip with exact counts and percentages
+const CustomChartTooltip = ({ active, payload, total }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0];
+    const value = data.value || 0;
+    const pct = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+    return (
+      <div className="bg-bg-card border border-border-main p-2.5 rounded-xl shadow-xl text-xs z-20">
+        <div className="font-bold text-text-primary flex items-center gap-1.5">
+          <span
+            className="w-2.5 h-2.5 rounded-full inline-block"
+            style={{ backgroundColor: data.payload?.fill || data.color }}
+          />
+          {data.name}
+        </div>
+        <div className="text-text-secondary mt-1 flex items-center justify-between gap-3">
+          <span>Lead count:</span>
+          <span className="font-bold text-text-primary">{value}</span>
+        </div>
+        <div className="text-text-secondary flex items-center justify-between gap-3">
+          <span>Share:</span>
+          <span className="font-bold text-emerald-600 dark:text-emerald-400">{pct}%</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -90,6 +119,14 @@ export default function Dashboard() {
       (currentUser?.role || "").toLowerCase()
     );
 
+  const isManagerRole = Boolean(
+    isManager ||
+    ["sales manager", "super_admin", "admin", "super admin"].includes(
+      (currentUser?.role || "").toLowerCase()
+    ) ||
+    currentUser?.isOrgOwner
+  );
+
   const [aiLimits, setAiLimits] = useState(null);
   const [aiLimitsLoading, setAiLimitsLoading] = useState(true);
 
@@ -106,11 +143,7 @@ export default function Dashboard() {
           const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
           const sessions = res.data?.sessions || [];
           setRepWaStatus(sessions[0] || null);
-        } else if (
-          isManager ||
-          currentUser?.role === "sales manager" ||
-          currentUser?.role === "super_admin"
-        ) {
+        } else if (isManagerRole) {
           const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS);
           setTeamWaStatuses(res.data?.data || []);
         }
@@ -121,10 +154,10 @@ export default function Dashboard() {
       }
     };
     if (currentUser) fetchWaWidget();
-  }, [currentUser, isRepUser, isManager]);
+  }, [currentUser, isRepUser, isManagerRole]);
 
   const connectedTeamCount = teamWaStatuses.filter(
-    (r) => r.status === "connected",
+    (r) => r.status === "connected"
   ).length;
 
   // Quick Add Sales Person Modal State
@@ -163,10 +196,10 @@ export default function Dashboard() {
       await addSalesPerson(
         newUser.name.trim(),
         newUser.email.trim(),
-        `+91${digitsOnly}`,
+        `+91${digitsOnly}`
       );
       setAddUserSuccess(
-        "Sales representative added! Login credentials sent via email.",
+        "Sales representative added! Login credentials sent via email."
       );
       setNewUser({ name: "", email: "", mobile: "" });
       setTimeout(() => {
@@ -203,12 +236,12 @@ export default function Dashboard() {
     setModalTemplate(
       globalSettings.welcomeMessageTemplate ||
         globalSettings.defaultTemplate ||
-        "",
+        ""
     );
     setModalFallbackService(
       globalSettings.welcomeMessageFallbackService ||
         globalSettings.primaryService ||
-        "",
+        ""
     );
     setModalEnabled(globalSettings.welcomeMessageEnabled !== false);
     setSaveSuccessNotice(false);
@@ -281,8 +314,9 @@ export default function Dashboard() {
           ...prev,
           ...data,
           effectiveAIEnabled: Boolean(
-            (data.globalAIEnabled !== undefined ? data.globalAIEnabled : prev.globalAIEnabled) &&
-            (prev.repAIEnabled !== false)
+            (data.globalAIEnabled !== undefined
+              ? data.globalAIEnabled
+              : prev.globalAIEnabled) && prev.repAIEnabled !== false
           ),
         }));
       }
@@ -293,7 +327,9 @@ export default function Dashboard() {
         setGlobalSettings((prev) => ({
           ...prev,
           repAIEnabled: data.aiAutoReplyEnabled,
-          effectiveAIEnabled: Boolean(prev.globalAIEnabled && data.aiAutoReplyEnabled),
+          effectiveAIEnabled: Boolean(
+            prev.globalAIEnabled && data.aiAutoReplyEnabled
+          ),
         }));
       }
     };
@@ -312,7 +348,7 @@ export default function Dashboard() {
     setGlobalSettings((prev) => ({
       ...prev,
       globalAIEnabled: newVal,
-      effectiveAIEnabled: Boolean(newVal && (prev.repAIEnabled !== false)),
+      effectiveAIEnabled: Boolean(newVal && prev.repAIEnabled !== false),
     }));
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.SETTINGS, {
@@ -323,7 +359,7 @@ export default function Dashboard() {
       setGlobalSettings((prev) => ({
         ...prev,
         globalAIEnabled: !newVal,
-        effectiveAIEnabled: Boolean(!newVal && (prev.repAIEnabled !== false)),
+        effectiveAIEnabled: Boolean(!newVal && prev.repAIEnabled !== false),
       }));
     }
   };
@@ -423,362 +459,541 @@ export default function Dashboard() {
     });
   };
 
+  // ── Derived High-Impact Metrics & Urgent Action Data ───────────────────
+  const unassignedLeads = useMemo(() => {
+    return leads.filter(
+      (l) =>
+        !l.assignedTo ||
+        l.assignedTo.trim() === "" ||
+        l.assignedTo.toLowerCase() === "unassigned"
+    );
+  }, [leads]);
+
+  const activePipelineLeadsCount = useMemo(() => {
+    return leads.filter((l) => l.status !== "Converted" && l.status !== "Lost")
+      .length;
+  }, [leads]);
+
+  const overdueFollowupsCount = stats.overdueFollowupsCount || 0;
+  const todaysFollowupsCount = stats.todaysFollowupsCount || 0;
+
+  // WhatsApp connection check
+  const isWaDisconnected = isRepUser
+    ? Boolean(repWaStatus && repWaStatus.status !== "connected")
+    : Boolean(
+        isManagerRole &&
+          teamWaStatuses.length > 0 &&
+          connectedTeamCount < teamWaStatuses.length
+      );
+
+  const hasUrgentWork =
+    overdueFollowupsCount > 0 ||
+    (isManagerRole && unassignedLeads.length > 0) ||
+    isWaDisconnected ||
+    (!isOrgSetupComplete && isManagerRole);
+
+  // Totals for Charts
+  const totalServiceLeads = useMemo(() => {
+    return (stats.leadsByServiceData || []).reduce(
+      (acc, curr) => acc + (curr.value || 0),
+      0
+    );
+  }, [stats.leadsByServiceData]);
+
+  const totalSourceLeads = useMemo(() => {
+    return (stats.leadSourceData || []).reduce(
+      (acc, curr) => acc + (curr.value || 0),
+      0
+    );
+  }, [stats.leadSourceData]);
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      {/* Top Banner section */}
-      <div className="flex flex-wrap justify-between items-center gap-4">
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+      {/* ── 1. Top Header Banner ────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-2 border-b border-brand-secondary/40">
         <div>
-          <h1 className="text-2xl font-extrabold text-brand-primary tracking-tight">
-            Executive Dashboard
-          </h1>
-          <p className="text-sm text-brand-primary/70">
-            Real-time analytical performance summary for{" "}
-            {organization?.name || "SalesBuster AI"}.
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-brand-primary tracking-tight">
+              Executive Dashboard
+            </h1>
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-pilot-blue/15 text-pilot-blue border border-pilot-blue/30 capitalize">
+              {isRepUser ? "Representative View" : "Manager Overview"}
+            </span>
+          </div>
+          <p className="text-xs md:text-sm text-brand-primary/70 mt-1">
+            Real-time performance metrics and lead intelligence for{" "}
+            <span className="font-semibold text-brand-primary">
+              {organization?.name || "SalesBuster AI"}
+            </span>
+            .
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-lg transition-colors cursor-pointer"
-        >
-          <Download className="w-4 h-4" /> Export Data
-        </button>
+
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {isManagerRole && (
+            <button
+              type="button"
+              onClick={() => setShowAddUserModal(true)}
+              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
+              aria-label="Add a new sales representative to team"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Add Sales Rep</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleExport}
+            className="flex items-center gap-2 px-3.5 py-2 bg-brand-light hover:bg-brand-secondary/40 border border-brand-secondary text-brand-primary text-xs font-bold rounded-xl transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+            aria-label="Export leads dataset to CSV format"
+          >
+            <Download className="w-4 h-4 text-purple-500" />
+            <span>Export CSV</span>
+          </button>
+        </div>
       </div>
 
-      {/* ── Organization Setup & Onboarding Validation Card ────────────────── */}
-      {!isOrgSetupComplete && isManager ? (
-        <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent p-5 md:p-6 shadow-sm">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-4 border-b border-amber-500/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
-                <ShieldAlert className="w-5 h-5" />
+      {/* ── 2. Primary Lead KPIs (Near Top for Immediate Scanability) ─────── */}
+      <section aria-label="Key Performance Indicators">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPI 1: Total Leads */}
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-xs transition-shadow hover:shadow-sm">
+            <div>
+              <span className="text-[11px] font-bold text-brand-primary/60 uppercase tracking-wider block">
+                Total Leads
+              </span>
+              <div className="text-2xl md:text-3xl font-extrabold text-brand-primary mt-1 tracking-tight">
+                {stats.totalLeads}
               </div>
+              <p className="text-xs font-medium text-brand-primary/60 mt-1 flex items-center gap-1">
+                <Users className="w-3.5 h-3.5 text-purple-500" />
+                Active tracked contacts
+              </p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5 text-purple-500" />
+            </div>
+          </div>
+
+          {/* KPI 2: Converted Leads & Conversion Rate */}
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 shadow-xs transition-shadow hover:shadow-sm">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-extrabold text-brand-primary flex items-center gap-2">
-                  {!hasSalesPerson && !isAiConfigured
-                    ? "Action Required: Complete Organization Setup"
-                    : !isAiConfigured
-                      ? "Action Required: Configure AI Setup"
-                      : "Action Required: Add Sales Representative"}
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                    {!hasSalesPerson && !isAiConfigured
-                      ? "2 Actions Remaining"
-                      : "1 Action Remaining"}
-                  </span>
-                </h3>
-                <p className="text-xs text-brand-primary/70 mt-0.5">
-                  {!hasSalesPerson && !isAiConfigured
-                    ? "Your organization must configure AI and add at least 1 sales representative to unlock automatic routing and operations."
-                    : !isAiConfigured
-                      ? "Define your company persona, services catalog, and lead qualification schema so our AI can automatically handle customer inquiries."
-                      : "Your organization currently has 0 sales representatives. Add at least 1 representative so incoming leads can be assigned and managed."}
-                </p>
+                <span className="text-[11px] font-bold text-brand-primary/60 uppercase tracking-wider block">
+                  Converted Leads
+                </span>
+                <div className="text-2xl md:text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 tracking-tight">
+                  {stats.convertedCount ?? stats.totalWonCount}
+                </div>
+              </div>
+              <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
 
-            {/* Progress bar pill */}
-            <div className="w-full md:w-48 shrink-0">
-              <div className="flex justify-between text-[10px] font-bold text-brand-primary/70 mb-1">
-                <span>Setup Progress</span>
-                <span>
-                  {((hasSalesPerson ? 1 : 0) + (isAiConfigured ? 1 : 0)) * 50}%
+            <div className="mt-3">
+              <div className="flex justify-between items-center text-xs font-bold mb-1">
+                <span className="text-brand-primary/70">Win Rate</span>
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  {stats.conversionRate}%
                 </span>
               </div>
-              <div className="w-full h-2 rounded-full bg-bg-main border border-brand-secondary overflow-hidden">
+              <div className="w-full bg-brand-secondary/40 rounded-full h-1.5 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-500 rounded-full"
-                  style={{
-                    width: `${((hasSalesPerson ? 1 : 0) + (isAiConfigured ? 1 : 0)) * 50}%`,
-                  }}
+                  className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(stats.conversionRate || 0, 100)}%` }}
                 />
               </div>
             </div>
           </div>
 
-          <div
-            className={`grid gap-4 pt-4 ${!hasSalesPerson && !isAiConfigured ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}
-          >
-            {/* Requirement 1: AI Setup - Only shown if NOT configured */}
-            {!isAiConfigured && (
-              <div className="p-4 rounded-xl border border-amber-500/40 bg-bg-main/90 shadow-sm transition-all">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      <Bot className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-brand-primary">
-                          You haven't configured AI
-                        </h4>
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                          Not Configured
-                        </span>
-                      </div>
-                      <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
-                        Define your company persona, services catalog, and lead
-                        qualification schema so our AI can automatically handle
-                        customer inquiries and qualify leads.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 pt-3 border-t border-brand-secondary/60 flex items-center justify-between">
-                  <span className="text-[11px] text-brand-primary/60">
-                    Setup required before auto-replies
-                  </span>
-                  <button
-                    onClick={() => navigate("/organization")}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-pilot-blue hover:bg-pilot-blue-hover text-white shadow-sm shadow-pilot-blue/20"
-                  >
-                    <span>Configure AI Setup</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+          {/* KPI 3: In-Pipeline Leads */}
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-xs transition-shadow hover:shadow-sm">
+            <div>
+              <span className="text-[11px] font-bold text-brand-primary/60 uppercase tracking-wider block">
+                In Pipeline
+              </span>
+              <div className="text-2xl md:text-3xl font-extrabold text-blue-600 dark:text-blue-400 mt-1 tracking-tight">
+                {activePipelineLeadsCount}
               </div>
-            )}
+              <p className="text-xs font-medium text-brand-primary/60 mt-1 flex items-center gap-1">
+                <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
+                Active discussions
+              </p>
+            </div>
+            <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 text-blue-500" />
+            </div>
+          </div>
 
-            {/* Requirement 2: Sales Representative - Only shown if 0 sales reps added */}
-            {!hasSalesPerson && (
-              <div className="p-4 rounded-xl border border-amber-500/40 bg-bg-main/90 shadow-sm transition-all">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      <Users className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-brand-primary">
-                          Add at least 1 sales person
-                        </h4>
-                        <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                          0 Added
-                        </span>
-                      </div>
-                      <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
-                        Your organization currently has 0 sales representatives.
-                        Add a representative so incoming leads can be assigned
-                        and managed.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-3 pt-3 border-t border-brand-secondary/60 flex items-center justify-between">
-                  <span className="text-[11px] text-brand-primary/60">
-                    Required for lead distribution
-                  </span>
-                  <button
-                    onClick={() => setShowAddUserModal(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Add Sales Person</span>
-                  </button>
-                </div>
+          {/* KPI 4: Follow-up Velocity */}
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 flex items-center justify-between shadow-xs transition-shadow hover:shadow-sm">
+            <div>
+              <span className="text-[11px] font-bold text-brand-primary/60 uppercase tracking-wider block">
+                Today's Follow-ups
+              </span>
+              <div className="text-2xl md:text-3xl font-extrabold text-brand-primary mt-1 tracking-tight">
+                {todaysFollowupsCount}
               </div>
-            )}
+              <div className="mt-1 flex items-center gap-2">
+                {overdueFollowupsCount > 0 ? (
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-500 border border-amber-500/30 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {overdueFollowupsCount} Overdue
+                  </span>
+                ) : (
+                  <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    On schedule
+                  </span>
+                )}
+              </div>
+            </div>
+            <div
+              className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${
+                overdueFollowupsCount > 0
+                  ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                  : "bg-teal-500/10 border-teal-500/20 text-teal-600"
+              }`}
+            >
+              <Calendar className="w-5 h-5" />
+            </div>
           </div>
         </div>
-      ) : null}
+      </section>
 
-      {/* WhatsApp Connection Widget */}
-      {isRepUser && (
-        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
-                  repWaStatus?.status === "connected"
-                    ? "bg-green-500/10 border-green-500/30 text-green-500"
-                    : "bg-purple-500/10 border-purple-500/30 text-purple-400"
-                }`}
-              >
-                <Smartphone className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-brand-primary">
-                  My WhatsApp Line
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      repWaStatus?.status === "connected"
-                        ? "bg-green-500 animate-pulse"
-                        : repWaStatus?.status === "qr"
-                          ? "bg-amber-400 animate-pulse"
-                          : repWaStatus?.status === "connecting"
-                            ? "bg-blue-400"
-                            : "bg-slate-400"
-                    }`}
-                  />
-                  <span className="text-xs text-brand-primary/70 capitalize">
-                    {repWaStatus?.status === "connected"
-                      ? `Connected · +${repWaStatus.connectedPhone}`
-                      : repWaStatus?.status === "qr"
-                        ? "QR Code Ready to Scan"
-                        : repWaStatus?.status === "connecting"
-                          ? "Connecting..."
-                          : "Not Connected"}
-                  </span>
+      {/* ── 3. Action Required & Priority Work Center ────────────────────── */}
+      <section aria-label="Action Required and Priority Work">
+        {hasUrgentWork ? (
+          <div className="bg-brand-light border border-amber-500/30 rounded-2xl p-4 md:p-5 shadow-xs">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-3 border-b border-brand-secondary/40">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
+                  <Flame className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm md:text-base font-extrabold text-brand-primary">
+                    Action Required & Priority Work
+                  </h2>
+                  <p className="text-xs text-brand-primary/60">
+                    High-priority operational tasks requiring prompt attention
+                  </p>
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => navigate("/whatsapp")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
-            >
-              {repWaStatus?.status === "connected" ? "Manage" : "Connect"}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      )}
 
-      {(currentUser?.role === "sales manager" ||
-        currentUser?.role === "super_admin") &&
-        teamWaStatuses.length > 0 && (
-          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
-                  <Smartphone className="w-4 h-4 text-purple-400" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mt-3.5">
+              {/* Item C: WhatsApp Disconnected Warning */}
+              {isWaDisconnected && (
+                <div className="p-3.5 rounded-xl bg-bg-main border border-red-500/40 flex flex-col justify-between shadow-2xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-500 shrink-0 mt-0.5">
+                      <WifiOff className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-brand-primary">
+                          WhatsApp Line Offline
+                        </span>
+                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-400">
+                          Action Needed
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
+                        {isRepUser
+                          ? "Your WhatsApp session is disconnected. Reconnect now so incoming messages and auto-replies remain active."
+                          : `${teamWaStatuses.length - connectedTeamCount} sales representative WhatsApp line(s) are offline.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2.5 border-t border-brand-secondary/40 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => navigate("/whatsapp")}
+                      className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none"
+                    >
+                      <span>Reconnect WhatsApp</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-brand-primary">
-                    Team WhatsApp Lines
-                  </p>
-                  <p className="text-xs text-brand-primary/70 mt-0.5">
-                    <span className="font-bold text-green-500">
-                      {connectedTeamCount}
-                    </span>{" "}
-                    of{" "}
-                    <span className="font-bold">{teamWaStatuses.length}</span>{" "}
-                    reps connected
-                  </p>
+              )}
+              {/* Item D: Organization Setup Checklist (if incomplete) */}
+              {!isOrgSetupComplete && isManagerRole && (
+                <div className="p-3.5 rounded-xl bg-bg-main border border-amber-500/40 flex flex-col justify-between shadow-2xs col-span-1 md:col-span-2 lg:col-span-3">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
+                        <ShieldAlert className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs md:text-sm font-bold text-brand-primary">
+                          Complete Organization Onboarding
+                        </h3>
+                        <p className="text-xs text-brand-primary/70 mt-0.5">
+                          {!hasSalesPerson && !isAiConfigured
+                            ? "Configure AI setup and add at least 1 sales representative to unlock automatic routing."
+                            : !isAiConfigured
+                              ? "Define company services and qualification schema to activate AI handling."
+                              : "Add at least 1 sales representative so incoming leads can be assigned."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isAiConfigured && (
+                        <button
+                          type="button"
+                          onClick={() => navigate("/organization")}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-pilot-blue hover:bg-pilot-blue-hover text-white transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                        >
+                          <span>Setup AI</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {!hasSalesPerson && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAddUserModal(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>Add Rep</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-brand-light border border-emerald-500/30 rounded-2xl p-3.5 md:p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                <CheckCircle2 className="w-4 h-4" />
               </div>
-              <div className="flex items-center gap-2">
-                {/* Rep status mini-pills */}
-                <div className="flex items-center gap-1">
-                  {teamWaStatuses.slice(0, 5).map((rep) => (
-                    <div
-                      key={rep.userId}
-                      title={`${rep.name}: ${rep.status}`}
-                      className={`w-2 h-2 rounded-full ${
-                        rep.status === "connected"
-                          ? "bg-green-500"
-                          : rep.status === "qr"
-                            ? "bg-amber-400"
-                            : "bg-slate-400"
-                      }`}
-                    />
-                  ))}
-                  {teamWaStatuses.length > 5 && (
-                    <span className="text-[10px] text-brand-primary/60 ml-1">
-                      +{teamWaStatuses.length - 5}
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => navigate("/whatsapp")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors"
-                >
-                  View All <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+              <div>
+                <p className="text-xs md:text-sm font-bold text-brand-primary">
+                  All Priority Work On Track
+                </p>
+                <p className="text-[11px] text-brand-primary/65">
+                  No overdue follow-ups, leads are properly assigned, and
+                  communication lines are healthy.
+                </p>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-semibold text-brand-primary/70">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-bg-main border border-brand-secondary/40 text-[11px]">
+                <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                Follow-ups Up to Date
+              </span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-bg-main border border-brand-secondary/40 text-[11px]">
+                <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                All Leads Assigned
+              </span>
             </div>
           </div>
         )}
+      </section>
 
-      {/* AI & Automation Master Control Card */}
-      <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5 text-teal-500" />
+      {/* ── 4. Unified WhatsApp & AI Automations Hub ─────────────────────── */}
+      <section aria-label="WhatsApp and AI Automations Hub">
+        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-4 md:p-5 shadow-xs">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-brand-secondary/40">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600 shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-brand-primary flex items-center gap-2">
+                  <span>Communications & AI Automations</span>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 border border-teal-500/20">
+                    {isRepUser ? "Personal Controls" : "Master Controls"}
+                  </span>
+                </h2>
+                <p className="text-xs text-brand-primary/70 mt-0.5">
+                  {isRepUser
+                    ? "Manage your WhatsApp line connectivity and AI auto-reply preferences."
+                    : "Centralized live switches for organization-wide WhatsApp lines and automated responses."}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-brand-primary flex items-center gap-2">
-                {isRepUser
-                  ? "My AI & Automation Controls"
-                  : "AI & Automation Master Controls"}
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-600 border border-teal-500/20">
-                  {isRepUser ? "Personal Line Switches" : "Live Master Switches"}
-                </span>
-              </h2>
-              <p className="text-xs text-brand-primary/70">
-                {isRepUser
-                  ? "Control AI auto-replies and messaging preferences for your assigned WhatsApp line."
-                  : "Instantly control global AI auto-replies and automated enquiry greetings across all channels."}
-              </p>
-            </div>
+
+            {/* Quick Action to WhatsApp Chat */}
+            <button
+              type="button"
+              onClick={() => navigate("/whatsapp")}
+              className="self-start lg:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-brand-primary bg-bg-main border border-brand-secondary hover:border-teal-500/40 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+              aria-label="Open WhatsApp live chat manager"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-teal-600" />
+              <span>Open WhatsApp Hub</span>
+              <ArrowRight className="w-3.5 h-3.5 text-brand-primary/60" />
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0">
-            {/* Toggle 1: AI Auto-Reply (Master Switch for Manager vs Personal Switch for Rep) */}
-            {isRepUser ? (
-              <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[250px]">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-4">
+            {/* Control 1: WhatsApp Line Status */}
+            <div className="p-3.5 rounded-xl bg-bg-main border border-brand-secondary flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  {!globalSettings.globalAIEnabled ? (
-                    <Lock className="w-4 h-4 shrink-0 text-amber-500" />
-                  ) : (
-                    <Bot
-                      className={`w-4 h-4 shrink-0 ${
-                        globalSettings.repAIEnabled !== false
-                          ? "text-emerald-500"
-                          : "text-amber-500"
-                      }`}
-                    />
-                  )}
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 ${
+                      (isRepUser && repWaStatus?.status === "connected") ||
+                      (!isRepUser && connectedTeamCount > 0)
+                        ? "bg-green-500/10 border-green-500/30 text-green-500"
+                        : "bg-purple-500/10 border-purple-500/30 text-purple-400"
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-brand-primary block truncate">
+                      {isRepUser ? "My WhatsApp Line" : "Team WhatsApp Lines"}
+                    </span>
+                    <span className="text-[11px] text-brand-primary/60 block truncate">
+                      {isRepUser
+                        ? repWaStatus?.status === "connected"
+                          ? `Connected · +${repWaStatus.connectedPhone || ""}`
+                          : repWaStatus?.status === "qr"
+                            ? "QR ready to scan"
+                            : "Offline"
+                        : `${connectedTeamCount} of ${teamWaStatuses.length} reps connected`}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/whatsapp")}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-brand-secondary/40 hover:bg-brand-secondary text-brand-primary transition-colors cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                >
+                  {isRepUser
+                    ? repWaStatus?.status === "connected"
+                      ? "Manage"
+                      : "Connect"
+                    : "View All"}
+                </button>
+              </div>
+
+              {/* Status indicator line */}
+              <div className="mt-3 pt-2.5 border-t border-brand-secondary/30 flex items-center justify-between text-[11px]">
+                <span className="text-brand-primary/60">Connection health</span>
+                <span className="flex items-center gap-1.5 font-bold">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      (isRepUser && repWaStatus?.status === "connected") ||
+                      (!isRepUser && connectedTeamCount === teamWaStatuses.length && teamWaStatuses.length > 0)
+                        ? "bg-green-500"
+                        : "bg-amber-400 animate-pulse"
+                    }`}
+                  />
+                  <span className="capitalize">
+                    {isRepUser
+                      ? repWaStatus?.status || "Not connected"
+                      : `${connectedTeamCount}/${teamWaStatuses.length} Active`}
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            {/* Control 2: AI Auto-Reply Switch */}
+            <div className="p-3.5 rounded-xl bg-bg-main border border-brand-secondary flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600 shrink-0">
+                    <Bot className="w-4 h-4" />
+                  </div>
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-brand-primary truncate flex items-center gap-1.5">
-                      <span>My AI Auto-Reply</span>
-                      {!globalSettings.globalAIEnabled && (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-semibold">
+                      <span>{isRepUser ? "My AI Auto-Reply" : "Org AI Auto-Reply"}</span>
+                      {isRepUser && !globalSettings.globalAIEnabled && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-500 font-semibold">
                           Locked
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-brand-primary/60 truncate">
-                      {!globalSettings.globalAIEnabled
-                        ? "Paused globally by Sales Manager"
-                        : globalSettings.repAIEnabled !== false
-                          ? "Active for your assigned leads"
-                          : "Paused for your leads only"}
-                    </div>
+                    <span className="text-[11px] text-brand-primary/60 block truncate">
+                      {isRepUser
+                        ? !globalSettings.globalAIEnabled
+                          ? "Paused globally by manager"
+                          : globalSettings.repAIEnabled !== false
+                            ? "Active for assigned leads"
+                            : "Paused for your leads"
+                        : globalSettings.globalAIEnabled
+                          ? "Master: Active for all reps"
+                          : "Master: Paused for all reps"}
+                    </span>
                   </div>
                 </div>
 
-                {!globalSettings.globalAIEnabled ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed rounded-full border-2 border-amber-500/30 bg-amber-500/20 opacity-70 transition-colors focus:outline-none"
-                    title="Disabled by Sales Manager (Master Switch is turned off organization-wide)"
-                  >
-                    <span className="pointer-events-none inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-amber-500 text-[10px] text-white shadow ring-0 transition duration-200 ease-in-out translate-x-0">
-                      <Lock className="w-2.5 h-2.5" />
-                    </span>
-                  </button>
+                {isRepUser ? (
+                  !globalSettings.globalAIEnabled ? (
+                    <button
+                      type="button"
+                      disabled
+                      role="switch"
+                      aria-checked={false}
+                      aria-label="AI Auto-Reply locked by manager"
+                      className="relative inline-flex h-6 w-11 shrink-0 cursor-not-allowed rounded-full border-2 border-amber-500/30 bg-amber-500/20 opacity-70 transition-colors focus-visible:outline-none"
+                      title="Disabled globally by Sales Manager"
+                    >
+                      <span className="pointer-events-none inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-amber-500 text-[10px] text-white shadow ring-0 transition duration-200 ease-in-out translate-x-0">
+                        <Lock className="w-2.5 h-2.5" />
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={globalSettings.repAIEnabled !== false}
+                      aria-label="Toggle personal AI auto-reply"
+                      onClick={handleToggleRepAI}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none ${
+                        globalSettings.repAIEnabled !== false
+                          ? "bg-emerald-500"
+                          : "bg-brand-secondary/70"
+                      }`}
+                      title={
+                        globalSettings.repAIEnabled !== false
+                          ? "Pause AI auto-reply for your assigned leads"
+                          : "Enable AI auto-reply for your assigned leads"
+                      }
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          globalSettings.repAIEnabled !== false
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  )
                 ) : (
                   <button
                     type="button"
-                    onClick={handleToggleRepAI}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      globalSettings.repAIEnabled !== false
+                    role="switch"
+                    aria-checked={Boolean(globalSettings.globalAIEnabled)}
+                    aria-label="Toggle organization-wide AI auto-reply"
+                    onClick={handleToggleGlobalAI}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none ${
+                      globalSettings.globalAIEnabled
                         ? "bg-emerald-500"
                         : "bg-brand-secondary/70"
                     }`}
                     title={
-                      globalSettings.repAIEnabled !== false
-                        ? "Pause AI auto-reply for your assigned leads"
-                        : "Enable AI auto-reply for your assigned leads"
+                      globalSettings.globalAIEnabled
+                        ? "Pause AI Auto-Reply for all representatives"
+                        : "Enable AI Auto-Reply organization-wide"
                     }
                   >
                     <span
                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        globalSettings.repAIEnabled !== false
+                        globalSettings.globalAIEnabled
                           ? "translate-x-5"
                           : "translate-x-0"
                       }`}
@@ -786,535 +1001,685 @@ export default function Dashboard() {
                   </button>
                 )}
               </div>
-            ) : (
-              <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[260px]">
+
+              <div className="mt-3 pt-2.5 border-t border-brand-secondary/30 flex items-center justify-between text-[11px]">
+                <span className="text-brand-primary/60">Auto-reply status</span>
+                <span
+                  className={`font-bold ${
+                    (isRepUser ? globalSettings.repAIEnabled !== false && globalSettings.globalAIEnabled : globalSettings.globalAIEnabled)
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-500"
+                  }`}
+                >
+                  {(isRepUser ? globalSettings.repAIEnabled !== false && globalSettings.globalAIEnabled : globalSettings.globalAIEnabled)
+                    ? "Active & Replying"
+                    : "Paused"}
+                </span>
+              </div>
+            </div>
+
+            {/* Control 3: Automated Welcome Message */}
+            <div className="p-3.5 rounded-xl bg-bg-main border border-brand-secondary flex flex-col justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <Bot
-                    className={`w-4 h-4 shrink-0 ${
-                      globalSettings.globalAIEnabled
-                        ? "text-emerald-500"
-                        : "text-amber-500"
-                    }`}
-                  />
+                  <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600 shrink-0">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-brand-primary truncate">
-                      Organization AI Auto-Reply
-                    </div>
-                    <div className="text-[10px] text-brand-primary/60 truncate">
-                      {globalSettings.globalAIEnabled
-                        ? "Master: Active across all sales reps"
-                        : "Master: Paused for all sales reps"}
-                    </div>
+                    <span className="text-xs font-bold text-brand-primary block truncate">
+                      Auto Welcome Greeting
+                    </span>
+                    <span className="text-[11px] text-brand-primary/60 block truncate">
+                      {globalSettings.welcomeMessageEnabled
+                        ? "Sent on first contact"
+                        : "Welcome greetings paused"}
+                    </span>
                   </div>
                 </div>
 
+                {isRepUser ? (
+                  <div
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-brand-primary/60 bg-brand-secondary/30 shrink-0 border border-brand-secondary/50"
+                    title="Managed organization-wide by Sales Manager"
+                  >
+                    {globalSettings.welcomeMessageEnabled ? "Active" : "Paused"}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleOpenWelcomeModal}
+                      className="p-1.5 rounded-lg border border-brand-secondary hover:bg-brand-secondary/40 text-brand-primary/70 hover:text-teal-600 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                      aria-label="Customize Welcome Message Template"
+                      title="Customize Welcome Message Template"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={Boolean(globalSettings.welcomeMessageEnabled)}
+                      aria-label="Toggle automated welcome greetings"
+                      onClick={handleToggleWelcomeMessage}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none ${
+                        globalSettings.welcomeMessageEnabled
+                          ? "bg-teal-500"
+                          : "bg-brand-secondary/70"
+                      }`}
+                      title={
+                        globalSettings.welcomeMessageEnabled
+                          ? "Pause Welcome Messages"
+                          : "Enable Welcome Messages"
+                      }
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          globalSettings.welcomeMessageEnabled
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 pt-2.5 border-t border-brand-secondary/30 flex items-center justify-between text-[11px]">
+                <span className="text-brand-primary/60">Greeting template</span>
                 <button
                   type="button"
-                  onClick={handleToggleGlobalAI}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    globalSettings.globalAIEnabled
-                      ? "bg-emerald-500"
-                      : "bg-brand-secondary/70"
-                  }`}
-                  title={
-                    globalSettings.globalAIEnabled
-                      ? "Pause AI Auto-Reply for all representatives"
-                      : "Enable AI Auto-Reply organization-wide"
-                  }
+                  onClick={handleOpenWelcomeModal}
+                  className="font-bold text-teal-600 hover:text-teal-700 transition-colors cursor-pointer flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none rounded px-1"
                 >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      globalSettings.globalAIEnabled
-                        ? "translate-x-5"
-                        : "translate-x-0"
-                    }`}
-                  />
+                  <span>{globalSettings.welcomeMessageEnabled ? "Configured" : "Disabled"}</span>
+                  <Settings className="w-3 h-3" />
                 </button>
               </div>
-            )}
+            </div>
+          </div>
+        </div>
+      </section>
 
-            {/* Toggle 2: Automated Welcome Messages */}
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-bg-main border border-brand-secondary min-w-[260px]">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <MessageCircle
-                  className={`w-4 h-4 shrink-0 ${
-                    globalSettings.welcomeMessageEnabled
-                      ? "text-teal-500"
-                      : "text-brand-primary/40"
-                  }`}
-                />
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-brand-primary truncate">
-                    External Media Auto Messages
-                  </div>
-                  <div className="text-[10px] text-brand-primary/60 truncate">
-                    {isRepUser
-                      ? globalSettings.welcomeMessageEnabled
-                        ? "Active (Managed by Sales Manager)"
-                        : "Paused by Sales Manager"
-                      : globalSettings.welcomeMessageEnabled
-                        ? "Sending automatically"
-                        : "External media auto messages paused"}
+      {/* ── 5. Channel Inquiries Pulse ──────────────────────────────────── */}
+      <section aria-label="Latest Channel Inquiries">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-green-500/10 flex items-center justify-center shrink-0">
+              <MessageCircle className="w-4 h-4 text-green-500" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-brand-primary/60 uppercase block truncate">
+                WhatsApp
+              </span>
+              <div className="text-xs font-semibold text-brand-primary flex items-center gap-1 truncate">
+                <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
+                <span>{getLatestEnquiryTime(["WhatsApp"])}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+              <Phone className="w-4 h-4 text-blue-500" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-brand-primary/60 uppercase block truncate">
+                Direct / Mobile
+              </span>
+              <div className="text-xs font-semibold text-brand-primary flex items-center gap-1 truncate">
+                <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
+                <span>{getLatestEnquiryTime(["Call", "Manual Entry", "Mobile App"])}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-pink-500/10 flex items-center justify-center shrink-0">
+              <Instagram className="w-4 h-4 text-pink-500" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-brand-primary/60 uppercase block truncate">
+                Meta / Instagram
+              </span>
+              <div className="text-xs font-semibold text-brand-primary flex items-center gap-1 truncate">
+                <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
+                <span>{getLatestEnquiryTime(["Meta Ads"])}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
+              <Mail className="w-4 h-4 text-orange-500" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-bold text-brand-primary/60 uppercase block truncate">
+                Email / Web Form
+              </span>
+              <div className="text-xs font-semibold text-brand-primary flex items-center gap-1 truncate">
+                <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
+                <span>{getLatestEnquiryTime(["Email", "Website Form"])}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 6. Service Performance (Renamed & Enhanced) ─────────────────── */}
+      <section aria-label="Service Performance">
+        <div className="flex justify-between items-center mb-3">
+          <div>
+            <h2 className="text-base font-bold text-brand-primary">
+              Service Performance
+            </h2>
+            <p className="text-xs text-brand-primary/60">
+              Lead volume and conversion performance across service offerings
+            </p>
+          </div>
+          {isManagerRole && (
+            <button
+              type="button"
+              onClick={() => navigate("/organization")}
+              className="text-xs font-bold text-pilot-blue hover:underline flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none rounded px-1"
+            >
+              <span>Manage Services</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
+        {stats.wonLeadsByServiceData && stats.wonLeadsByServiceData.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.wonLeadsByServiceData.map((s) => {
+              const numLeads = s.pipeline || 0;
+              const wonLeads = s.won || 0;
+              const sColor = getServiceColor(s.name);
+              const conversionPct =
+                numLeads > 0 ? Math.round((wonLeads / numLeads) * 100) : 0;
+
+              return (
+                <div
+                  key={s.name}
+                  className="relative bg-brand-light border border-brand-secondary rounded-2xl overflow-hidden p-4 shadow-2xs hover:shadow-xs transition-shadow"
+                  style={{
+                    background: `linear-gradient(135deg, var(--bg-card) 60%, ${sColor}18 100%)`,
+                  }}
+                >
+                  <div
+                    className="absolute left-0 top-0 bottom-0 w-1.5"
+                    style={{ backgroundColor: sColor }}
+                  />
+                  <div className="pl-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-bold text-brand-primary truncate">
+                        {s.name}
+                      </h3>
+                      <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                        {conversionPct}% Won
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-baseline mt-4">
+                      <div>
+                        <span className="block text-[11px] font-medium text-brand-primary/60">
+                          Total Leads
+                        </span>
+                        <span className="block text-xl font-extrabold text-brand-primary leading-tight mt-0.5">
+                          {numLeads}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-[11px] font-medium text-brand-primary/60">
+                          Converted
+                        </span>
+                        <span className="block text-xl font-extrabold text-emerald-600 dark:text-emerald-400 leading-tight mt-0.5">
+                          {wonLeads}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mt-3 w-full bg-brand-secondary/40 rounded-full h-1 overflow-hidden">
+                      <div
+                        className="h-1 rounded-full"
+                        style={{
+                          backgroundColor: sColor,
+                          width: `${Math.min(conversionPct, 100)}%`,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-8 text-center">
+            <Layers className="w-8 h-8 text-brand-primary/40 mx-auto mb-2" />
+            <h3 className="text-sm font-bold text-brand-primary">
+              No service performance data available
+            </h3>
+            <p className="text-xs text-brand-primary/60 max-w-md mx-auto mt-1">
+              Add services in your Organization Profile or log your first lead to see service conversion analytics here.
+            </p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => navigate("/organization")}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-pilot-blue text-white cursor-pointer"
+              >
+                Configure Services
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/leads/new")}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-brand-secondary hover:bg-brand-secondary/30 text-brand-primary cursor-pointer"
+              >
+                Add Lead
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ── 7. Manager Analytics Charts (Enhanced Readability) ───────────── */}
+      {isManagerRole && (
+        <section aria-label="Lead Distribution Analytics">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Chart 1: Leads by Service */}
+            <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-base font-bold text-brand-primary">
+                    Leads by Service
+                  </h3>
+                  <p className="text-xs text-brand-primary/60">
+                    Distribution across configured service categories
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-brand-primary/70 px-2 py-0.5 rounded-md bg-brand-secondary/40">
+                  {totalServiceLeads} Total
+                </span>
               </div>
 
-              {isRepUser ? (
-                <div
-                  className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-brand-primary/60 bg-brand-secondary/30 shrink-0 border border-brand-secondary/50"
-                  title="Managed organization-wide by Sales Manager"
-                >
-                  {globalSettings.welcomeMessageEnabled ? "Active" : "Paused"}
+              {stats.leadsByServiceData && stats.leadsByServiceData.length > 0 ? (
+                <div className="flex flex-col sm:flex-row items-center gap-4 py-2">
+                  <div className="w-full sm:w-1/2 h-56 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stats.leadsByServiceData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={85}
+                          paddingAngle={3}
+                          dataKey="value"
+                          nameKey="name"
+                        >
+                          {stats.leadsByServiceData.map((entry, index) => (
+                            <Cell
+                              key={`cell-service-${index}`}
+                              fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          content={<CustomChartTooltip total={totalServiceLeads} />}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Clean side breakdown list */}
+                  <div className="w-full sm:w-1/2 max-h-56 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                    {stats.leadsByServiceData.map((item, idx) => {
+                      const sharePct =
+                        totalServiceLeads > 0
+                          ? ((item.value / totalServiceLeads) * 100).toFixed(0)
+                          : 0;
+                      return (
+                        <div
+                          key={item.name}
+                          className="flex items-center justify-between p-1.5 rounded-lg hover:bg-brand-secondary/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 pr-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{
+                                backgroundColor:
+                                  CHART_COLORS[idx % CHART_COLORS.length],
+                              }}
+                            />
+                            <span className="text-brand-primary font-medium truncate">
+                              {item.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-bold text-brand-primary">
+                              {item.value}
+                            </span>
+                            <span className="text-[10px] text-brand-primary/60 font-semibold px-1 rounded bg-brand-secondary/40">
+                              {sharePct}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={handleOpenWelcomeModal}
-                    className="p-1.5 rounded-lg border border-brand-secondary hover:bg-brand-secondary/40 text-brand-primary/70 hover:text-teal-500 transition-colors cursor-pointer"
-                    title="Customize Welcome Message Template"
-                  >
-                    <Settings className="w-3.5 h-3.5" />
-                  </button>
+                <div className="py-16 text-center text-xs text-brand-primary/60">
+                  No service distribution data logged yet.
+                </div>
+              )}
+            </div>
 
+            {/* Chart 2: Leads by Source */}
+            <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-base font-bold text-brand-primary">
+                    Leads by Source
+                  </h3>
+                  <p className="text-xs text-brand-primary/60">
+                    Acquisition channel performance breakdown
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-brand-primary/70 px-2 py-0.5 rounded-md bg-brand-secondary/40">
+                  {totalSourceLeads} Total
+                </span>
+              </div>
+
+              {stats.leadSourceData && stats.leadSourceData.length > 0 ? (
+                <div className="flex flex-col sm:flex-row items-center gap-4 py-2">
+                  <div className="w-full sm:w-1/2 h-56 shrink-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={stats.leadSourceData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={85}
+                          paddingAngle={3}
+                          dataKey="value"
+                          nameKey="name"
+                        >
+                          {stats.leadSourceData.map((entry, index) => (
+                            <Cell
+                              key={`cell-source-${index}`}
+                              fill={CHART_COLORS[(index + 2) % CHART_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          content={<CustomChartTooltip total={totalSourceLeads} />}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Clean side breakdown list */}
+                  <div className="w-full sm:w-1/2 max-h-56 overflow-y-auto space-y-1.5 pr-1 text-xs">
+                    {stats.leadSourceData.map((item, idx) => {
+                      const sharePct =
+                        totalSourceLeads > 0
+                          ? ((item.value / totalSourceLeads) * 100).toFixed(0)
+                          : 0;
+                      return (
+                        <div
+                          key={item.name}
+                          className="flex items-center justify-between p-1.5 rounded-lg hover:bg-brand-secondary/30 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 pr-2">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{
+                                backgroundColor:
+                                  CHART_COLORS[(idx + 2) % CHART_COLORS.length],
+                              }}
+                            />
+                            <span className="text-brand-primary font-medium truncate">
+                              {item.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-bold text-brand-primary">
+                              {item.value}
+                            </span>
+                            <span className="text-[10px] text-brand-primary/60 font-semibold px-1 rounded bg-brand-secondary/40">
+                              {sharePct}%
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="py-16 text-center text-xs text-brand-primary/60">
+                  No lead source data logged yet.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── 8. Leaderboard & Recent Activity Feed ───────────────────────── */}
+      <section aria-label="Team Performance and Recent Activity">
+        <div
+          className={
+            isManagerRole
+              ? "grid grid-cols-1 lg:grid-cols-2 gap-6"
+              : "grid grid-cols-1"
+          }
+        >
+          {/* Sales Leaderboard (Manager Only) */}
+          {isManagerRole && (
+            <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-4 pb-3 border-b border-brand-secondary/40">
+                  <div>
+                    <h3 className="text-base font-bold text-brand-primary flex items-center gap-2">
+                      <Star
+                        className="w-4 h-4 text-yellow-500 fill-yellow-500"
+                        aria-hidden="true"
+                      />
+                      <span>Sales Leaderboard</span>
+                    </h3>
+                    <p className="text-xs text-brand-primary/60 mt-0.5">
+                      Conversion ranking across active representatives
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleToggleWelcomeMessage}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      globalSettings.welcomeMessageEnabled
-                        ? "bg-teal-500"
-                        : "bg-brand-secondary/70"
-                    }`}
-                    title={
-                      globalSettings.welcomeMessageEnabled
-                        ? "Pause Welcome Messages"
-                        : "Enable Welcome Messages"
-                    }
+                    onClick={() => navigate("/performance")}
+                    className="text-xs font-bold text-purple-600 hover:text-purple-700 flex items-center gap-1 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none rounded px-1"
                   >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        globalSettings.welcomeMessageEnabled
-                          ? "translate-x-5"
-                          : "translate-x-0"
-                      }`}
-                    />
+                    <span>Full Report</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {stats.performersList && stats.performersList.length > 0 ? (
+                  <ul className="divide-y divide-brand-secondary/30">
+                    {stats.performersList.map((p, index) => (
+                      <li
+                        key={p.id || p.name}
+                        className="flex items-center justify-between py-3 px-1 hover:bg-brand-secondary/20 rounded-xl transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 pr-3">
+                          <div className="relative shrink-0">
+                            <div
+                              className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold ${
+                                index === 0
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-brand-secondary/50 text-brand-primary"
+                              }`}
+                            >
+                              {p.name
+                                .split(" ")
+                                .map((w) => w[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </div>
+                            <span
+                              className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold text-white border-2 border-brand-light ${
+                                index === 0
+                                  ? "bg-yellow-500"
+                                  : index === 1
+                                    ? "bg-slate-400"
+                                    : "bg-amber-700"
+                              }`}
+                            >
+                              {index + 1}
+                            </span>
+                          </div>
+
+                          <div className="min-w-0">
+                            <span className="font-bold text-brand-primary text-xs truncate block">
+                              {p.name}
+                            </span>
+                            <span className="text-[11px] text-brand-primary/65 block truncate">
+                              {p.assigned} assigned · {p.won} converted
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 block">
+                            {p.conversionRate}%
+                          </span>
+                          <span className="text-[10px] text-brand-primary/50 block">
+                            Win Rate
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="py-12 text-center">
+                    <Users className="w-8 h-8 text-brand-primary/30 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-brand-primary">
+                      No sales representatives found
+                    </p>
+                    <p className="text-[11px] text-brand-primary/60 mt-0.5">
+                      Add team members to track conversion performance.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddUserModal(true)}
+                      className="mt-3 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                    >
+                      Add Sales Rep
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Activity Feed (Renamed from Recent Action timeline) */}
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-center mb-4 pb-3 border-b border-brand-secondary/40">
+                <div>
+                  <h3 className="text-base font-bold text-brand-primary">
+                    Recent Activity
+                  </h3>
+                  <p className="text-xs text-brand-primary/60 mt-0.5">
+                    Latest logged follow-ups, calls, and status updates
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate("/followups")}
+                  className="text-xs font-bold text-pilot-blue hover:underline flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none rounded px-1"
+                >
+                  <span>All Activity</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {stats.recentActivities && stats.recentActivities.length > 0 ? (
+                <ul className="divide-y divide-brand-secondary/30">
+                  {stats.recentActivities.slice(0, 5).map((act) => (
+                    <li
+                      key={act.id || act._id}
+                      className="flex items-start gap-3 py-3 px-1 hover:bg-brand-secondary/20 rounded-xl transition-colors"
+                    >
+                      <div className="shrink-0 mt-0.5">
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                            act.type?.includes("Stage")
+                              ? "bg-orange-500/10 text-orange-500"
+                              : act.type?.includes("Created")
+                                ? "bg-purple-500/10 text-purple-500"
+                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          }`}
+                        >
+                          {act.type?.includes("Stage") ? (
+                            <TrendingUp className="w-3.5 h-3.5" />
+                          ) : act.type?.includes("Created") ? (
+                            <Users className="w-3.5 h-3.5" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start flex-wrap gap-1">
+                          <span className="font-bold text-brand-primary text-xs truncate pr-2">
+                            {act.leadName || "Lead"}{" "}
+                            {act.author ? `(${act.author})` : ""}
+                          </span>
+                          <span className="text-[10px] text-brand-primary/60 whitespace-nowrap">
+                            {formatDate(act.date)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-brand-primary/75 mt-0.5 line-clamp-2">
+                          {act.notes || act.content || "Follow-up activity recorded"}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="py-12 text-center">
+                  <ListTodo className="w-8 h-8 text-brand-primary/30 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-brand-primary">
+                    No recent activity logged
+                  </p>
+                  <p className="text-[11px] text-brand-primary/60 mt-0.5">
+                    Completed follow-ups and lead modifications will appear here.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/leads")}
+                    className="mt-3 px-3 py-1.5 rounded-lg text-xs font-bold border border-brand-secondary hover:bg-brand-secondary/30 text-brand-primary cursor-pointer"
+                  >
+                    View Leads
                   </button>
                 </div>
               )}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Latest Enquiry Times Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-sm">
-          <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-            <MessageCircle className="w-4 h-4 text-green-500" />
-          </div>
-          <div>
-            <div className="text-[10px] font-bold text-brand-primary/60 uppercase">
-              WhatsApp
-            </div>
-            <div className="text-xs font-semibold text-brand-primary flex items-center gap-1">
-              <Clock className="w-3 h-3 text-brand-primary/40" />
-              {getLatestEnquiryTime(["WhatsApp"])}
-            </div>
-          </div>
-        </div>
-        <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-sm">
-          <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-            <Phone className="w-4 h-4 text-blue-500" />
-          </div>
-          <div>
-            <div className="text-[10px] font-bold text-brand-primary/60 uppercase">
-              Mobile
-            </div>
-            <div className="text-xs font-semibold text-brand-primary flex items-center gap-1">
-              <Clock className="w-3 h-3 text-brand-primary/40" />
-              {getLatestEnquiryTime(["Call", "Manual Entry", "Mobile App"])}
-            </div>
-          </div>
-        </div>
-        <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-sm">
-          <div className="w-8 h-8 rounded-full bg-pink-500/10 flex items-center justify-center">
-            <Instagram className="w-4 h-4 text-pink-500" />
-          </div>
-          <div>
-            <div className="text-[10px] font-bold text-brand-primary/60 uppercase">
-              Instagram / Meta
-            </div>
-            <div className="text-xs font-semibold text-brand-primary flex items-center gap-1">
-              <Clock className="w-3 h-3 text-brand-primary/40" />
-              {getLatestEnquiryTime(["Meta Ads"])}
-            </div>
-          </div>
-        </div>
-        <div className="bg-brand-light border border-brand-secondary rounded-xl p-3 flex items-center gap-3 shadow-sm">
-          <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center">
-            <Mail className="w-4 h-4 text-orange-500" />
-          </div>
-          <div>
-            <div className="text-[10px] font-bold text-brand-primary/60 uppercase">
-              Email / Web
-            </div>
-            <div className="text-xs font-semibold text-brand-primary flex items-center gap-1">
-              <Clock className="w-3 h-3 text-brand-primary/40" />
-              {getLatestEnquiryTime(["Email", "Website Form"])}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Total Leads */}
-        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 flex items-center justify-between">
-          <div>
-            <h3 className="text-xs font-bold text-brand-primary/70 uppercase tracking-wider">
-              Total Leads
-            </h3>
-            <div className="text-3xl font-extrabold text-brand-primary mt-1">
-              {stats.totalLeads}
-            </div>
-            <div className="text-xs font-semibold text-purple-500 flex items-center mt-1">
-              Active and tracked clients
-            </div>
-          </div>
-          <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center">
-            <Users className="w-6 h-6 text-purple-500" />
-          </div>
-        </div>
-        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xs font-bold text-brand-primary/70 uppercase tracking-wider">
-                Lead Conversion %
-              </h3>
-              <div className="text-3xl font-extrabold text-brand-primary mt-1">
-                {stats.conversionRate}%
-              </div>
-            </div>
-            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-blue-500" />
-            </div>
-          </div>
-          <div className="mt-4 w-full bg-blue-500/10 rounded-full h-1.5">
-            <div
-              className="bg-blue-500 h-1.5 rounded-full"
-              style={{ width: `${stats.conversionRate}%` }}
-            ></div>
-          </div>
-        </div>
-
-        {/* Converted Leads */}
-        <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 flex items-center justify-between">
-          <div>
-            <h3 className="text-xs font-bold text-brand-primary/70 uppercase tracking-wider">
-              Converted Leads
-            </h3>
-            <div className="text-3xl font-extrabold text-emerald-600 mt-1">
-              {stats.convertedCount ?? stats.totalWonCount}
-            </div>
-            <div className="text-xs font-semibold text-brand-primary/70 flex items-center mt-1">
-              Successfully converted leads
-            </div>
-          </div>
-          <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
-            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
-          </div>
-        </div>
-      </div>
-
-      {/* service level stats grid summaries */}
-      <div>
-        <h2 className="text-lg font-bold text-brand-primary mb-4">
-          Service Performance Hubs
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.wonLeadsByServiceData.map((s, index) => {
-            const numLeads = s.pipeline;
-            const wonLeads = s.won;
-            const sColor = getServiceColor(s.name);
-            return (
-              <div
-                key={s.name}
-                className="relative bg-brand-light border border-brand-secondary rounded-2xl overflow-hidden"
-                style={{
-                  background: `linear-gradient(135deg, var(--bg-card) 60%, ${sColor}1a 100%)`,
-                }}
-              >
-                <div
-                  className="absolute left-0 top-0 bottom-0 w-1"
-                  style={{ backgroundColor: sColor }}
-                />
-                <div className="p-4 pl-6">
-                  <h3 className="text-base font-bold text-brand-primary leading-tight">
-                    {s.name}
-                  </h3>
-                  <div className="flex justify-between items-end mt-4">
-                    <div>
-                      <span className="block text-xs font-medium text-brand-primary/70">
-                        Total Leads:
-                      </span>
-                      <span className="block text-lg font-extrabold text-brand-primary leading-tight mt-0.5">
-                        {numLeads}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-xs font-medium text-brand-primary/70">
-                        Won Leads:
-                      </span>
-                      <span className="block text-lg font-extrabold text-emerald-500 leading-tight mt-0.5">
-                        {wonLeads}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Analytics Pie Charts */}
-      {currentUser?.role === "Sales Manager" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-brand-light border border-brand-secondary rounded-3xl p-5 h-[400px]">
-            <h3 className="text-base font-bold text-brand-primary mb-4">
-              Leads by Service
-            </h3>
-            <ResponsiveContainer width="100%" height="85%">
-              <PieChart>
-                <Pie
-                  data={stats.leadsByServiceData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                  labelLine={false}
-                >
-                  {stats.leadsByServiceData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={CHART_COLORS[index % CHART_COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: "var(--bg-card)",
-                    borderColor: "var(--border)",
-                    color: "var(--text-primary)",
-                    borderRadius: "8px",
-                  }}
-                  itemStyle={{ color: "var(--text-primary)" }}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  wrapperStyle={{
-                    fontSize: "12px",
-                    color: "var(--text-primary)",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-brand-light border border-brand-secondary rounded-3xl p-5 h-[400px]">
-            <h3 className="text-base font-bold text-brand-primary mb-4">
-              Leads by Source
-            </h3>
-            <ResponsiveContainer width="100%" height="85%">
-              <PieChart>
-                <Pie
-                  data={stats.leadSourceData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={2}
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
-                  }
-                  labelLine={false}
-                >
-                  {stats.leadSourceData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={CHART_COLORS[(index + 2) % CHART_COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: "var(--bg-card)",
-                    borderColor: "var(--border)",
-                    color: "var(--text-primary)",
-                    borderRadius: "8px",
-                  }}
-                  itemStyle={{ color: "var(--text-primary)" }}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  wrapperStyle={{
-                    fontSize: "12px",
-                    color: "var(--text-primary)",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-      <div
-        className={
-          currentUser?.role === "Sales Manager"
-            ? "grid grid-cols-1 lg:grid-cols-2 gap-6"
-            : "grid grid-cols-1"
-        }
-      >
-        {currentUser?.role === "Sales Manager" && (
-          <div className="bg-brand-light border border-brand-secondary rounded-3xl p-5 min-h-[400px]">
-            <div className="flex justify-between items-center mb-6 px-2">
-              <h3 className="text-base font-bold text-brand-primary flex items-center gap-2">
-                <Star className="w-5 h-5 text-yellow-500" fill="currentColor" />{" "}
-                Sales Leaderboard
-              </h3>
-              <button
-                onClick={() => navigate("/performance")}
-                className="text-sm font-bold text-purple-500 hover:text-purple-400 flex items-center gap-1 transition-colors"
-              >
-                View Report <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            <ul className="space-y-0">
-              {stats.performersList.map((p, index) => (
-                <React.Fragment key={p.name}>
-                  {index > 0 && (
-                    <li className="h-px bg-brand-secondary/30 my-2" />
-                  )}
-                  <li className="flex items-center px-2 py-3">
-                    <div className="relative shrink-0 mr-4">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-brand-light ${
-                          index === 0
-                            ? "bg-purple-500"
-                            : "bg-brand-secondary/30 text-brand-primary"
-                        }`}
-                      >
-                        {p.name
-                          .split(" ")
-                          .map((w) => w[0])
-                          .join("")}
-                      </div>
-                      <div
-                        className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-brand-light border-2 border-brand-secondary ${
-                          index === 0
-                            ? "bg-yellow-500"
-                            : index === 1
-                              ? "bg-brand-primary/50"
-                              : "bg-amber-700"
-                        }`}
-                      >
-                        {index + 1}
-                      </div>
-                    </div>
-                    <div className="flex-1 flex items-center justify-between min-w-0">
-                      <div className="min-w-0 truncate pr-4">
-                        <div className="font-bold text-brand-primary text-sm truncate">
-                          {p.name}
-                        </div>
-                        <div className="text-xs text-brand-primary/70 mt-0.5 truncate">
-                          {p.assigned} assigned • {p.won} converted
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="font-bold text-emerald-500 text-sm">
-                          {p.conversionRate}% Conv.
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                </React.Fragment>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Recent timeline feed */}
-        <div className="bg-brand-light border border-brand-secondary rounded-3xl p-5 min-h-[400px]">
-          <h3 className="text-base font-bold text-brand-primary mb-6 px-2">
-            Recent Action timeline
-          </h3>
-
-          <ul className="space-y-0">
-            {stats.recentActivities.slice(0, 5).map((act, index) => (
-              <React.Fragment key={act.id}>
-                {index > 0 && (
-                  <li className="h-px bg-brand-secondary/30 my-2" />
-                )}
-                <li className="flex items-start px-2 py-3">
-                  <div className="shrink-0 mr-4 mt-1">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        act.type.includes("Stage")
-                          ? "bg-orange-500/10 text-orange-500"
-                          : act.type.includes("Created")
-                            ? "bg-purple-500/10 text-purple-500"
-                            : "bg-slate-500/10 text-slate-400"
-                      }`}
-                    >
-                      {act.type.includes("Stage") ? (
-                        <TrendingUp className="w-4 h-4" />
-                      ) : act.type.includes("Created") ? (
-                        <Users className="w-4 h-4" />
-                      ) : (
-                        <CheckCircle2 className="w-4 h-4" />
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start flex-wrap gap-1">
-                      <div className="font-bold text-brand-primary text-sm truncate pr-2">
-                        {act.leadName} ({act.author})
-                      </div>
-                      <div className="text-xs text-brand-primary/70 whitespace-nowrap">
-                        {formatDate(act.date)}
-                      </div>
-                    </div>
-                    <div className="text-sm text-brand-primary/70 mt-1">
-                      {act.content}
-                    </div>
-                  </div>
-                </li>
-              </React.Fragment>
-            ))}
-          </ul>
-          {stats.recentActivities.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-10">
-              <p className="text-sm text-brand-primary/70">
-                No recent audit events logged.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Quick Add Sales Representative Modal ─────────────────────────────── */}
+      {/* ── 9. Quick Add Sales Representative Modal ───────────────────────── */}
       {showAddUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-rep-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+        >
           <div className="bg-bg-card border border-border-main rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
             <div className="flex justify-between items-center pb-4 border-b border-border-main">
               <div className="flex items-center gap-2.5">
@@ -1322,7 +1687,10 @@ export default function Dashboard() {
                   <UserPlus className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-text-primary">
+                  <h3
+                    id="add-rep-modal-title"
+                    className="text-base font-bold text-text-primary"
+                  >
                     Add Sales Representative
                   </h3>
                   <p className="text-xs text-text-secondary">
@@ -1331,26 +1699,34 @@ export default function Dashboard() {
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setShowAddUserModal(false);
                   setAddUserError("");
                   setAddUserSuccess("");
                 }}
-                className="p-1 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                aria-label="Close add sales representative modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {addUserError && (
-              <div className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs font-semibold text-red-500 flex items-center gap-2">
+              <div
+                role="alert"
+                className="mt-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs font-semibold text-red-500 flex items-center gap-2"
+              >
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span>{addUserError}</span>
               </div>
             )}
 
             {addUserSuccess && (
-              <div className="mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-500 flex items-center gap-2">
+              <div
+                role="alert"
+                className="mt-4 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-500 flex items-center gap-2"
+              >
                 <CheckCheck className="w-4 h-4 shrink-0" />
                 <span>{addUserSuccess}</span>
               </div>
@@ -1358,10 +1734,14 @@ export default function Dashboard() {
 
             <form onSubmit={handleQuickAddUser} className="mt-4 space-y-3.5">
               <div>
-                <label className="text-xs font-bold text-text-primary block mb-1">
+                <label
+                  htmlFor="new-rep-name"
+                  className="text-xs font-bold text-text-primary block mb-1"
+                >
                   Full Name
                 </label>
                 <input
+                  id="new-rep-name"
                   type="text"
                   placeholder="e.g. Ramesh Kumar"
                   value={newUser.name}
@@ -1369,15 +1749,19 @@ export default function Dashboard() {
                     setNewUser({ ...newUser, name: e.target.value })
                   }
                   required
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue focus-visible:ring-2 focus-visible:ring-pilot-blue"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-text-primary block mb-1">
+                <label
+                  htmlFor="new-rep-email"
+                  className="text-xs font-bold text-text-primary block mb-1"
+                >
                   Email Address
                 </label>
                 <input
+                  id="new-rep-email"
                   type="email"
                   placeholder="ramesh@company.com"
                   value={newUser.email}
@@ -1385,12 +1769,15 @@ export default function Dashboard() {
                     setNewUser({ ...newUser, email: e.target.value })
                   }
                   required
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-bg-secondary border border-border-main text-xs text-text-primary focus:outline-none focus:border-pilot-blue focus-visible:ring-2 focus-visible:ring-pilot-blue"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-text-primary block mb-1">
+                <label
+                  htmlFor="new-rep-mobile"
+                  className="text-xs font-bold text-text-primary block mb-1"
+                >
                   Mobile Number
                 </label>
                 <div className="flex rounded-xl bg-bg-secondary border border-border-main focus-within:border-pilot-blue">
@@ -1398,6 +1785,7 @@ export default function Dashboard() {
                     +91
                   </span>
                   <input
+                    id="new-rep-mobile"
                     type="tel"
                     inputMode="numeric"
                     maxLength={10}
@@ -1410,7 +1798,7 @@ export default function Dashboard() {
                       })
                     }
                     required
-                    className="w-full min-w-0 px-3.5 py-2.5 rounded-r-xl bg-transparent text-xs text-text-primary focus:outline-none"
+                    className="w-full min-w-0 px-3.5 py-2.5 rounded-r-xl bg-transparent text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-pilot-blue"
                   />
                 </div>
               </div>
@@ -1427,14 +1815,14 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setShowAddUserModal(false)}
-                  className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-border-main text-xs font-bold text-text-secondary hover:bg-bg-secondary transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={addUserLoading}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-sm transition-all disabled:opacity-60 cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all disabled:opacity-60 cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none"
                 >
                   {addUserLoading
                     ? "Creating & Sending..."
@@ -1446,18 +1834,26 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Modal: Customize Welcome Message */}
+      {/* ── 10. Customize Welcome Message Modal ────────────────────────────── */}
       {welcomeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="welcome-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+        >
           <div className="bg-bg-main border border-brand-secondary rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
             {/* Modal Header */}
             <div className="p-5 border-b border-brand-secondary flex items-center justify-between shrink-0 bg-bg-main">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-500">
+                <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600">
                   <MessageCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-brand-primary">
+                  <h3
+                    id="welcome-modal-title"
+                    className="text-base font-bold text-brand-primary"
+                  >
                     Automated Welcome Message
                   </h3>
                   <p className="text-xs text-brand-primary/60">
@@ -1469,7 +1865,8 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => setWelcomeModalOpen(false)}
-                className="p-2 rounded-xl text-brand-primary/60 hover:text-brand-primary hover:bg-brand-secondary/40 transition-colors cursor-pointer"
+                className="p-2 rounded-xl text-brand-primary/60 hover:text-brand-primary hover:bg-brand-secondary/40 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+                aria-label="Close welcome message modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1481,7 +1878,10 @@ export default function Dashboard() {
               className="flex-1 overflow-y-auto p-5 space-y-5"
             >
               {saveSuccessNotice && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-500 flex items-center gap-2">
+                <div
+                  role="alert"
+                  className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-500 flex items-center gap-2"
+                >
                   <CheckCheck className="w-4 h-4 shrink-0" />
                   <span>Welcome message settings saved successfully!</span>
                 </div>
@@ -1500,8 +1900,11 @@ export default function Dashboard() {
                 </div>
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={modalEnabled}
+                  aria-label="Toggle automated greeting state"
                   onClick={() => setModalEnabled(!modalEnabled)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none ${
                     modalEnabled ? "bg-teal-500" : "bg-brand-secondary/70"
                   }`}
                 >
@@ -1534,8 +1937,9 @@ export default function Dashboard() {
                           key={item.key}
                           type="button"
                           onClick={() => insertVariableChip(item.key)}
-                          className="px-2 py-1 text-[11px] font-semibold bg-brand-secondary/40 hover:bg-teal-500/20 text-brand-primary hover:text-teal-600 rounded-lg border border-brand-secondary transition-colors cursor-pointer"
+                          className="px-2 py-1 text-[11px] font-semibold bg-brand-secondary/40 hover:bg-teal-500/20 text-brand-primary hover:text-teal-600 rounded-lg border border-brand-secondary transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
                           title={`Click to insert ${item.label}`}
+                          aria-label={`Insert placeholder ${item.label}`}
                         >
                           + {item.label}
                         </button>
@@ -1546,25 +1950,30 @@ export default function Dashboard() {
                   {/* Template Textarea */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs font-bold text-brand-primary">
+                      <label
+                        htmlFor="welcome-template-input"
+                        className="text-xs font-bold text-brand-primary"
+                      >
                         Message Template
                       </label>
                       <button
                         type="button"
                         onClick={handleResetWelcomeDefault}
-                        className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer"
+                        className="text-[11px] font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1 cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none rounded px-1"
                         title="Reset message to standard default"
+                        aria-label="Reset message to standard default template"
                       >
                         <RotateCcw className="w-3 h-3" />
                         Reset Default
                       </button>
                     </div>
                     <textarea
+                      id="welcome-template-input"
                       rows={8}
                       value={modalTemplate}
                       onChange={(e) => setModalTemplate(e.target.value)}
                       placeholder="Type your WhatsApp greeting template..."
-                      className="w-full p-3 rounded-xl bg-bg-secondary border border-border-main text-xs text-brand-primary focus:outline-none focus:border-teal-500 resize-none font-mono leading-relaxed"
+                      className="w-full p-3 rounded-xl bg-bg-secondary border border-border-main text-xs text-brand-primary focus:outline-none focus:border-teal-500 resize-none font-mono leading-relaxed focus-visible:ring-2 focus-visible:ring-pilot-blue"
                     />
                     <div className="mt-1 flex items-center justify-between text-[10px] text-brand-primary/50">
                       <span>
@@ -1576,29 +1985,33 @@ export default function Dashboard() {
 
                   {/* Fallback Service */}
                   <div>
-                    <label className="text-xs font-bold text-brand-primary block mb-1">
+                    <label
+                      htmlFor="fallback-service-input"
+                      className="text-xs font-bold text-brand-primary block mb-1"
+                    >
                       Fallback Service Name
                     </label>
                     <input
+                      id="fallback-service-input"
                       type="text"
                       value={modalFallbackService}
                       onChange={(e) => setModalFallbackService(e.target.value)}
                       placeholder="e.g. Consultation & Services"
-                      className="w-full px-3 py-2 rounded-xl bg-bg-secondary border border-border-main text-xs text-brand-primary focus:outline-none focus:border-teal-500"
+                      className="w-full px-3 py-2 rounded-xl bg-bg-secondary border border-border-main text-xs text-brand-primary focus:outline-none focus:border-teal-500 focus-visible:ring-2 focus-visible:ring-pilot-blue"
                     />
                     <span className="text-[10px] text-brand-primary/50 block mt-1">
-                      Used when an incoming lead does not specify a specific
-                      product or service.
+                      Used when an incoming lead does not specify a product or
+                      service.
                     </span>
                   </div>
                 </div>
 
                 {/* Right: Real-time WhatsApp Chat Preview */}
                 <div>
-                  <label className="text-xs font-bold text-brand-primary block mb-2 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-teal-500" />
+                  <span className="text-xs font-bold text-brand-primary block mb-2 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-600" />
                     Live Customer WhatsApp Preview
-                  </label>
+                  </span>
 
                   <div className="rounded-2xl border border-brand-secondary bg-[#0b141a] p-4 text-white min-h-[320px] flex flex-col justify-between shadow-inner">
                     {/* Simulated Chat Header */}
@@ -1639,14 +2052,14 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setWelcomeModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-brand-secondary text-xs font-bold text-brand-primary/70 hover:bg-brand-secondary/30 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-brand-secondary text-xs font-bold text-brand-primary/70 hover:bg-brand-secondary/30 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingWelcome}
-                  className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  className="px-5 py-2 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none"
                 >
                   {isSavingWelcome ? (
                     <>

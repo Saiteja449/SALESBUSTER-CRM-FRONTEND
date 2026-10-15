@@ -38,6 +38,7 @@ import {
   ChevronLeft,
   Users,
   SlidersHorizontal,
+  Search,
 } from "lucide-react";
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
@@ -91,6 +92,9 @@ export default function WhatsAppChat() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   // AI Lead Qualification Form
   const [qualForm, setQualForm] = useState({
@@ -154,6 +158,27 @@ export default function WhatsAppChat() {
       return assignedStr;
     }
     return "Unassigned";
+  };
+
+  const formatConversationTime = (dateStr) => {
+    if (!dateStr) return "";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "";
+    const nowDate = new Date();
+    const today = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+    const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((today - msgDay) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    if (diffDays === 1) {
+      return "Yesterday";
+    }
+    if (diffDays < 7) {
+      return date.toLocaleDateString([], { weekday: "short" });
+    }
+    return date.toLocaleDateString([], { month: "short", day: "numeric" });
   };
 
   // Load Status on mount
@@ -708,13 +733,15 @@ export default function WhatsAppChat() {
   };
 
   const handleSend = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!selectedConv) return;
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || sendingMessage) return;
 
     const messageText = inputValue.trim();
     const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
     setInputValue("");
+    setSendError("");
+    setSendingMessage(true);
 
     // Optimistically snooze AI for 5 minutes if AI is enabled for this lead
     if (selectedConv.leadId?.aiEnabled) {
@@ -749,7 +776,12 @@ export default function WhatsAppChat() {
         senderName: currentUser?.name || "System",
       });
     } catch (err) {
-      alert("Failed to send message.");
+      setSendError(
+        err.response?.data?.message ||
+          "Failed to send message. Please verify your WhatsApp connection and try again."
+      );
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -923,6 +955,18 @@ export default function WhatsAppChat() {
     );
   });
 
+  const hasActiveFilters = Boolean(
+    searchQuery.trim() ||
+    dateFilter !== "all" ||
+    (isManager && repFilterUserId !== "all")
+  );
+
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setDateFilter("all");
+    setRepFilterUserId("all");
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-70px)] relative overflow-hidden bg-[#130a28] text-white">
       {/* Top Header Connection Status Bar */}
@@ -1057,7 +1101,7 @@ export default function WhatsAppChat() {
                 <button
                   type="button"
                   onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm hover:shadow-emerald-500/15 transition-all cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm hover:shadow-emerald-500/15 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
                   title="WhatsApp Account Active · Click to manage or disconnect"
                 >
                   <span className="relative flex h-2 w-2">
@@ -1085,7 +1129,7 @@ export default function WhatsAppChat() {
                   <button
                     type="button"
                     onClick={() => setConnectModalOpen(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
+                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
                     title="Line 1 is active · Scan QR to connect Line 2"
                   >
                     <QrCode className="w-4 h-4" />
@@ -1097,7 +1141,7 @@ export default function WhatsAppChat() {
                 <button
                   type="button"
                   onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm transition-all cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
                   title="1 channel active · Click to connect second channel"
                 >
                   <span className="relative flex h-2 w-2">
@@ -1118,7 +1162,7 @@ export default function WhatsAppChat() {
                 <button
                   type="button"
                   onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer"
+                  className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
                   title="Scan QR Code with mobile WhatsApp"
                 >
                   <QrCode className="w-4 h-4" />
@@ -1141,7 +1185,7 @@ export default function WhatsAppChat() {
                 <button
                   type="button"
                   onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs transition-all cursor-pointer"
+                  className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none"
                   title="Connecting to WhatsApp..."
                 >
                   <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
@@ -1155,7 +1199,7 @@ export default function WhatsAppChat() {
               <button
                 type="button"
                 onClick={() => setConnectModalOpen(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                 title="Click to connect WhatsApp"
               >
                 <QrCode className="w-4 h-4" />
@@ -1175,15 +1219,35 @@ export default function WhatsAppChat() {
       {/* Main Layout Pane */}
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left Side: Conversation List */}
-        <div className="w-80 flex flex-col border-r border-[#361c5a] bg-[#1a0c35] shrink-0">
+        <div
+          className={`w-full md:w-80 flex flex-col border-r border-[#361c5a] bg-[#1a0c35] shrink-0 ${
+            selectedConv ? "hidden md:flex" : "flex"
+          }`}
+        >
           <div className="p-3 border-b border-[#361c5a] space-y-2">
-            <input
-              type="text"
-              placeholder="Search conversations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl px-4 py-2 outline-none focus:border-purple-400 text-sm text-white placeholder-purple-300/40"
-            />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+              <input
+                id="whatsapp-conversation-search"
+                type="text"
+                aria-label="Search conversations by customer name or phone"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-400/50 text-sm text-white placeholder-purple-300/40"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-purple-400 hover:text-white rounded-md hover:bg-[#361c5a] focus-visible:ring-1 focus-visible:ring-purple-400"
+                  aria-label="Clear conversation search"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
 
             {/* Sales Rep Filter with dropdown icon and leading Users icon */}
             {isManager && (
@@ -1193,7 +1257,7 @@ export default function WhatsAppChat() {
                   aria-label="Filter WhatsApp conversations by representative"
                   value={repFilterUserId}
                   onChange={(e) => setRepFilterUserId(e.target.value)}
-                  className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 text-xs text-white appearance-none cursor-pointer"
+                  className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-400/50 text-xs text-white appearance-none cursor-pointer"
                 >
                   <option value="all">All conversations (Team)</option>
                   <option value="admin">Organization WhatsApp lines</option>
@@ -1214,7 +1278,7 @@ export default function WhatsAppChat() {
                 aria-label="Filter conversations by date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 text-xs text-white appearance-none cursor-pointer"
+                className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-400/50 text-xs text-white appearance-none cursor-pointer"
               >
                 <option value="all">All Dates</option>
                 <option value="today">Today</option>
@@ -1224,20 +1288,59 @@ export default function WhatsAppChat() {
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
             </div>
+
+            {/* Search count and active filter indicator */}
+            <div className="flex items-center justify-between px-1 text-[11px] text-purple-300/70">
+              <span>
+                {conversationsLoading
+                  ? "Loading conversations..."
+                  : `${filteredConversations.length} of ${conversations.length} ${
+                      conversations.length === 1 ? "chat" : "chats"
+                    }`}
+              </span>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="text-purple-400 hover:text-purple-200 underline font-semibold focus-visible:ring-1 focus-visible:ring-purple-400 rounded"
+                >
+                  Reset filters
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" role="region" aria-label="Conversation list">
             {conversationsLoading ? (
-              <div className="p-6 text-center text-brand-secondary/50">
+              <div className="p-6 text-center text-brand-secondary/50" role="status" aria-live="polite">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-purple-400" />
                 Loading conversations...
               </div>
             ) : filteredConversations.length === 0 ? (
-              <div className="p-6 text-center text-brand-secondary/50">
-                No active conversations found
+              <div className="p-6 text-center text-brand-secondary/60 flex flex-col items-center">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-3 border border-purple-500/20">
+                  <MessageSquare className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-semibold text-white mb-1">
+                  {hasActiveFilters ? "No matches found" : "No active conversations"}
+                </h4>
+                <p className="text-xs text-brand-secondary/60 max-w-xs mb-3">
+                  {hasActiveFilters
+                    ? "Try adjusting your search terms, date range, or representative filter."
+                    : "When contacts message your connected WhatsApp line, conversations will show here."}
+                </p>
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={handleClearFilters}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400"
+                  >
+                    Clear Search & Filters
+                  </button>
+                )}
               </div>
             ) : (
-              <ul className="divide-y divide-[#301855]/40">
+              <ul className="divide-y divide-[#301855]/40" role="list">
                 {filteredConversations.map((conv) => {
                   const lead = conv.leadId;
                   const isSelected = selectedConv?.id === conv.id;
@@ -1248,7 +1351,7 @@ export default function WhatsAppChat() {
                     <li key={conv.id}>
                       <button
                         onClick={() => handleSelectConversation(conv)}
-                        className={`w-full flex items-start gap-3 p-3.5 text-left transition-colors ${
+                        className={`w-full flex items-start gap-3 p-3.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none focus-visible:bg-[#2f1658] ${
                           isSelected ? "bg-[#2f1658]" : "hover:bg-[#24114d]"
                         }`}
                       >
@@ -1259,31 +1362,47 @@ export default function WhatsAppChat() {
 
                         {/* Details */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-sm truncate text-white">
+                          <div className="flex items-center justify-between gap-1">
+                            <h3
+                              className="font-bold text-sm truncate text-white"
+                              title={leadName}
+                            >
                               {leadName}
                             </h3>
-                            <span className="text-[10px] text-brand-secondary/50 font-medium">
-                              {conv.lastMessageTime
-                                ? new Date(
-                                    conv.lastMessageTime,
-                                  ).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
-                                : ""}
+                            <span
+                              className="text-[10px] text-brand-secondary/60 font-medium whitespace-nowrap shrink-0"
+                              title={
+                                conv.lastMessageTime
+                                  ? new Date(conv.lastMessageTime).toLocaleString()
+                                  : ""
+                              }
+                            >
+                              {formatConversationTime(conv.lastMessageTime)}
                             </span>
                           </div>
-                          <p className="text-xs text-brand-secondary/70 truncate mt-0.5">
+                          <p
+                            className="text-xs text-brand-secondary/70 truncate mt-0.5"
+                            title={conv.lastMessage || ""}
+                          >
                             {conv.lastMessage || "No messages yet"}
                           </p>
 
                           <div className="flex items-center justify-between mt-2">
-                            <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[9px] rounded-md font-bold uppercase tracking-wider">
-                              {status}
-                            </span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[9px] rounded-md font-bold uppercase tracking-wider shrink-0">
+                                {status}
+                              </span>
+                              {lead?.assignedTo && (
+                                <span
+                                  className="text-[9px] text-purple-300/60 truncate max-w-[90px]"
+                                  title={`Assigned Rep: ${getAssignedRepName(lead)}`}
+                                >
+                                  • {getAssignedRepName(lead)}
+                                </span>
+                              )}
+                            </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               {/* AI State badge */}
                               {lead?.aiEnabled ? (
                                 isLeadAiPaused(lead) ? (
@@ -1303,8 +1422,12 @@ export default function WhatsAppChat() {
 
                               {/* Unread badge */}
                               {conv.unreadCount > 0 && (
-                                <span className="w-5 h-5 flex items-center justify-center bg-emerald-500 text-black text-[10px] font-extrabold rounded-full">
-                                  {conv.unreadCount}
+                                <span
+                                  className="min-w-5 h-5 px-1.5 flex items-center justify-center bg-emerald-500 text-black text-[10px] font-extrabold rounded-full shadow-sm"
+                                  aria-label={`${conv.unreadCount} unread messages`}
+                                  title={`${conv.unreadCount} unread`}
+                                >
+                                  {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
                                 </span>
                               )}
                             </div>
@@ -1320,20 +1443,38 @@ export default function WhatsAppChat() {
         </div>
 
         {/* Center: Message Logs timeline */}
-        <div className="flex-1 flex flex-col bg-[#0f0822] min-w-0">
+        <div
+          className={`flex-1 flex flex-col bg-[#0f0822] min-w-0 ${
+            selectedConv ? "flex" : "hidden md:flex"
+          }`}
+        >
           {selectedConv ? (
             <>
               {/* Chat room Header */}
-              <div className="flex items-center justify-between p-3.5 border-b border-[#361c5a] bg-[#1a0c35]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="flex items-center justify-between p-3.5 border-b border-[#361c5a] bg-[#1a0c35] gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Mobile Back Button to return to list */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConv(null)}
+                    className="md:hidden p-1.5 -ml-1 text-purple-300 hover:text-white rounded-lg hover:bg-[#251347] focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none transition-colors shrink-0"
+                    aria-label="Back to conversations list"
+                    title="Back to conversations"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+
+                  <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-sm shrink-0 border border-purple-500/20">
                     {(selectedConv.leadId?.name || "Unknown")
                       .substring(0, 2)
                       .toUpperCase()}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="font-bold text-sm text-white">
+                      <h2
+                        className="font-bold text-sm text-white truncate max-w-[150px] sm:max-w-xs md:max-w-sm"
+                        title={selectedConv.leadId?.name || "Unknown Customer"}
+                      >
                         {selectedConv.leadId?.name || "Unknown Customer"}
                       </h2>
                       {/* Assigned Sales Person Badge */}
@@ -1341,50 +1482,89 @@ export default function WhatsAppChat() {
                         const repName = getAssignedRepName(selectedConv.leadId);
                         return (
                           <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 truncate max-w-[150px]"
                             title={`Assigned Sales Representative: ${repName}`}
                           >
-                            <UserCheck className="w-3 h-3 text-indigo-400" />
-                            <span>{repName}</span>
+                            <UserCheck className="w-3 h-3 text-indigo-400 shrink-0" />
+                            <span className="truncate">{repName}</span>
                           </span>
                         );
                       })()}
                     </div>
-                    <p className="text-xs text-brand-secondary/60">
-                      WhatsApp: {selectedConv.leadId?.phone}
-                    </p>
+                    <div className="flex items-center gap-1.5 text-xs text-brand-secondary/70">
+                      <span>
+                        WhatsApp: {formatPhoneNumber(selectedConv.leadId?.phone) || selectedConv.leadId?.phone || "N/A"}
+                      </span>
+                      {selectedConv.leadId?.phone && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedConv.leadId.phone);
+                            setCopiedPhone(true);
+                            setTimeout(() => setCopiedPhone(false), 2000);
+                          }}
+                          className="text-purple-400 hover:text-purple-200 p-0.5 rounded hover:bg-[#251347] focus-visible:ring-1 focus-visible:ring-purple-400"
+                          title="Copy phone number"
+                          aria-label="Copy phone number"
+                        >
+                          {copiedPhone ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0">
                   {/* Summarize Chat Button */}
                   {selectedConv && (
                     <button
                       id="summarize-chat-btn"
                       onClick={() => handleSummarizeChat(false)}
                       disabled={summaryLoading}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-600/30 transition-all disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-600/30 transition-all disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                       title="Summarize conversation with AI"
+                      aria-label="Summarize conversation with AI"
                     >
-                      {summaryLoading
-                        ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        : <Sparkles className="w-3.5 h-3.5" />}
-                      <span>{summaryLoading ? "Analyzing..." : "Summarize"}</span>
+                      {summaryLoading ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {summaryLoading ? "Analyzing..." : "Summarize"}
+                      </span>
                     </button>
                   )}
 
                   {/* AI toggle slider */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-brand-secondary/80 font-bold">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-brand-secondary/80 font-bold hidden sm:inline">
                       Auto-AI:
                     </span>
                     <button
+                      type="button"
                       onClick={handleToggleAI}
-                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none ${
                         selectedConv.leadId?.aiEnabled
                           ? "bg-purple-500"
                           : "bg-[#361c5a]"
                       }`}
+                      title={
+                        selectedConv.leadId?.aiEnabled
+                          ? "Disable AI automated replies for this lead"
+                          : "Enable AI automated replies for this lead"
+                      }
+                      aria-label={
+                        selectedConv.leadId?.aiEnabled
+                          ? "Disable AI auto-reply"
+                          : "Enable AI auto-reply"
+                      }
+                      role="switch"
+                      aria-checked={Boolean(selectedConv.leadId?.aiEnabled)}
                     >
                       <span
                         className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
@@ -1397,28 +1577,39 @@ export default function WhatsAppChat() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={() =>
-                      navigate(`/lead-details/${selectedConv.leadId?.id}`)
+                      navigate(`/lead-details/${selectedConv.leadId?.id || selectedConv.leadId?._id}`)
                     }
-                    className="text-xs font-bold text-purple-400 hover:text-purple-300 border border-purple-500/30 bg-purple-500/5 px-3 py-1.5 rounded-lg"
+                    className="text-xs font-bold text-purple-400 hover:text-purple-300 border border-purple-500/30 bg-purple-500/5 px-2.5 sm:px-3 py-1.5 rounded-lg focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none hidden sm:inline-block"
+                    title="View full lead record"
                   >
-                    View Lead Record
+                    View Lead
                   </button>
 
                   {/* Lead Qualifications Collapse / Expand Button */}
                   <button
                     type="button"
                     onClick={() => setIsQualPanelOpen((prev) => !prev)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none ${
                       isQualPanelOpen
                         ? "bg-purple-600/30 text-purple-200 border-purple-500/50"
                         : "bg-[#251347] text-purple-300 hover:text-white border-[#3e206c] hover:border-purple-400"
                     }`}
-                    title={isQualPanelOpen ? "Collapse Lead Qualifications to right" : "Expand Lead Qualifications"}
+                    title={
+                      isQualPanelOpen
+                        ? "Collapse Lead Qualifications panel"
+                        : "Expand Lead Qualifications panel"
+                    }
+                    aria-label={
+                      isQualPanelOpen
+                        ? "Collapse Lead Qualifications panel"
+                        : "Expand Lead Qualifications panel"
+                    }
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">
-                      {isQualPanelOpen ? "Hide Quals" : "Lead Qualifications"}
+                    <span className="hidden md:inline">
+                      {isQualPanelOpen ? "Hide Quals" : "Qualifications"}
                     </span>
                   </button>
                 </div>
@@ -1446,9 +1637,17 @@ export default function WhatsAppChat() {
               )}
 
               {/* Chat Timeline body */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div
+                className="flex-1 overflow-y-auto p-4 space-y-4"
+                role="region"
+                aria-label="Message history"
+              >
                 {messagesLoading ? (
-                  <div className="flex flex-col items-center justify-center h-full text-brand-secondary/50">
+                  <div
+                    className="flex flex-col items-center justify-center h-full text-brand-secondary/50"
+                    role="status"
+                    aria-live="polite"
+                  >
                     <RefreshCw className="w-8 h-8 animate-spin text-purple-400 mb-2" />
                     Fetching chat transcripts...
                   </div>
@@ -1463,7 +1662,7 @@ export default function WhatsAppChat() {
                           className={`flex ${isIncoming ? "justify-start" : "justify-end"}`}
                         >
                           <div
-                            className={`max-w-[70%] rounded-2xl p-3 shadow-md relative group ${
+                            className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 shadow-md relative group break-words [overflow-wrap:anywhere] ${
                               isIncoming
                                 ? "bg-[#281645] text-white rounded-tl-none border border-[#3e2164]"
                                 : "bg-purple-600 text-white rounded-tr-none"
@@ -1471,7 +1670,7 @@ export default function WhatsAppChat() {
                           >
                             {/* AI Generated tag badge */}
                             {!isIncoming && msg.aiGenerated && (
-                              <span className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-[#130a28]/40 text-purple-200 text-[8px] rounded font-semibold mb-1">
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#130a28]/40 text-purple-200 text-[8px] rounded font-semibold mb-1">
                                 <Bot className="w-2.5 h-2.5" /> AI Reply
                               </span>
                             )}
@@ -1484,7 +1683,7 @@ export default function WhatsAppChat() {
                                   className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold mb-1 ${
                                     msg.source === "cloud_api_campaign"
                                       ? "bg-purple-500/20 text-purple-200 border border-purple-400/20"
-                                      : "bg-[#130a28]/20 text-white"
+                                      : "bg-[#130a28]/25 text-white"
                                   }`}
                                 >
                                   {msg.source === "cloud_api_campaign" ? (
@@ -1503,27 +1702,28 @@ export default function WhatsAppChat() {
 
                             {/* Image Attachment Rendering */}
                             {msg.mediaUrl && msg.messageType === "image" && (
-                              <div className="mb-2 max-w-sm rounded-lg overflow-hidden border border-black/20">
+                              <div className="mb-2 max-w-full sm:max-w-sm rounded-lg overflow-hidden border border-black/20">
                                 <img
                                   src={
                                     msg.mediaUrl?.startsWith("http")
                                       ? msg.mediaUrl
                                       : `${BACKEND_URL}${msg.mediaUrl}`
                                   }
-                                  alt="Attachment"
-                                  className="w-full object-cover max-h-60"
+                                  alt="WhatsApp attachment"
+                                  className="w-full object-contain max-h-60"
                                 />
                               </div>
                             )}
 
                             {/* Audio message handler */}
                             {msg.mediaUrl && msg.messageType === "audio" && (
-                              <div className="mb-2 flex items-center gap-2 p-2 bg-black/10 rounded-lg">
-                                <Play className="w-4 h-4 text-purple-200 cursor-pointer" />
+                              <div className="mb-2 flex items-center gap-2 p-2 bg-black/20 rounded-lg max-w-full overflow-hidden">
+                                <Play className="w-4 h-4 text-purple-200 shrink-0" />
                                 <audio
                                   controls
                                   src={`${BACKEND_URL}${msg.mediaUrl}`}
-                                  className="h-6 w-48 text-xs"
+                                  className="h-8 max-w-full w-56 text-xs"
+                                  aria-label="Voice audio message"
                                 />
                               </div>
                             )}
@@ -1534,10 +1734,11 @@ export default function WhatsAppChat() {
                                 href={`${BACKEND_URL}${msg.mediaUrl}`}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="mb-2 flex items-center gap-2 p-2.5 bg-black/10 rounded-lg text-purple-100 hover:text-white border border-white/10"
+                                className="mb-2 flex items-center gap-2 p-2.5 bg-black/20 hover:bg-black/30 rounded-lg text-purple-100 hover:text-white border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
+                                aria-label={`Open document: ${msg.text || "Document Attachment"}`}
                               >
-                                <FileText className="w-5 h-5" />
-                                <span className="text-xs font-semibold truncate max-w-[180px]">
+                                <FileText className="w-5 h-5 text-purple-300 shrink-0" />
+                                <span className="text-xs font-semibold truncate max-w-[200px]">
                                   {msg.text || "Document Attachment"}
                                 </span>
                               </a>
@@ -1546,29 +1747,54 @@ export default function WhatsAppChat() {
                             {/* Location rendering */}
                             {msg.messageType === "location" && (
                               <div className="mb-2 flex items-center gap-2 p-2 bg-[#130a28]/35 rounded-lg text-xs font-medium">
-                                <MapPin className="w-4 h-4 text-red-400" />
+                                <MapPin className="w-4 h-4 text-red-400 shrink-0" />
                                 <span>{msg.text}</span>
                               </div>
                             )}
 
                             {/* Text message content */}
                             {msg.messageType !== "document" && (
-                              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                 {msg.text}
                               </p>
                             )}
 
                             {/* Date time and checkmarks status */}
-                            <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[9px] text-brand-secondary/65">
-                              <span>
-                                {new Date(msg.timestamp).toLocaleTimeString(
-                                  [],
-                                  { hour: "2-digit", minute: "2-digit" },
-                                )}
+                            <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[9px] text-brand-secondary/70">
+                              <span
+                                title={
+                                  msg.timestamp
+                                    ? new Date(msg.timestamp).toLocaleString([], {
+                                        dateStyle: "medium",
+                                        timeStyle: "short",
+                                      })
+                                    : ""
+                                }
+                              >
+                                {new Date(msg.timestamp).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
                               </span>
 
                               {!isIncoming && (
-                                <span>
+                                <span
+                                  className="inline-flex items-center"
+                                  title={
+                                    msg.status === "read"
+                                      ? "Read by customer"
+                                      : msg.status === "delivered"
+                                      ? "Delivered to device"
+                                      : "Sent to WhatsApp"
+                                  }
+                                  aria-label={
+                                    msg.status === "read"
+                                      ? "Read"
+                                      : msg.status === "delivered"
+                                      ? "Delivered"
+                                      : "Sent"
+                                  }
+                                >
                                   {msg.status === "read" ? (
                                     <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
                                   ) : msg.status === "delivered" ? (
@@ -1587,7 +1813,11 @@ export default function WhatsAppChat() {
                     {/* Live typing status */}
                     {isTyping && (
                       <div className="flex justify-start">
-                        <div className="bg-[#281645] text-purple-400 rounded-2xl rounded-tl-none p-3 border border-[#3e2164] flex items-center gap-2">
+                        <div
+                          className="bg-[#281645] text-purple-400 rounded-2xl rounded-tl-none p-3 border border-[#3e2164] flex items-center gap-2"
+                          role="status"
+                          aria-live="polite"
+                        >
                           <Bot className="w-4 h-4 animate-bounce" />
                           <span className="text-xs font-semibold">
                             Gemini AI is crafting reply...
@@ -1602,61 +1832,153 @@ export default function WhatsAppChat() {
 
               {/* Chat Input footer — Admin sees view-only banner; reps get send input */}
               {isManager ? (
-                <div className="p-3.5 border-t border-[#361c5a] bg-[#1a0c35] flex items-center justify-center gap-2 text-xs font-semibold text-purple-200">
+                <div
+                  className="p-3.5 border-t border-[#361c5a] bg-[#1a0c35] flex items-center justify-center gap-2 text-xs font-semibold text-purple-200"
+                  role="status"
+                >
                   <Eye className="w-4 h-4 text-purple-400 flex-shrink-0" />
                   <span>
-                    <span className="font-bold text-purple-300">Admin Oversight Mode:</span>{" "}
+                    <span className="font-bold text-purple-300">
+                      Admin Oversight Mode:
+                    </span>{" "}
                     View-only access. Only{" "}
                     <span className="text-purple-100 font-bold">
-                      {selectedConv?.leadId?.assignedTo?.name || "the assigned representative"}
+                      {selectedConv?.leadId?.assignedTo?.name ||
+                        "the assigned representative"}
                     </span>{" "}
-                    can send messages.
+                    or organization line can send messages.
                   </span>
                 </div>
               ) : (
-                <form
-                  onSubmit={handleSend}
-                  className="p-3 border-t border-[#361c5a] bg-[#1a0c35] flex items-center gap-2"
-                >
-                  <div className="flex-1 relative flex items-center bg-[#21103f] border border-[#3e206c] rounded-xl px-4 py-2.5">
-                    <input
-                      type="text"
-                      placeholder="Type message..."
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      className="w-full bg-transparent outline-none text-white text-sm"
-                    />
-                  </div>
+                <div className="border-t border-[#361c5a] bg-[#1a0c35]">
+                  {sendError && (
+                    <div
+                      className="px-4 py-2 bg-red-900/30 border-b border-red-500/30 text-red-200 text-xs flex items-center justify-between gap-2"
+                      role="alert"
+                    >
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        <span>{sendError}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSendError("")}
+                        className="text-red-300 hover:text-white p-0.5 rounded focus-visible:ring-1 focus-visible:ring-red-400"
+                        aria-label="Dismiss error"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
 
-                  <button
-                    type="submit"
-                    className="p-2.5 bg-purple-500 hover:bg-purple-600 rounded-xl text-white transition-all shrink-0 shadow-lg"
+                  <form
+                    onSubmit={handleSend}
+                    className="p-3 flex items-center gap-2"
                   >
-                    <Send className="w-5 h-5" />
-                  </button>
-                </form>
+                    <label
+                      htmlFor="whatsapp-chat-message-input"
+                      className="sr-only"
+                    >
+                      Type WhatsApp message
+                    </label>
+                    <div className="flex-1 relative flex items-center bg-[#21103f] border border-[#3e206c] focus-within:border-purple-400 focus-within:ring-1 focus-within:ring-purple-400/50 rounded-xl px-3.5 py-2 transition-all">
+                      <input
+                        id="whatsapp-chat-message-input"
+                        type="text"
+                        placeholder="Type a WhatsApp message... (Press Enter to send)"
+                        value={inputValue}
+                        onChange={(e) => {
+                          setInputValue(e.target.value);
+                          if (sendError) setSendError("");
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend(e);
+                          }
+                        }}
+                        className="w-full bg-transparent outline-none text-white text-sm placeholder-purple-300/40"
+                      />
+                      {inputValue && (
+                        <button
+                          type="button"
+                          onClick={() => setInputValue("")}
+                          className="text-purple-400 hover:text-white p-1 rounded-md focus-visible:ring-1 focus-visible:ring-purple-400 ml-1"
+                          title="Clear message text"
+                          aria-label="Clear message text"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={!inputValue.trim() || sendingMessage}
+                      className="p-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:hover:bg-purple-600 disabled:cursor-not-allowed rounded-xl text-white transition-all shrink-0 shadow-lg focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
+                      title={
+                        !inputValue.trim()
+                          ? "Type a message to send"
+                          : "Send message"
+                      }
+                      aria-label="Send WhatsApp message"
+                    >
+                      {sendingMessage ? (
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Send className="w-5 h-5" />
+                      )}
+                    </button>
+                  </form>
+                </div>
               )}
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-8 text-brand-secondary/45">
-              {primarySession.status === "disconnected" && (isSalesRep || secondarySession.status === "disconnected") ? (
-                <div className="max-w-md p-6 rounded-2xl bg-[#1e0e3c] border border-[#3e206c] flex flex-col items-center shadow-xl animate-fadeIn text-center">
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 sm:p-8 text-brand-secondary/50">
+              {primarySession.status === "disconnected" &&
+              (isSalesRep || secondarySession.status === "disconnected") ? (
+                <div className="max-w-md w-full p-6 sm:p-8 rounded-2xl bg-[#1e0e3c] border border-[#3e206c] flex flex-col items-center shadow-xl animate-fadeIn text-center">
                   <div className="w-14 h-14 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mb-4 border border-purple-500/20">
                     <QrCode className="w-7 h-7" />
                   </div>
-                  <h2 className="text-lg font-bold text-white mb-1.5">
-                    {isSalesRep ? "Connect Your WhatsApp Line" : "Connect WhatsApp Channels"}
+                  <h2 className="text-lg font-bold text-white mb-2">
+                    {isSalesRep
+                      ? "Connect Your WhatsApp Line"
+                      : "Connect WhatsApp Channels"}
                   </h2>
-                  <p className="text-xs text-brand-secondary/80 mb-5 leading-relaxed max-w-xs">
+                  <p className="text-xs text-brand-secondary/80 mb-5 leading-relaxed max-w-sm">
                     {isSalesRep
                       ? "Connect your authorized WhatsApp account to start chatting with customer leads directly."
                       : whatsappLineLimit >= 2
-                      ? "Your organization supports 2 simultaneous WhatsApp connections. Click below to view and connect both lines."
+                      ? "Your organization supports 2 simultaneous WhatsApp connections. Click below to view and link both lines."
                       : "Connect your organization WhatsApp account to activate automated lead capture and real-time CRM sync."}
                   </p>
+
+                  {/* Step-by-step guidance */}
+                  <div className="w-full bg-[#130a28]/60 border border-[#361c5a] rounded-xl p-3.5 mb-5 text-left text-xs space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-purple-300">
+                      Quick Setup Steps:
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1 text-purple-200/80 text-[11px]">
+                      <li>
+                        Click the <strong className="text-white">Connect</strong>{" "}
+                        button below to open the QR modal.
+                      </li>
+                      <li>
+                        Open <strong className="text-white">WhatsApp</strong> on
+                        your phone &gt;{" "}
+                        <strong className="text-white">Linked Devices</strong>.
+                      </li>
+                      <li>
+                        Scan the QR code displayed on screen to start syncing
+                        chats.
+                      </li>
+                    </ol>
+                  </div>
+
                   <button
                     onClick={() => setConnectModalOpen(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-lg shadow-purple-500/25 transition-all cursor-pointer"
+                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-lg shadow-purple-500/25 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                   >
                     <QrCode className="w-4 h-4" />
                     <span>
@@ -1669,16 +1991,18 @@ export default function WhatsAppChat() {
                   </button>
                 </div>
               ) : (
-                <>
-                  <MessageSquare className="w-16 h-16 mb-4 text-[#381d5a]" />
-                  <h2 className="text-xl font-bold text-white mb-1">
+                <div className="max-w-sm flex flex-col items-center">
+                  <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-4 border border-purple-500/20">
+                    <MessageSquare className="w-8 h-8 text-purple-400" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white mb-2">
                     Select a Conversation
                   </h2>
-                  <p className="text-sm max-w-xs text-brand-secondary/70">
+                  <p className="text-xs sm:text-sm text-brand-secondary/70 leading-relaxed">
                     Pick a chat thread from the left panel to begin managing
-                    customer inquiries or review AI actions.
+                    customer inquiries, review AI actions, or qualify leads.
                   </p>
-                </>
+                </div>
               )}
             </div>
           )}
@@ -1686,7 +2010,7 @@ export default function WhatsAppChat() {
 
         {/* Right side: AI Qualification insights sidebar */}
         {selectedConv && isQualPanelOpen && (
-          <div className="w-80 border-l border-[#361c5a] bg-[#1a0c35] flex flex-col overflow-y-auto shrink-0 p-4 space-y-6 transition-all duration-300">
+          <div className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 md:static md:w-80 border-l border-[#361c5a] bg-[#1a0c35] flex flex-col overflow-y-auto shrink-0 p-4 space-y-6 transition-all duration-300 shadow-2xl md:shadow-none">
             {/* Qualification Form */}
             <div>
               <div className="flex items-center justify-between mb-4 border-b border-[#361c5a] pb-2 text-white">
@@ -1699,8 +2023,9 @@ export default function WhatsAppChat() {
                 <button
                   type="button"
                   onClick={() => setIsQualPanelOpen(false)}
-                  title="Collapse panel to right"
-                  className="p-1 rounded-lg hover:bg-[#251347] text-purple-300 hover:text-white transition-colors cursor-pointer"
+                  title="Close qualifications panel"
+                  aria-label="Close qualifications panel"
+                  className="p-1 rounded-lg hover:bg-[#251347] text-purple-300 hover:text-white transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -1953,7 +2278,7 @@ export default function WhatsAppChat() {
                 <button
                   type="submit"
                   disabled={savingQual}
-                  className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-bold py-2 rounded-lg text-xs transition-colors"
+                  className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-bold py-2 rounded-lg text-xs transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                 >
                   {savingQual ? "Saving..." : "Update Qualification Data"}
                 </button>
@@ -1977,8 +2302,11 @@ export default function WhatsAppChat() {
                   >
                     {tag}
                     <button
+                      type="button"
                       onClick={() => handleDeleteTag(tag)}
-                      className="text-purple-400 hover:text-red-400 transition-colors ml-1 font-bold text-[10px]"
+                      className="text-purple-400 hover:text-red-400 transition-colors ml-1 font-bold text-[10px] focus-visible:ring-1 focus-visible:ring-purple-400 rounded"
+                      title={`Remove ${tag} tag`}
+                      aria-label={`Remove tag ${tag}`}
                     >
                       ×
                     </button>
@@ -1990,13 +2318,14 @@ export default function WhatsAppChat() {
                 <input
                   type="text"
                   placeholder="New tag..."
+                  aria-label="New lead tag"
                   value={newTagInput}
                   onChange={(e) => setNewTagInput(e.target.value)}
-                  className="flex-grow bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
+                  className="flex-grow bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white text-xs rounded-lg p-2 outline-none focus-visible:ring-1 focus-visible:ring-purple-400"
                 />
                 <button
                   type="submit"
-                  className="px-3 bg-[#3e206c] hover:bg-[#592e9c] text-white rounded-lg text-xs"
+                  className="px-3 bg-[#3e206c] hover:bg-[#592e9c] text-white rounded-lg text-xs font-semibold focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                 >
                   Add
                 </button>
@@ -2065,31 +2394,15 @@ export default function WhatsAppChat() {
 
               <div className="flex flex-col gap-2">
                 <button
+                  type="button"
                   onClick={() => setFollowUpOpen(true)}
-                  className="flex items-center justify-center gap-2 w-full bg-[#361c5a] hover:bg-[#482575] text-white py-2 rounded-lg text-xs font-semibold transition-all border border-[#502b7b]"
+                  className="flex items-center justify-center gap-2 w-full bg-[#361c5a] hover:bg-[#482575] text-white py-2 rounded-lg text-xs font-semibold transition-all border border-[#502b7b] focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                 >
                   <Calendar className="w-4 h-4 text-purple-400" />
                   Schedule Follow Up
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Collapsed state tab to reopen Lead Qualifications */}
-        {selectedConv && !isQualPanelOpen && (
-          <div className="border-l border-[#361c5a] bg-[#1a0c35] flex flex-col items-center py-4 px-1.5 shrink-0 transition-all duration-300">
-            <button
-              type="button"
-              onClick={() => setIsQualPanelOpen(true)}
-              className="p-2 rounded-xl bg-[#21103f] hover:bg-[#361c5a] border border-[#3e206c] hover:border-purple-400 text-purple-300 hover:text-white transition-all cursor-pointer flex flex-col items-center gap-2 group shadow-sm"
-              title="Expand Lead Qualifications"
-            >
-              <ChevronLeft className="w-4 h-4 text-purple-400 group-hover:-translate-x-0.5 transition-transform" />
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 [writing-mode:vertical-rl] rotate-180 py-2">
-                Qualifications
-              </span>
-            </button>
           </div>
         )}
       </div>
@@ -2104,8 +2417,10 @@ export default function WhatsAppChat() {
                 Schedule CRM Follow Up
               </h3>
               <button
+                type="button"
                 onClick={() => setFollowUpOpen(false)}
-                className="p-1 hover:bg-[#361c5a] rounded-lg text-brand-secondary/80"
+                className="p-1 hover:bg-[#361c5a] rounded-lg text-brand-secondary/80 focus-visible:ring-1 focus-visible:ring-purple-400"
+                aria-label="Close follow up modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2121,7 +2436,7 @@ export default function WhatsAppChat() {
                   onChange={(e) =>
                     setFollowUpData({ ...followUpData, type: e.target.value })
                   }
-                  className="w-full bg-[#21103f] border border-[#3e206c] text-white rounded-lg p-2.5 outline-none"
+                  className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
                 >
                   <option value="WhatsApp">WhatsApp Message</option>
                   <option value="Call">Phone Call</option>
@@ -2142,7 +2457,7 @@ export default function WhatsAppChat() {
                     onChange={(e) =>
                       setFollowUpData({ ...followUpData, date: e.target.value })
                     }
-                    className="w-full bg-[#21103f] border border-[#3e206c] text-white rounded-lg p-2.5 outline-none"
+                    className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
                   />
                 </div>
                 <div>
@@ -2156,7 +2471,7 @@ export default function WhatsAppChat() {
                     onChange={(e) =>
                       setFollowUpData({ ...followUpData, time: e.target.value })
                     }
-                    className="w-full bg-[#21103f] border border-[#3e206c] text-white rounded-lg p-2.5 outline-none"
+                    className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
                     placeholder="e.g. 11:00 AM"
                   />
                 </div>
@@ -2183,7 +2498,7 @@ export default function WhatsAppChat() {
                             priority: e.target.value,
                           })
                         }
-                        className="text-purple-400 focus:ring-0 bg-transparent border-[#3e206c]"
+                        className="text-purple-400 focus:ring-0 bg-transparent border-[#3e206c] focus-visible:ring-2 focus-visible:ring-purple-400"
                       />
                       <span>{p}</span>
                     </label>
@@ -2202,14 +2517,14 @@ export default function WhatsAppChat() {
                   onChange={(e) =>
                     setFollowUpData({ ...followUpData, notes: e.target.value })
                   }
-                  className="w-full bg-[#21103f] border border-[#3e206c] text-white rounded-lg p-2.5 outline-none"
+                  className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
                   placeholder="Task instruction for sales agent..."
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors shadow-lg"
+                className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors shadow-lg focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
               >
                 Schedule Task
               </button>
@@ -2259,15 +2574,20 @@ export default function WhatsAppChat() {
               </div>
               <div className="flex gap-2">
                 <button
+                  type="button"
                   onClick={() => handleSummarizeChat(true)}
                   title="Re-analyze conversation"
-                  className="p-1.5 rounded-lg text-purple-400 hover:text-purple-200 hover:bg-purple-500/10 transition-colors"
+                  aria-label="Re-analyze conversation with AI"
+                  className="p-1.5 rounded-lg text-purple-400 hover:text-purple-200 hover:bg-purple-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setSummaryModal(false)}
-                  className="p-1.5 rounded-lg text-purple-400 hover:text-white hover:bg-purple-500/10 transition-colors"
+                  title="Close summary modal"
+                  aria-label="Close summary modal"
+                  className="p-1.5 rounded-lg text-purple-400 hover:text-white hover:bg-purple-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -2352,6 +2672,7 @@ export default function WhatsAppChat() {
                       {chatSummary.generatedAt ? ` · ${new Date(chatSummary.generatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}` : ""}
                     </span>
                     <button
+                      type="button"
                       id="copy-summary-btn"
                       onClick={() => {
                         const text = [
@@ -2362,7 +2683,9 @@ export default function WhatsAppChat() {
                         ].join("");
                         navigator.clipboard.writeText(text);
                       }}
-                      className="text-xs text-purple-400 hover:text-purple-200 flex items-center gap-1 transition-colors"
+                      className="text-xs text-purple-400 hover:text-purple-200 flex items-center gap-1 transition-colors px-2 py-1 rounded-md focus-visible:ring-1 focus-visible:ring-purple-400 focus-visible:outline-none"
+                      title="Copy summary to clipboard"
+                      aria-label="Copy summary to clipboard"
                     >
                       <Copy className="w-3.5 h-3.5" /> Copy
                     </button>

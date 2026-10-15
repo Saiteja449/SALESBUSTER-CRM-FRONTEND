@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { LogOut, X, AlertTriangle } from "lucide-react";
 
 export default function LogoutConfirmModal({
@@ -8,17 +9,24 @@ export default function LogoutConfirmModal({
   currentUser = null,
   organization = null,
 }) {
-  // Close on Escape key press
+  // Close on Escape key press and prevent background scrolling
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleKeyDown = (e) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape") {
         onClose();
       }
     };
-    if (isOpen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
-    return () => window.removeEventListener("keydown", handleKeyDown);
+
+    window.addEventListener("keydown", handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -29,16 +37,16 @@ export default function LogoutConfirmModal({
   const displayRole = currentUser?.role || "";
   const displayOrg = organization?.name || currentUser?.organizationName || "";
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/65 backdrop-blur-xs animate-fadeIn"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/65 backdrop-blur-xs animate-fadeIn overflow-y-auto"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="logout-modal-title"
     >
       <div
-        className="relative w-full max-w-md bg-bg-card border border-border-main rounded-2xl shadow-2xl overflow-hidden animate-scaleUp text-text-primary"
+        className="relative w-full max-w-md bg-bg-card border border-border-main rounded-2xl shadow-2xl overflow-hidden animate-scaleUp text-text-primary my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top subtle danger gradient accent line */}
@@ -48,7 +56,7 @@ export default function LogoutConfirmModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60 transition-colors"
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none"
           aria-label="Close modal"
         >
           <X className="w-5 h-5" />
@@ -110,14 +118,14 @@ export default function LogoutConfirmModal({
             <button
               type="button"
               onClick={onClose}
-              className="w-full sm:flex-1 py-2.5 px-4 rounded-xl border border-border-main bg-bg-card hover:bg-bg-secondary text-text-primary font-semibold text-sm transition-all duration-150 active:scale-[0.98] cursor-pointer"
+              className="w-full sm:flex-1 py-2.5 px-4 rounded-xl border border-border-main bg-bg-card hover:bg-bg-secondary text-text-primary font-semibold text-sm transition-all duration-150 active:scale-[0.98] cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none"
             >
               Stay Logged In
             </button>
             <button
               type="button"
               onClick={onConfirm}
-              className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-semibold text-sm shadow-md shadow-red-500/25 transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-semibold text-sm shadow-md shadow-red-500/25 transition-all duration-150 active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none"
             >
               <LogOut className="w-4 h-4" />
               <span>Yes, Log Out</span>
@@ -127,4 +135,8 @@ export default function LogoutConfirmModal({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined"
+    ? createPortal(modalContent, document.body)
+    : null;
 }

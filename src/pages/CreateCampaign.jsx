@@ -17,17 +17,22 @@ import {
   Layers,
   Phone,
   Radio,
+  Search,
+  Filter,
+  X,
+  HelpCircle,
+  RotateCcw,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import CloudSettingsModal from "../components/whatsapp/CloudSettingsModal.jsx";
 
 const STEPS = [
-  { id: 1, title: "Campaign Info", icon: Layers },
-  { id: 2, title: "Target Audience", icon: Users },
-  { id: 3, title: "Select Template", icon: FileText },
-  { id: 4, title: "Variable Mapping", icon: Sparkles },
-  { id: 5, title: "Review & Launch", icon: Send },
+  { id: 1, title: "Campaign Info", icon: Layers, desc: "Name & Purpose" },
+  { id: 2, title: "Target Audience", icon: Users, desc: "Segments & Filters" },
+  { id: 3, title: "Select Template", icon: FileText, desc: "Meta Approved" },
+  { id: 4, title: "Variable Mapping", icon: Sparkles, desc: "Personalize Tags" },
+  { id: 5, title: "Review & Launch", icon: Send, desc: "Schedule & Send" },
 ];
 
 export default function CreateCampaign() {
@@ -66,6 +71,8 @@ export default function CreateCampaign() {
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [templateSearch, setTemplateSearch] = useState("");
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState("All");
 
   // Step 4: Variable mappings & Header media
   const [variableMappings, setVariableMappings] = useState([]);
@@ -222,8 +229,8 @@ export default function CreateCampaign() {
     let rendered = bodyComp.text;
     const sampleValues = {
       name: "John Doe",
-      service: "Elevator Modernization",
-      city: "Hyderabad",
+      service: "Premium Service",
+      city: "Mumbai",
       phone: "+91 98765 43210",
       companyName: "SalesBuster AI",
       assignedTo: "Rahul Sharma",
@@ -284,7 +291,11 @@ export default function CreateCampaign() {
       return;
     }
 
-    if (scheduleMode === "recurring" && recurringFrequency === "custom_dates" && customDatesList.length === 0) {
+    if (
+      scheduleMode === "recurring" &&
+      recurringFrequency === "custom_dates" &&
+      customDatesList.length === 0
+    ) {
       setError("Please add at least one run date for specific dates scheduling.");
       return;
     }
@@ -359,21 +370,35 @@ export default function CreateCampaign() {
     }
   };
 
+  const filteredTemplates = templates.filter((t) => {
+    const matchSearch =
+      !templateSearch ||
+      t.name?.toLowerCase().includes(templateSearch.toLowerCase()) ||
+      t.components?.some((c) =>
+        c.text?.toLowerCase().includes(templateSearch.toLowerCase())
+      );
+    const categoryStr =
+      typeof t.category === "object" ? t.category?.name : t.category;
+    const matchCat =
+      templateCategoryFilter === "All" || categoryStr === templateCategoryFilter;
+    return matchSearch && matchCat;
+  });
+
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto w-full">
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => navigate("/whatsapp/campaigns")}
-          className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+          className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Campaigns</span>
         </button>
 
-        <span className="text-xs font-bold text-purple-600 dark:text-purple-400">
-          Step {currentStep} of {STEPS.length}
+        <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+          Step {currentStep} of {STEPS.length}: {STEPS[currentStep - 1]?.title}
         </span>
       </div>
 
@@ -394,7 +419,7 @@ export default function CreateCampaign() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs shrink-0 self-start sm:self-auto"
+            className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white transition-all shadow-xs shrink-0 self-start sm:self-auto cursor-pointer"
           >
             Setup Cloud API
           </button>
@@ -404,7 +429,7 @@ export default function CreateCampaign() {
       {/* Stepper Wizard Bar */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
         <div className="flex items-center justify-between relative">
-          {STEPS.map((step) => {
+          {STEPS.map((step, idx) => {
             const Icon = step.icon;
             const isDone = currentStep > step.id;
             const isCurrent = currentStep === step.id;
@@ -415,7 +440,9 @@ export default function CreateCampaign() {
                 onClick={() => {
                   if (step.id < currentStep) setCurrentStep(step.id);
                 }}
-                className={`flex flex-col items-center gap-1.5 z-10 cursor-pointer transition-all ${
+                className={`flex flex-col items-center gap-1.5 z-10 transition-all ${
+                  step.id < currentStep ? "cursor-pointer" : ""
+                } ${
                   isCurrent
                     ? "text-purple-600 dark:text-purple-400 font-bold"
                     : isDone
@@ -434,7 +461,10 @@ export default function CreateCampaign() {
                 >
                   {isDone ? <Check className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
                 </div>
-                <span className="text-[11px] hidden sm:block">{step.title}</span>
+                <div className="text-center hidden sm:block">
+                  <span className="text-[11px] block">{step.title}</span>
+                  <span className="text-[9px] text-slate-400 block">{step.desc}</span>
+                </div>
               </div>
             );
           })}
@@ -442,7 +472,7 @@ export default function CreateCampaign() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 flex items-start gap-3">
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 flex items-start gap-3 animate-fadeIn">
           <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
           <div className="text-xs text-rose-700 dark:text-rose-300 font-medium leading-relaxed">
             {error}
@@ -460,21 +490,24 @@ export default function CreateCampaign() {
                 Campaign Information
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Give your WhatsApp campaign an identifiable title
+                Give your WhatsApp campaign a clear, identifiable title to track results
               </p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Campaign Name *
+                Campaign Name <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
-                placeholder="e.g. March Elevator Modernization Special"
+                placeholder="e.g. March Product Launch Special"
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
               />
+              <p className="text-[11px] text-slate-400 mt-1">
+                This name is only visible internally within your CRM team.
+              </p>
             </div>
           </div>
         )}
@@ -494,17 +527,17 @@ export default function CreateCampaign() {
 
               {/* Estimate Badge */}
               <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800/80 flex items-center gap-3">
-                <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                <Users className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
                 <div>
                   <div className="text-xs font-bold text-slate-900 dark:text-white">
                     {estimating ? (
-                      "Calculating..."
+                      <span className="animate-pulse">Calculating estimate...</span>
                     ) : (
                       <>
                         <span className="text-base text-purple-600 dark:text-purple-400">
                           {audienceEstimate?.eligibleCount || 0}
                         </span>{" "}
-                        Recipients
+                        Eligible Recipients
                       </>
                     )}
                   </div>
@@ -549,7 +582,7 @@ export default function CreateCampaign() {
                           setSelectedBatchTag("");
                         }
                       }}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                         active
                           ? "bg-purple-600 text-white shadow-xs font-bold"
                           : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-purple-500/40"
@@ -617,18 +650,6 @@ export default function CreateCampaign() {
                       No specific batch tags detected yet. All imported old leads will be targeted.
                     </div>
                   )}
-
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
-                    {selectedBatchTag ? (
-                      <span className="text-purple-600 dark:text-purple-400 font-semibold">
-                        ✓ Locked to batch "{selectedBatchTag}". Other Excel uploads are excluded.
-                      </span>
-                    ) : (
-                      <span>
-                        💡 Select your specific Excel batch above to run this campaign only for that upload.
-                      </span>
-                    )}
-                  </p>
                 </div>
               )}
             </div>
@@ -662,7 +683,7 @@ export default function CreateCampaign() {
                               : [...prev.leadStatus, status],
                           }));
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                           active
                             ? "bg-purple-600 text-white shadow-xs"
                             : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
@@ -701,7 +722,7 @@ export default function CreateCampaign() {
                               : [...prev.services, serviceName],
                           }));
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                           active
                             ? "bg-purple-600 text-white shadow-xs"
                             : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
@@ -739,62 +760,82 @@ export default function CreateCampaign() {
                 </div>
               </label>
             </div>
-
-            {/* Dynamic Scheduled Checks Note */}
-            <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/60 flex items-start gap-3">
-              <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
-              <div className="text-xs">
-                <span className="font-bold text-slate-900 dark:text-white">
-                  Dynamic Check on Scheduled Dates
-                </span>
-                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
-                  When you schedule this campaign in Step 5, SalesBuster dynamically checks for leads matching your selected <strong>Lead Statuses</strong> ({audienceCriteria.leadStatus.length > 0 ? audienceCriteria.leadStatus.join(", ") : "All"}) and <strong>Services</strong> ({audienceCriteria.services.length > 0 ? audienceCriteria.services.join(", ") : "All"}) on each scheduled date, picking up newly added leads while skipping already messaged contacts.
-                </p>
-              </div>
-            </div>
           </div>
         )}
 
         {/* ================= STEP 3: SELECT TEMPLATE ================= */}
         {currentStep === 3 && (
           <div className="space-y-6">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
-                Select Approved WhatsApp Template
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Choose the pre-approved Meta template for this campaign
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+                  Select Approved WhatsApp Template
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Choose the pre-approved Meta template for this campaign
+                </p>
+              </div>
+
+              {/* Template Search Bar */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search templates..."
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                {templateSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setTemplateSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {loadingTemplates ? (
               <div className="py-12 text-center text-slate-400 text-xs animate-pulse">
-                Loading templates...
+                Loading approved templates...
               </div>
-            ) : templates.length === 0 ? (
+            ) : filteredTemplates.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700">
                 <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
                 <p className="text-xs text-slate-700 dark:text-slate-300 font-bold mb-1">
-                  No approved templates found
+                  No matching approved templates found
                 </p>
                 <p className="text-xs text-slate-500 mb-3">
-                  Please visit the Templates section to sync your Meta templates.
+                  {templateSearch
+                    ? "Try clearing the search term."
+                    : "Please visit the Templates section to create or sync your Meta templates."}
                 </p>
                 <button
                   type="button"
                   onClick={() => navigate("/whatsapp/templates")}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 text-white"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 text-white cursor-pointer"
                 >
                   Go to Templates
                 </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {templates.map((template, idx) => {
-                  const tId = template._id || template.id || template.metaTemplateId || `tpl_${idx}`;
-                  const selectedId = selectedTemplate?._id || selectedTemplate?.id || selectedTemplate?.metaTemplateId;
+                {filteredTemplates.map((template, idx) => {
+                  const tId =
+                    template._id ||
+                    template.id ||
+                    template.metaTemplateId ||
+                    `tpl_${idx}`;
+                  const selectedId =
+                    selectedTemplate?._id ||
+                    selectedTemplate?.id ||
+                    selectedTemplate?.metaTemplateId;
                   const isSelected = selectedId === tId;
-                  const body = template.components?.find((c) => c.type === "BODY")?.text || "";
+                  const body =
+                    template.components?.find((c) => c.type === "BODY")?.text || "";
 
                   return (
                     <div
@@ -809,7 +850,9 @@ export default function CreateCampaign() {
                       <div>
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                            {typeof template.category === "object" ? template.category?.name : (template.category || "UTILITY")}
+                            {typeof template.category === "object"
+                              ? template.category?.name
+                              : template.category || "UTILITY"}
                           </span>
                           <span className="text-[10px] text-slate-400 font-medium">
                             {template.variableCount || 0} variables
@@ -825,7 +868,7 @@ export default function CreateCampaign() {
 
                       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                         <span className="text-[10px] text-slate-400">
-                          {template.language}
+                          {template.language || "en_US"}
                         </span>
                         {isSelected && (
                           <span className="text-purple-600 dark:text-purple-400 font-bold flex items-center gap-1">
@@ -894,7 +937,7 @@ export default function CreateCampaign() {
                                 sourceType: "lead_field",
                               })
                             }
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md cursor-pointer ${
                               mapping.sourceType === "lead_field"
                                 ? "bg-purple-600 text-white"
                                 : "text-slate-400"
@@ -909,7 +952,7 @@ export default function CreateCampaign() {
                                 sourceType: "static_value",
                               })
                             }
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md cursor-pointer ${
                               mapping.sourceType === "static_value"
                                 ? "bg-purple-600 text-white"
                                 : "text-slate-400"
@@ -950,7 +993,7 @@ export default function CreateCampaign() {
                             </label>
                             <input
                               type="text"
-                              placeholder="e.g. Customer"
+                              placeholder="e.g. Valued Customer"
                               value={mapping.fallback}
                               onChange={(e) =>
                                 handleUpdateMapping(idx, {
@@ -1025,7 +1068,7 @@ export default function CreateCampaign() {
           <div className="space-y-6 max-w-xl">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
-                Scheduling & Launch Options
+                Scheduling &amp; Launch Options
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Choose whether to dispatch this campaign immediately or schedule it to run on specific dates based on lead status and service.
@@ -1049,13 +1092,19 @@ export default function CreateCampaign() {
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Zap className={`w-4 h-4 ${scheduleMode === "immediate" ? "text-purple-600 dark:text-purple-400" : "text-slate-400"}`} />
+                    <Zap
+                      className={`w-4 h-4 ${
+                        scheduleMode === "immediate"
+                          ? "text-purple-600 dark:text-purple-400"
+                          : "text-slate-400"
+                      }`}
+                    />
                     <span className="text-xs font-bold text-slate-900 dark:text-white">
                       Immediate
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                    Launch now to currently eligible leads at 5 msg/sec.
+                    Launch now to currently eligible leads at safe throttle speed.
                   </p>
                 </div>
 
@@ -1069,7 +1118,13 @@ export default function CreateCampaign() {
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Clock className={`w-4 h-4 ${scheduleMode === "once" ? "text-purple-600 dark:text-purple-400" : "text-slate-400"}`} />
+                    <Clock
+                      className={`w-4 h-4 ${
+                        scheduleMode === "once"
+                          ? "text-purple-600 dark:text-purple-400"
+                          : "text-slate-400"
+                      }`}
+                    />
                     <span className="text-xs font-bold text-slate-900 dark:text-white">
                       Schedule Once
                     </span>
@@ -1089,13 +1144,19 @@ export default function CreateCampaign() {
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Calendar className={`w-4 h-4 ${scheduleMode === "recurring" ? "text-purple-600 dark:text-purple-400" : "text-slate-400"}`} />
+                    <Calendar
+                      className={`w-4 h-4 ${
+                        scheduleMode === "recurring"
+                          ? "text-purple-600 dark:text-purple-400"
+                          : "text-slate-400"
+                      }`}
+                    />
                     <span className="text-xs font-bold text-slate-900 dark:text-white">
                       Recurring Checks
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                    Check on dates & message matching status/service leads.
+                    Check on dates &amp; message matching status/service leads.
                   </p>
                 </div>
               </div>
@@ -1106,7 +1167,7 @@ export default function CreateCampaign() {
               <div className="p-4 rounded-2xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/50 space-y-3.5 animate-fadeIn">
                 <div className="flex items-center gap-2 text-xs font-bold text-purple-700 dark:text-purple-300">
                   <Clock className="w-4 h-4" />
-                  <span>One-Time Scheduled Launch Date & Time</span>
+                  <span>One-Time Scheduled Launch Date &amp; Time</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1170,7 +1231,7 @@ export default function CreateCampaign() {
                         key={f.id}
                         type="button"
                         onClick={() => setRecurringFrequency(f.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                           recurringFrequency === f.id
                             ? "bg-purple-600 text-white shadow-xs font-bold"
                             : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
@@ -1210,7 +1271,7 @@ export default function CreateCampaign() {
                                   : [...prev, item.day]
                               );
                             }}
-                            className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${
+                            className={`w-9 h-9 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                               active
                                 ? "bg-purple-600 text-white shadow-xs"
                                 : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
@@ -1246,7 +1307,7 @@ export default function CreateCampaign() {
                             setNewDateInput("");
                           }
                         }}
-                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-purple-600 text-white hover:bg-purple-700"
+                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-purple-600 text-white hover:bg-purple-700 cursor-pointer"
                       >
                         + Add Date
                       </button>
@@ -1263,9 +1324,11 @@ export default function CreateCampaign() {
                             <button
                               type="button"
                               onClick={() =>
-                                setCustomDatesList((prev) => prev.filter((item) => item !== d))
+                                setCustomDatesList((prev) =>
+                                  prev.filter((item) => item !== d)
+                                )
                               }
-                              className="text-purple-600 dark:text-purple-400 hover:text-rose-600 ml-1 font-bold"
+                              className="text-purple-600 dark:text-purple-400 hover:text-rose-600 ml-1 font-bold cursor-pointer"
                             >
                               ×
                             </button>
@@ -1274,7 +1337,7 @@ export default function CreateCampaign() {
                       </div>
                     ) : (
                       <p className="text-[11px] text-slate-400 italic">
-                        No specific dates added yet. Pick a date above and click "+ Add Date".
+                        No specific dates added yet. Pick a date above and click &quot;+ Add Date&quot;.
                       </p>
                     )}
                   </div>
@@ -1393,7 +1456,7 @@ export default function CreateCampaign() {
             <button
               type="button"
               onClick={() => setCurrentStep(currentStep - 1)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             >
               Previous
             </button>
@@ -1416,7 +1479,7 @@ export default function CreateCampaign() {
                 setError("");
                 setCurrentStep(currentStep + 1);
               }}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
             >
               <span>Next Step</span>
               <ArrowRight className="w-4 h-4" />
@@ -1427,7 +1490,7 @@ export default function CreateCampaign() {
                 type="button"
                 disabled={loading}
                 onClick={() => handleCreateAndLaunch(false)}
-                className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-colors"
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Save as Draft
               </button>
@@ -1436,7 +1499,7 @@ export default function CreateCampaign() {
                 type="button"
                 disabled={loading}
                 onClick={() => handleCreateAndLaunch(true)}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
               >
                 {scheduleMode === "immediate" ? (
                   <>
@@ -1454,6 +1517,7 @@ export default function CreateCampaign() {
           )}
         </div>
       </div>
+
       {/* Cloud Settings Modal */}
       <CloudSettingsModal
         isOpen={settingsOpen}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
@@ -18,6 +18,11 @@ import {
   AlertTriangle,
   RefreshCw,
   Users,
+  X,
+  Calendar,
+  Layers,
+  Phone,
+  MessageSquare,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
@@ -40,6 +45,59 @@ export default function CampaignDetails() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [actionLoading, setActionLoading] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+
+  // Confirmation Modals
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showRetryModal, setShowRetryModal] = useState(false);
+
+  const fetchCampaign = useCallback(async () => {
+    try {
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.CAMPAIGN(id));
+      if (res.data.success) {
+        setCampaign(res.data.data);
+      }
+    } catch (err) {
+      console.error("Error loading campaign:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  const fetchAnalytics = useCallback(async () => {
+    try {
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.ANALYTICS(id));
+      if (res.data.success) {
+        setAnalytics(res.data.data);
+      }
+    } catch (err) {
+      console.error("Error loading analytics:", err);
+    }
+  }, [id]);
+
+  const fetchRecipients = useCallback(
+    async (targetPage = 1) => {
+      try {
+        const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.RECIPIENTS(id), {
+          params: {
+            page: targetPage,
+            limit: 20,
+            status: statusFilter !== "All" ? statusFilter : undefined,
+            search: search.trim() || undefined,
+          },
+        });
+
+        if (res.data.success) {
+          setRecipients(res.data.data || []);
+          setPage(res.data.pagination?.page || 1);
+          setTotalPages(res.data.pagination?.totalPages || 1);
+        }
+      } catch (err) {
+        console.error("Error loading recipients:", err);
+      }
+    },
+    [id, statusFilter, search]
+  );
 
   useEffect(() => {
     fetchCampaign();
@@ -84,58 +142,15 @@ export default function CampaignDetails() {
       socket.off("campaign_completed", handleProgress);
       socket.off("campaign_paused", handleProgress);
     };
-  }, [id, orgId]);
-
-  const fetchCampaign = async () => {
-    try {
-      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.CAMPAIGN(id));
-      if (res.data.success) {
-        setCampaign(res.data.data);
-      }
-    } catch (err) {
-      console.error("Error loading campaign:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAnalytics = async () => {
-    try {
-      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.ANALYTICS(id));
-      if (res.data.success) {
-        setAnalytics(res.data.data);
-      }
-    } catch (err) {
-      console.error("Error loading analytics:", err);
-    }
-  };
-
-  const fetchRecipients = async (targetPage = 1) => {
-    try {
-      const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.RECIPIENTS(id), {
-        params: {
-          page: targetPage,
-          limit: 20,
-          status: statusFilter !== "All" ? statusFilter : undefined,
-          search: search.trim() || undefined,
-        },
-      });
-
-      if (res.data.success) {
-        setRecipients(res.data.data || []);
-        setPage(res.data.pagination?.page || 1);
-        setTotalPages(res.data.pagination?.totalPages || 1);
-      }
-    } catch (err) {
-      console.error("Error loading recipients:", err);
-    }
-  };
+  }, [id, orgId, page, fetchCampaign, fetchAnalytics, fetchRecipients]);
 
   const handleStart = async () => {
     setActionLoading(true);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.START(id));
-      fetchCampaign();
+      await fetchCampaign();
+      setToastMessage("Campaign execution started.");
+      setTimeout(() => setToastMessage(""), 4000);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to start campaign.");
     } finally {
@@ -147,7 +162,9 @@ export default function CampaignDetails() {
     setActionLoading(true);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.PAUSE(id));
-      fetchCampaign();
+      await fetchCampaign();
+      setToastMessage("Campaign paused.");
+      setTimeout(() => setToastMessage(""), 4000);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to pause campaign.");
     } finally {
@@ -159,7 +176,9 @@ export default function CampaignDetails() {
     setActionLoading(true);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.RESUME(id));
-      fetchCampaign();
+      await fetchCampaign();
+      setToastMessage("Campaign resumed.");
+      setTimeout(() => setToastMessage(""), 4000);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to resume campaign.");
     } finally {
@@ -168,18 +187,13 @@ export default function CampaignDetails() {
   };
 
   const handleCancel = async () => {
-    if (
-      !window.confirm(
-        "Are you sure you want to cancel this campaign? Remaining queued messages will not be sent."
-      )
-    ) {
-      return;
-    }
-
     setActionLoading(true);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP_CLOUD.CANCEL(id));
-      fetchCampaign();
+      setShowCancelModal(false);
+      await fetchCampaign();
+      setToastMessage("Campaign cancelled. Remaining queued messages will not be sent.");
+      setTimeout(() => setToastMessage(""), 4000);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to cancel campaign.");
     } finally {
@@ -193,9 +207,11 @@ export default function CampaignDetails() {
       const res = await axios.post(
         API_ENDPOINTS.WHATSAPP_CLOUD.RETRY_FAILED(id)
       );
-      alert(res.data.message || "Failed recipients re-queued.");
-      fetchCampaign();
-      fetchRecipients(1);
+      setShowRetryModal(false);
+      setToastMessage(res.data.message || "Failed recipients re-queued.");
+      setTimeout(() => setToastMessage(""), 4000);
+      await fetchCampaign();
+      await fetchRecipients(1);
     } catch (err) {
       alert(err.response?.data?.message || "Failed to retry.");
     } finally {
@@ -205,22 +221,27 @@ export default function CampaignDetails() {
 
   if (loading) {
     return (
-      <div className="p-6 text-center text-slate-400 text-xs animate-pulse">
-        Loading campaign details...
+      <div className="p-12 text-center text-slate-400 text-xs animate-pulse">
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-purple-600" />
+        <span>Loading campaign details...</span>
       </div>
     );
   }
 
   if (!campaign) {
     return (
-      <div className="p-8 text-center">
+      <div className="p-8 text-center max-w-md mx-auto bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 my-12">
+        <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2" />
         <h3 className="text-base font-bold text-slate-900 dark:text-white mb-2">
           Campaign Not Found
         </h3>
+        <p className="text-xs text-slate-500 mb-4">
+          This campaign may have been removed or you do not have permission to view it.
+        </p>
         <button
           type="button"
           onClick={() => navigate("/whatsapp/campaigns")}
-          className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 text-white"
+          className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 text-white cursor-pointer"
         >
           Back to Campaigns
         </button>
@@ -240,18 +261,18 @@ export default function CampaignDetails() {
           <button
             type="button"
             onClick={() => navigate("/whatsapp/campaigns")}
-            className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors mb-2"
+            className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors mb-2 cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Campaigns</span>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white truncate">
               {campaign.name}
             </h1>
             <span
-              className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+              className={`text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 ${
                 campaign.status === "Running"
                   ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
                   : campaign.status === "Scheduled"
@@ -263,11 +284,17 @@ export default function CampaignDetails() {
                   : "bg-slate-100 dark:bg-slate-800 text-slate-500"
               }`}
             >
-              {campaign.status}
+              {campaign.status === "Running" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              )}
+              {campaign.status === "Scheduled" && (
+                <Calendar className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+              )}
+              <span>{campaign.status}</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+          <div className="flex items-center gap-3 text-xs text-slate-400 mt-1 flex-wrap">
             <span>Template: {campaign.templateName}</span>
             <span>•</span>
             <span>Created: {new Date(campaign.createdAt).toLocaleString()}</span>
@@ -275,14 +302,14 @@ export default function CampaignDetails() {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {campaign.status === "Scheduled" && (
             <>
               <button
                 type="button"
                 disabled={actionLoading}
                 onClick={handleStart}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center gap-1.5 shadow-xs"
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
                 <Play className="w-3.5 h-3.5" />
                 <span>Run Now (Bypass Schedule)</span>
@@ -290,8 +317,8 @@ export default function CampaignDetails() {
               <button
                 type="button"
                 disabled={actionLoading}
-                onClick={handleCancel}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1.5"
+                onClick={() => setShowCancelModal(true)}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <XCircle className="w-3.5 h-3.5" />
                 <span>Cancel Schedule</span>
@@ -304,7 +331,7 @@ export default function CampaignDetails() {
               type="button"
               disabled={actionLoading}
               onClick={handleStart}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center gap-1.5 shadow-xs"
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Play className="w-3.5 h-3.5" />
               <span>Start Sending</span>
@@ -316,7 +343,7 @@ export default function CampaignDetails() {
               type="button"
               disabled={actionLoading}
               onClick={handlePause}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all flex items-center gap-1.5 shadow-xs"
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Pause className="w-3.5 h-3.5" />
               <span>Pause</span>
@@ -328,7 +355,7 @@ export default function CampaignDetails() {
               type="button"
               disabled={actionLoading}
               onClick={handleResume}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all flex items-center gap-1.5 shadow-xs"
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Play className="w-3.5 h-3.5" />
               <span>Resume</span>
@@ -339,11 +366,11 @@ export default function CampaignDetails() {
             <button
               type="button"
               disabled={actionLoading}
-              onClick={handleCancel}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1.5"
+              onClick={() => setShowCancelModal(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <XCircle className="w-3.5 h-3.5" />
-              <span>Cancel</span>
+              <span>Cancel Campaign</span>
             </button>
           )}
 
@@ -351,8 +378,8 @@ export default function CampaignDetails() {
             <button
               type="button"
               disabled={actionLoading}
-              onClick={handleRetryFailed}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5"
+              onClick={() => setShowRetryModal(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Retry Failed ({campaign.failedCount})</span>
@@ -360,6 +387,22 @@ export default function CampaignDetails() {
           )}
         </div>
       </div>
+
+      {toastMessage && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-xs text-emerald-700 dark:text-emerald-300 font-medium flex items-center justify-between gap-2 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMessage("")}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Scheduled Campaign Information Card */}
       {campaign.status === "Scheduled" && (
@@ -427,15 +470,15 @@ export default function CampaignDetails() {
               </span>
               <span className="font-semibold text-slate-800 dark:text-slate-200">
                 {campaign.preventDuplicateLeads !== false
-                  ? "Active (Skips previously messaged leads)"
-                  : "Inactive (All matching leads)"}
+                  ? "Active (Skips previously messaged contacts)"
+                  : "Inactive (All matching contacts)"}
               </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Progress & Funnel Card */}
+      {/* Progress & Conversion Funnel Card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">
         <div>
           <div className="flex items-center justify-between text-xs mb-2">
@@ -461,8 +504,9 @@ export default function CampaignDetails() {
         {/* 5 Funnel Stages */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
           <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/70">
-            <div className="text-[10px] uppercase font-bold text-slate-400 mb-1">
-              Recipients
+            <div className="text-[10px] uppercase font-bold text-slate-400 mb-1 flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              <span>Targeted</span>
             </div>
             <div className="text-xl font-black text-slate-900 dark:text-white">
               {campaign.totalRecipients}
@@ -470,8 +514,9 @@ export default function CampaignDetails() {
           </div>
 
           <div className="p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/60">
-            <div className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 mb-1">
-              Sent
+            <div className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400 mb-1 flex items-center gap-1">
+              <Send className="w-3 h-3" />
+              <span>Sent</span>
             </div>
             <div className="text-xl font-black text-blue-700 dark:text-blue-300">
               {campaign.sentCount || 0}
@@ -479,8 +524,9 @@ export default function CampaignDetails() {
           </div>
 
           <div className="p-3.5 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200/60 dark:border-indigo-800/60">
-            <div className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 mb-1">
-              Delivered
+            <div className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400 mb-1 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>Delivered</span>
             </div>
             <div className="text-xl font-black text-indigo-700 dark:text-indigo-300 flex items-baseline justify-between">
               <span>{campaign.deliveredCount || 0}</span>
@@ -491,8 +537,9 @@ export default function CampaignDetails() {
           </div>
 
           <div className="p-3.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/60">
-            <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 mb-1">
-              Read
+            <div className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 mb-1 flex items-center gap-1">
+              <CheckCheck className="w-3 h-3" />
+              <span>Read</span>
             </div>
             <div className="text-xl font-black text-emerald-700 dark:text-emerald-300 flex items-baseline justify-between">
               <span>{campaign.readCount || 0}</span>
@@ -503,8 +550,9 @@ export default function CampaignDetails() {
           </div>
 
           <div className="p-3.5 rounded-xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200/60 dark:border-rose-800/60">
-            <div className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 mb-1">
-              Failed
+            <div className="text-[10px] uppercase font-bold text-rose-600 dark:text-rose-400 mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />
+              <span>Failed</span>
             </div>
             <div className="text-xl font-black text-rose-700 dark:text-rose-300">
               {campaign.failedCount || 0}
@@ -524,7 +572,7 @@ export default function CampaignDetails() {
             {analytics.errorBreakdown.map((e, idx) => (
               <div
                 key={idx}
-                className="p-3 rounded-xl bg-white dark:bg-slate-850 border border-rose-200/60 dark:border-rose-900/40 text-xs"
+                className="p-3 rounded-xl bg-white dark:bg-slate-800 border border-rose-200/60 dark:border-rose-900/40 text-xs"
               >
                 <div className="flex items-center justify-between font-bold mb-0.5">
                   <span className="text-rose-600 dark:text-rose-400">
@@ -543,16 +591,16 @@ export default function CampaignDetails() {
         </div>
       )}
 
-      {/* Recipient Delivery Table */}
+      {/* Recipient Delivery Log */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
         {/* Table Header Controls */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Users className="w-4 h-4 text-purple-500" />
-            <span>Recipients Log</span>
+            <span>Recipients Dispatch Log</span>
           </h3>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -571,7 +619,6 @@ export default function CampaignDetails() {
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
-                setTimeout(() => fetchRecipients(1), 50);
               }}
               className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none"
             >
@@ -605,7 +652,7 @@ export default function CampaignDetails() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {recipients.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="py-8 text-center text-slate-400">
+                  <td colSpan={8} className="py-8 text-center text-slate-400">
                     No recipients matching filter.
                   </td>
                 </tr>
@@ -675,7 +722,7 @@ export default function CampaignDetails() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => fetchRecipients(page - 1)}
-                className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40 cursor-pointer"
               >
                 Prev
               </button>
@@ -683,7 +730,7 @@ export default function CampaignDetails() {
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => fetchRecipients(page + 1)}
-                className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40"
+                className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40 cursor-pointer"
               >
                 Next
               </button>
@@ -691,6 +738,80 @@ export default function CampaignDetails() {
           </div>
         )}
       </div>
+
+      {/* Cancel Campaign Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
+              <XCircle className="w-6 h-6" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Cancel WhatsApp Campaign?
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Cancelling will permanently stop this campaign. Any remaining queued or scheduled messages will not be sent to recipients.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Keep Active
+              </button>
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {actionLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm Cancel</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Retry Failed Confirmation Modal */}
+      {showRetryModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto">
+              <RotateCcw className="w-6 h-6" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Retry Failed Deliveries?
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                This will re-queue all {campaign.failedCount} recipient messages that encountered errors during the previous dispatch run.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRetryModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRetryFailed}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {actionLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>Retry Failed</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
