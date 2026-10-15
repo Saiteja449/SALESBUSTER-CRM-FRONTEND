@@ -21,14 +21,20 @@ import {
   Bot,
   AlertCircle,
   Mic,
+  MicOff,
   Radio,
   X,
   HelpCircle,
   CornerDownRight,
+  Volume2,
+  VolumeX,
+  ChevronDown,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useGeminiLiveVoice } from "../hooks/useGeminiLiveVoice.js";
+import { useTextToSpeech } from "../hooks/useTextToSpeech.js";
+import { useSpeechToText } from "../hooks/useSpeechToText.js";
 import GeminiLiveVoiceModal from "../components/ai/GeminiLiveVoiceModal.jsx";
 import FormattedAIResponse from "../components/ai/FormattedAIResponse.jsx";
 
@@ -112,6 +118,31 @@ export default function BIAnalyst() {
   const [error, setError] = useState(null);
   const [activeOptions, setActiveOptions] = useState(null);
   const [isLiveVoiceModalOpen, setIsLiveVoiceModalOpen] = useState(false);
+
+  // Text-To-Speech (Speak Loud for every message)
+  const {
+    speakingMessageId,
+    speakMessage,
+    stopSpeaking,
+    voices: ttsVoices,
+    selectedVoiceName,
+    setVoice: setTtsVoice,
+  } = useTextToSpeech();
+
+  // Speech-To-Text (Voice Typing into input)
+  const {
+    isListening: isVoiceTyping,
+    error: speechToTextError,
+    toggleListening: toggleVoiceTyping,
+    stopListening: stopVoiceTyping,
+    clearError: clearSpeechError,
+  } = useSpeechToText();
+
+  const handleToggleVoiceTyping = () => {
+    toggleVoiceTyping((newText) => {
+      setInputValue(newText);
+    }, inputValue);
+  };
 
   // Gemini Multimodal Live API Voice Hook
   const {
@@ -220,8 +251,11 @@ export default function BIAnalyst() {
   // Load specific chat session
   const loadSession = async (chatId) => {
     try {
+      stopSpeaking();
+      stopVoiceTyping();
       setActiveSessionId(chatId);
       setError(null);
+      clearSpeechError();
       const res = await axios.get(API_ENDPOINTS.AI_ASSISTANT.SESSION(chatId));
       if (res.data.success && res.data.data) {
         const msgs = res.data.data.messages || [];
@@ -246,10 +280,13 @@ export default function BIAnalyst() {
 
   // Start new fresh chat
   const handleStartNewChat = () => {
+    stopSpeaking();
+    stopVoiceTyping();
     setActiveSessionId(null);
     setMessages([]);
     setActiveOptions(null);
     setError(null);
+    clearSpeechError();
     setInputValue("");
     if (textareaRef.current) {
       textareaRef.current.focus();
@@ -272,10 +309,13 @@ export default function BIAnalyst() {
 
   // Send message to BI Assistant
   const handleSendMessage = async (customPrompt) => {
+    stopVoiceTyping();
+    stopSpeaking();
     const text = (customPrompt || inputValue).trim();
     if (!text || loading) return;
 
     setError(null);
+    clearSpeechError();
     setActiveOptions(null);
     setInputValue("");
     if (textareaRef.current) {
@@ -492,6 +532,40 @@ export default function BIAnalyst() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* TTS Narration Voice Selector */}
+            {ttsVoices && ttsVoices.length > 0 && (
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-bg-secondary/80 border border-border-main text-xs text-text-secondary hover:text-text-primary transition-all shadow-2xs"
+                title="Select narration voice for Speak Loud"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                <span className="hidden xl:inline text-[11px] font-medium text-text-secondary">
+                  Voice:
+                </span>
+                <div className="relative flex items-center">
+                  <select
+                    value={selectedVoiceName || ""}
+                    onChange={(e) => setTtsVoice(e.target.value)}
+                    className="bg-transparent text-text-primary font-medium text-xs outline-none cursor-pointer pr-4 appearance-none max-w-[110px] sm:max-w-[150px] truncate"
+                    title="Choose text-to-speech voice"
+                  >
+                    {ttsVoices.map((v) => {
+                      const cleanName = v.name
+                        .replace(/Online\s*\(Natural\)/i, "(Natural)")
+                        .replace(/^Microsoft\s+/i, "")
+                        .replace(/English\s*\(([^)]+)\)/i, "$1");
+                      return (
+                        <option key={v.name} value={v.name} className="bg-bg-card text-text-primary">
+                          {cleanName}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <ChevronDown className="w-3 h-3 text-text-secondary pointer-events-none -ml-3" />
+                </div>
+              </div>
+            )}
+
             {/* Live Voice Mode Button */}
             <button
               type="button"
@@ -566,12 +640,30 @@ export default function BIAnalyst() {
                 const isUser = m.role === "user";
                 const feedback = feedbackState[m.id];
                 const isCopied = copiedMessageId === m.id;
+                const isSpeakingThis = speakingMessageId === m.id;
 
                 return (
                   <div key={m.id || idx} className="w-full flex flex-col group animate-in fade-in duration-200">
                     {isUser ? (
-                      /* User Message: ChatGPT style right-aligned capsule */
-                      <div className="flex justify-end">
+                      /* User Message: ChatGPT style right-aligned capsule with Speak Aloud option */
+                      <div className="flex justify-end items-center gap-2 group/userMsg">
+                        <button
+                          type="button"
+                          onClick={() => speakMessage(m.id, m.content)}
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                            isSpeakingThis
+                              ? "opacity-100 text-purple-600 dark:text-purple-400 bg-purple-500/10"
+                              : "opacity-0 group-hover/userMsg:opacity-100 text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60"
+                          }`}
+                          title={isSpeakingThis ? "Stop speaking" : "Speak loud"}
+                          aria-label={isSpeakingThis ? "Stop speaking user message" : "Speak loud user message"}
+                        >
+                          {isSpeakingThis ? (
+                            <VolumeX className="w-4 h-4 text-purple-600 dark:text-purple-400 animate-pulse" />
+                          ) : (
+                            <Volume2 className="w-4 h-4" />
+                          )}
+                        </button>
                         <div className="max-w-[80%] px-5 py-3 rounded-3xl bg-bg-secondary/90 text-text-primary text-sm leading-relaxed border border-border-main shadow-2xs">
                           {m.content}
                         </div>
@@ -612,6 +704,31 @@ export default function BIAnalyst() {
 
                           {/* ChatGPT Message Action Bar */}
                           <div className="flex items-center gap-1 mt-3 pt-1 text-text-secondary opacity-70 group-hover:opacity-100 transition-opacity">
+                            {/* Speak Loud Button */}
+                            <button
+                              type="button"
+                              onClick={() => speakMessage(m.id, m.content)}
+                              className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-[11px] ${
+                                isSpeakingThis
+                                  ? "text-purple-600 dark:text-purple-400 bg-purple-500/15 font-medium shadow-2xs"
+                                  : "hover:bg-bg-secondary hover:text-text-primary"
+                              }`}
+                              title={isSpeakingThis ? "Stop speaking" : "Speak loud (Read aloud)"}
+                              aria-label={isSpeakingThis ? "Stop reading response aloud" : "Speak loud"}
+                            >
+                              {isSpeakingThis ? (
+                                <>
+                                  <VolumeX className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
+                                  <span className="text-purple-600 dark:text-purple-400 font-medium">Stop</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                  <span>Speak</span>
+                                </>
+                              )}
+                            </button>
+
                             {/* Copy Button */}
                             <button
                               type="button"
@@ -689,15 +806,18 @@ export default function BIAnalyst() {
             BOTTOM CHATGPT INPUT CAPSULE
             ========================================================================= */}
         <div className="shrink-0 max-w-3xl mx-auto w-full px-4 pb-4 pt-1">
-          {error && (
+          {(error || speechToTextError) && (
             <div className="mb-2 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
+                <span>{error || speechToTextError}</span>
               </div>
               <button
                 type="button"
-                onClick={() => setError(null)}
+                onClick={() => {
+                  setError(null);
+                  clearSpeechError();
+                }}
                 className="text-xs hover:underline cursor-pointer"
               >
                 Dismiss
@@ -707,14 +827,22 @@ export default function BIAnalyst() {
 
 
           {/* Floating Pill Input Box (Signature ChatGPT) */}
-          <div className="relative rounded-3xl border border-border-main bg-bg-card shadow-md focus-within:shadow-lg focus-within:border-purple-500/60 transition-all p-2 sm:p-3">
+          <div className={`relative rounded-3xl border bg-bg-card shadow-md focus-within:shadow-lg transition-all p-2 sm:p-3 ${
+            isVoiceTyping
+              ? "border-red-500/70 ring-2 ring-red-500/20 shadow-red-500/10"
+              : "border-border-main focus-within:border-purple-500/60"
+          }`}>
             <textarea
               ref={textareaRef}
               rows={1}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything about your leads, revenue, conversion, or team..."
+              placeholder={
+                isVoiceTyping
+                  ? "Listening... Speak your prompt into microphone..."
+                  : "Ask anything about your leads, revenue, conversion, or team..."
+              }
               disabled={loading}
               className="w-full bg-transparent resize-none border-none outline-none focus:outline-none focus:ring-0 text-sm text-text-primary placeholder:text-text-secondary px-2 py-1 max-h-44"
               style={{ overflowY: inputValue.length > 200 ? "auto" : "hidden" }}
@@ -722,24 +850,36 @@ export default function BIAnalyst() {
 
             {/* Bottom Row inside capsule */}
             <div className="flex items-center justify-between pt-1 px-1">
-              <div className="flex items-center gap-1.5 text-[11px] text-text-secondary">
-                <span className="hidden sm:inline">Press</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-bg-secondary text-[10px] font-mono border border-border-main hidden sm:inline">
-                  Enter ↵
-                </kbd>
-                <span className="hidden sm:inline">to send</span>
-              </div>
+              {isVoiceTyping ? (
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  <span className="font-medium">Listening... speak now (click Send or Mic when done)</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                  <span className="hidden sm:inline">Press</span>
+                  <kbd className="px-1.5 py-0.5 rounded bg-bg-secondary text-[10px] font-mono border border-border-main hidden sm:inline">
+                    Enter ↵
+                  </kbd>
+                  <span className="hidden sm:inline">to send</span>
+                </div>
+              )}
 
-              {/* Action Buttons: Live Mic and Send */}
+              {/* Action Buttons: Voice Typing Mic and Send */}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleOpenLiveVoice}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-bg-secondary hover:bg-purple-600 hover:text-white text-text-secondary cursor-pointer shadow-xs shrink-0"
-                  title="Talk with Gemini Live Voice"
-                  aria-label="Start Voice Chat"
+                  onClick={handleToggleVoiceTyping}
+                  disabled={loading}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-xs shrink-0 ${
+                    isVoiceTyping
+                      ? "bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-md shadow-red-500/30 ring-2 ring-red-400/60"
+                      : "bg-bg-secondary hover:bg-purple-600 hover:text-white text-text-secondary"
+                  }`}
+                  title={isVoiceTyping ? "Stop listening" : "Speak instead of typing (Voice dictation)"}
+                  aria-label={isVoiceTyping ? "Stop voice typing" : "Start voice typing"}
                 >
-                  <Mic className="w-4 h-4" />
+                  {isVoiceTyping ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </button>
 
                 {/* Round Send Button with ArrowUp */}
@@ -748,6 +888,7 @@ export default function BIAnalyst() {
                   onClick={() => handleSendMessage()}
                   disabled={!inputValue.trim() || loading}
                   className="w-8 h-8 rounded-full flex items-center justify-center transition-all bg-purple-600 hover:bg-purple-700 text-white disabled:bg-bg-secondary disabled:text-text-secondary/40 cursor-pointer disabled:cursor-not-allowed shadow-xs shrink-0"
+                  title="Send message"
                   aria-label="Send message"
                 >
                   <ArrowUp className="w-4 h-4 stroke-[2.5]" />
