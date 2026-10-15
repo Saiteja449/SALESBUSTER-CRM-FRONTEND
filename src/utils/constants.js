@@ -55,6 +55,8 @@ export const API_ENDPOINTS = {
     PAUSE: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/pause`,
     RESUME: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/resume`,
     CANCEL: (id) => `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/cancel`,
+    RESCHEDULE: (id) =>
+      `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/reschedule`,
     RETRY_FAILED: (id) =>
       `${API_BASE_URL}/whatsapp/cloud/campaigns/${id}/retry-failed`,
     RECIPIENTS: (id) =>

@@ -254,6 +254,8 @@ export default function CampaignDetails() {
               className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
                 campaign.status === "Running"
                   ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                  : campaign.status === "Scheduled"
+                  ? "bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30"
                   : campaign.status === "Completed"
                   ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                   : campaign.status === "Paused"
@@ -274,6 +276,29 @@ export default function CampaignDetails() {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
+          {campaign.status === "Scheduled" && (
+            <>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={handleStart}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center gap-1.5 shadow-xs"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Run Now (Bypass Schedule)</span>
+              </button>
+              <button
+                type="button"
+                disabled={actionLoading}
+                onClick={handleCancel}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1.5"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>Cancel Schedule</span>
+              </button>
+            </>
+          )}
+
           {campaign.status === "Draft" && (
             <button
               type="button"
@@ -335,6 +360,80 @@ export default function CampaignDetails() {
           )}
         </div>
       </div>
+
+      {/* Scheduled Campaign Information Card */}
+      {campaign.status === "Scheduled" && (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-blue-500/5 to-transparent border border-purple-500/30 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Scheduled Broadcast Automation</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300">
+                    {campaign.scheduleType === "recurring"
+                      ? "Recurring Schedule"
+                      : campaign.scheduleType === "specific_dates"
+                      ? "Specific Dates"
+                      : "One-Time Schedule"}
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                  {campaign.scheduleType === "recurring"
+                    ? `Runs ${campaign.recurringSchedule?.frequency || "daily"} at ${campaign.recurringSchedule?.time || "10:00"}`
+                    : campaign.scheduleType === "specific_dates"
+                    ? `Runs on ${campaign.scheduledDates?.length || 0} designated dates at ${campaign.recurringSchedule?.time || "10:00"}`
+                    : `Scheduled to run on ${campaign.scheduledAt ? new Date(campaign.scheduledAt).toLocaleString() : "configured date"}`}
+                </p>
+              </div>
+            </div>
+
+            {campaign.recurringSchedule?.nextRunAt && (
+              <div className="px-3.5 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold shrink-0 self-start sm:self-auto shadow-xs flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Next Run: {new Date(campaign.recurringSchedule.nextRunAt).toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-purple-500/20 text-xs">
+            <div>
+              <span className="text-slate-400 text-[10px] uppercase font-bold block mb-0.5">
+                Target Lead Status
+              </span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {campaign.audienceCriteria?.leadStatus?.length > 0
+                  ? campaign.audienceCriteria.leadStatus.join(", ")
+                  : "All Statuses"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-400 text-[10px] uppercase font-bold block mb-0.5">
+                Target Service / Product
+              </span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {campaign.audienceCriteria?.services?.length > 0
+                  ? campaign.audienceCriteria.services.join(", ")
+                  : "All Services"}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-400 text-[10px] uppercase font-bold block mb-0.5">
+                Dynamic Deduplication
+              </span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {campaign.preventDuplicateLeads !== false
+                  ? "Active (Skips previously messaged leads)"
+                  : "Inactive (All matching leads)"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress & Funnel Card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">

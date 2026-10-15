@@ -19,6 +19,7 @@ import {
   BarChart2,
   Users,
   ShieldAlert,
+  Calendar,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
@@ -48,6 +49,9 @@ export default function WhatsAppCampaigns() {
 
     // Real-time Socket.IO updates
     socket.on("campaign_started", () => fetchCampaigns());
+    socket.on("campaign_scheduled", () => fetchCampaigns());
+    socket.on("campaign_scheduled_run", () => fetchCampaigns());
+    socket.on("campaign_rescheduled", () => fetchCampaigns());
     socket.on("campaign_paused", () => fetchCampaigns());
     socket.on("campaign_resumed", () => fetchCampaigns());
     socket.on("campaign_completed", () => fetchCampaigns());
@@ -86,6 +90,9 @@ export default function WhatsAppCampaigns() {
 
     return () => {
       socket.off("campaign_started");
+      socket.off("campaign_scheduled");
+      socket.off("campaign_scheduled_run");
+      socket.off("campaign_rescheduled");
       socket.off("campaign_paused");
       socket.off("campaign_resumed");
       socket.off("campaign_completed");
@@ -355,6 +362,7 @@ export default function WhatsAppCampaigns() {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
           {[
             "All",
+            "Scheduled",
             "Running",
             "Draft",
             "Completed",
@@ -452,6 +460,8 @@ export default function WhatsAppCampaigns() {
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
                         campaign.status === "Running"
                           ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                          : campaign.status === "Scheduled"
+                          ? "bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30"
                           : campaign.status === "Completed"
                           ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                           : campaign.status === "Paused"
@@ -461,6 +471,9 @@ export default function WhatsAppCampaigns() {
                     >
                       {campaign.status === "Running" && (
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      )}
+                      {campaign.status === "Scheduled" && (
+                        <Calendar className="w-3 h-3 text-purple-600 dark:text-purple-400" />
                       )}
                       <span>{campaign.status}</span>
                     </span>
@@ -474,13 +487,45 @@ export default function WhatsAppCampaigns() {
                     {campaign.name}
                   </h3>
 
-                  <div className="flex items-center gap-4 text-xs text-slate-400 mt-1">
-                    <span>
-                      Created: {new Date(campaign.createdAt).toLocaleDateString()}
-                    </span>
-                    <span>•</span>
-                    <span>By: {campaign.createdByName || "Agent"}</span>
-                  </div>
+                  {/* Scheduled Recurrence & Target Criteria Details */}
+                  {campaign.status === "Scheduled" ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs mt-1.5">
+                      <span className="inline-flex items-center gap-1 font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded-md">
+                        <Clock className="w-3 h-3" />
+                        {campaign.scheduleType === "recurring"
+                          ? `Recurring: ${campaign.recurringSchedule?.frequency || "daily"} at ${campaign.recurringSchedule?.time || "10:00"}`
+                          : campaign.scheduleType === "specific_dates"
+                          ? `Specific Dates (${campaign.scheduledDates?.length || 0})`
+                          : `Scheduled: ${campaign.scheduledAt ? new Date(campaign.scheduledAt).toLocaleString() : "configured date"}`}
+                      </span>
+
+                      {campaign.recurringSchedule?.nextRunAt && (
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Next Run: {new Date(campaign.recurringSchedule.nextRunAt).toLocaleString()}
+                        </span>
+                      )}
+
+                      {campaign.audienceCriteria?.leadStatus?.length > 0 && (
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                          Status: {campaign.audienceCriteria.leadStatus.join(", ")}
+                        </span>
+                      )}
+
+                      {campaign.audienceCriteria?.services?.length > 0 && (
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                          Service: {campaign.audienceCriteria.services.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-4 text-xs text-slate-400 mt-1">
+                      <span>
+                        Created: {new Date(campaign.createdAt).toLocaleDateString()}
+                      </span>
+                      <span>•</span>
+                      <span>By: {campaign.createdByName || "Agent"}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Middle: Progress Bar */}
@@ -507,6 +552,19 @@ export default function WhatsAppCampaigns() {
 
                 {/* Right: Quick Action Buttons */}
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Scheduled quick action */}
+                  {campaign.status === "Scheduled" && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleStart(e, campaign._id)}
+                      title="Trigger immediate run without waiting for schedule"
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-colors flex items-center gap-1 shadow-xs"
+                    >
+                      <Play className="w-3 h-3" />
+                      <span>Run Now</span>
+                    </button>
+                  )}
+
                   {campaign.status === "Draft" && (
                     <button
                       type="button"

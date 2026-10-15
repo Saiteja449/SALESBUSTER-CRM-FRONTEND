@@ -72,8 +72,21 @@ export default function CreateCampaign() {
   const [headerMediaUrl, setHeaderMediaUrl] = useState("");
   const [headerMediaName, setHeaderMediaName] = useState("");
 
-  // Step 5: Rate & Launch (fixed at default 5 msg/sec)
+  // Step 5: Rate & Launch & Scheduling Options
   const messagesPerSecond = 5;
+  const [scheduleMode, setScheduleMode] = useState("immediate"); // "immediate" | "once" | "recurring"
+  const [scheduledDate, setScheduledDate] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.toISOString().split("T")[0];
+  });
+  const [scheduledTime, setScheduledTime] = useState("10:00");
+  const [recurringFrequency, setRecurringFrequency] = useState("daily"); // "daily" | "weekly" | "custom_dates"
+  const [recurringDays, setRecurringDays] = useState([1, 2, 3, 4, 5]); // Mon-Fri
+  const [customDatesList, setCustomDatesList] = useState([]);
+  const [newDateInput, setNewDateInput] = useState("");
+  const [preventDuplicateLeads, setPreventDuplicateLeads] = useState(true);
+  const [scheduleEndDate, setScheduleEndDate] = useState("");
 
   useEffect(() => {
     checkCloudStatus();
@@ -258,9 +271,21 @@ export default function CreateCampaign() {
       return;
     }
 
-    if (audienceEstimate && audienceEstimate.eligibleCount === 0) {
-      setError("Target audience has 0 eligible recipients.");
+    const isScheduled = scheduleMode !== "immediate";
+
+    if (!isScheduled && audienceEstimate && audienceEstimate.eligibleCount === 0) {
+      setError("Target audience has 0 eligible recipients right now for immediate launch.");
       setCurrentStep(2);
+      return;
+    }
+
+    if (scheduleMode === "once" && !scheduledDate) {
+      setError("Please select a valid scheduled date.");
+      return;
+    }
+
+    if (scheduleMode === "recurring" && recurringFrequency === "custom_dates" && customDatesList.length === 0) {
+      setError("Please add at least one run date for specific dates scheduling.");
       return;
     }
 
@@ -280,7 +305,36 @@ export default function CreateCampaign() {
             }
           : undefined,
         messagesPerSecond: Number(messagesPerSecond) || 5,
-        autoStart: !!autoStart,
+        scheduleType:
+          scheduleMode === "immediate"
+            ? "immediate"
+            : scheduleMode === "once"
+            ? "once"
+            : recurringFrequency === "custom_dates"
+            ? "specific_dates"
+            : "recurring",
+        scheduledAt:
+          scheduleMode === "once"
+            ? new Date(`${scheduledDate}T${scheduledTime || "10:00"}:00`)
+            : undefined,
+        scheduledDates:
+          scheduleMode === "recurring" && recurringFrequency === "custom_dates"
+            ? customDatesList
+            : [],
+        recurringSchedule:
+          scheduleMode === "recurring"
+            ? {
+                frequency: recurringFrequency,
+                daysOfWeek: recurringDays,
+                time: scheduledTime || "10:00",
+                endDate: scheduleEndDate
+                  ? new Date(`${scheduleEndDate}T23:59:59.999`)
+                  : null,
+              }
+            : undefined,
+        preventDuplicateLeads: preventDuplicateLeads !== false,
+        dynamicAudience: true,
+        autoStart: scheduleMode === "immediate" && !!autoStart,
       };
 
       const res = await axios.post(
@@ -685,6 +739,19 @@ export default function CreateCampaign() {
                 </div>
               </label>
             </div>
+
+            {/* Dynamic Scheduled Checks Note */}
+            <div className="p-4 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-800/60 flex items-start gap-3">
+              <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <span className="font-bold text-slate-900 dark:text-white">
+                  Dynamic Check on Scheduled Dates
+                </span>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">
+                  When you schedule this campaign in Step 5, SalesBuster dynamically checks for leads matching your selected <strong>Lead Statuses</strong> ({audienceCriteria.leadStatus.length > 0 ? audienceCriteria.leadStatus.join(", ") : "All"}) and <strong>Services</strong> ({audienceCriteria.services.length > 0 ? audienceCriteria.services.join(", ") : "All"}) on each scheduled date, picking up newly added leads while skipping already messaged contacts.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -958,25 +1025,310 @@ export default function CreateCampaign() {
           <div className="space-y-6 max-w-xl">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
-                Review & Launch
+                Scheduling & Launch Options
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Review your campaign setup and choose to launch now or save as draft
+                Choose whether to dispatch this campaign immediately or schedule it to run on specific dates based on lead status and service.
               </p>
             </div>
 
-            {/* Dispatch Mode Banner */}
-            <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-800/60 bg-purple-50/50 dark:bg-purple-950/20 flex items-start gap-3">
-              <Send className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                  Immediate Queue Dispatch
-                </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Launching will immediately queue recipients and dispatch messages at the standard safe rate (5 msg/sec). You can pause or cancel anytime from the campaign dashboard.
-                </p>
+            {/* Scheduling Mode Cards */}
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Dispatch Schedule Mode
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 1. Immediate */}
+                <div
+                  onClick={() => setScheduleMode("immediate")}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    scheduleMode === "immediate"
+                      ? "border-purple-600 bg-purple-50/60 dark:bg-purple-950/30 ring-2 ring-purple-500/20"
+                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Zap className={`w-4 h-4 ${scheduleMode === "immediate" ? "text-purple-600 dark:text-purple-400" : "text-slate-400"}`} />
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Immediate
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Launch now to currently eligible leads at 5 msg/sec.
+                  </p>
+                </div>
+
+                {/* 2. One-Time Schedule */}
+                <div
+                  onClick={() => setScheduleMode("once")}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    scheduleMode === "once"
+                      ? "border-purple-600 bg-purple-50/60 dark:bg-purple-950/30 ring-2 ring-purple-500/20"
+                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Clock className={`w-4 h-4 ${scheduleMode === "once" ? "text-purple-600 dark:text-purple-400" : "text-slate-400"}`} />
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Schedule Once
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Run once on a specific future date and time.
+                  </p>
+                </div>
+
+                {/* 3. Recurring / Multi-Date */}
+                <div
+                  onClick={() => setScheduleMode("recurring")}
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    scheduleMode === "recurring"
+                      ? "border-purple-600 bg-purple-50/60 dark:bg-purple-950/30 ring-2 ring-purple-500/20"
+                      : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Calendar className={`w-4 h-4 ${scheduleMode === "recurring" ? "text-purple-600 dark:text-purple-400" : "text-slate-400"}`} />
+                    <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      Recurring Checks
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Check on dates & message matching status/service leads.
+                  </p>
+                </div>
               </div>
             </div>
+
+            {/* Configuration for Schedule Once */}
+            {scheduleMode === "once" && (
+              <div className="p-4 rounded-2xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/50 space-y-3.5 animate-fadeIn">
+                <div className="flex items-center gap-2 text-xs font-bold text-purple-700 dark:text-purple-300">
+                  <Clock className="w-4 h-4" />
+                  <span>One-Time Scheduled Launch Date & Time</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                      Target Date *
+                    </label>
+                    <input
+                      type="date"
+                      min={new Date().toISOString().split("T")[0]}
+                      value={scheduledDate}
+                      onChange={(e) => setScheduledDate(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500 shadow-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                      Execution Time *
+                    </label>
+                    <input
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500 shadow-xs"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  ⚡ When the scheduled time arrives, SalesBuster checks for all leads matching your selected Status and Service and starts broadcasting.
+                </p>
+              </div>
+            )}
+
+            {/* Configuration for Recurring / Multi-Date Check */}
+            {scheduleMode === "recurring" && (
+              <div className="p-4 rounded-2xl bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/50 space-y-4 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-700 dark:text-purple-300">
+                    <Calendar className="w-4 h-4" />
+                    <span>Recurring Schedule Configuration</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-200 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200">
+                    Dynamic Check on Run Dates
+                  </span>
+                </div>
+
+                {/* Recurrence Frequency Tabs */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1.5">
+                    Run Frequency
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: "daily", label: "Every Day" },
+                      { id: "weekly", label: "Weekly on Days" },
+                      { id: "custom_dates", label: "Specific Run Dates" },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setRecurringFrequency(f.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                          recurringFrequency === f.id
+                            ? "bg-purple-600 text-white shadow-xs font-bold"
+                            : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Days of Week selector if weekly */}
+                {recurringFrequency === "weekly" && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1.5">
+                      Select Days to Run
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { day: 1, label: "Mon" },
+                        { day: 2, label: "Tue" },
+                        { day: 3, label: "Wed" },
+                        { day: 4, label: "Thu" },
+                        { day: 5, label: "Fri" },
+                        { day: 6, label: "Sat" },
+                        { day: 0, label: "Sun" },
+                      ].map((item) => {
+                        const active = recurringDays.includes(item.day);
+                        return (
+                          <button
+                            key={item.day}
+                            type="button"
+                            onClick={() => {
+                              setRecurringDays((prev) =>
+                                active
+                                  ? prev.filter((d) => d !== item.day)
+                                  : [...prev, item.day]
+                              );
+                            }}
+                            className={`w-9 h-9 rounded-xl text-xs font-bold transition-all ${
+                              active
+                                ? "bg-purple-600 text-white shadow-xs"
+                                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Specific Dates Multi-Selector */}
+                {recurringFrequency === "custom_dates" && (
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                      Add Target Dates to Run
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        min={new Date().toISOString().split("T")[0]}
+                        value={newDateInput}
+                        onChange={(e) => setNewDateInput(e.target.value)}
+                        className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newDateInput && !customDatesList.includes(newDateInput)) {
+                            setCustomDatesList((prev) => [...prev, newDateInput].sort());
+                            setNewDateInput("");
+                          }
+                        }}
+                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-purple-600 text-white hover:bg-purple-700"
+                      >
+                        + Add Date
+                      </button>
+                    </div>
+
+                    {customDatesList.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {customDatesList.map((d) => (
+                          <span
+                            key={d}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                          >
+                            <span>📅 {d}</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCustomDatesList((prev) => prev.filter((item) => item !== d))
+                              }
+                              className="text-purple-600 dark:text-purple-400 hover:text-rose-600 ml-1 font-bold"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic">
+                        No specific dates added yet. Pick a date above and click "+ Add Date".
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Execution Time & End Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                      Check Time of Day *
+                    </label>
+                    <input
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500 shadow-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                      End Date (Optional)
+                    </label>
+                    <input
+                      type="date"
+                      min={new Date().toISOString().split("T")[0]}
+                      value={scheduleEndDate}
+                      onChange={(e) => setScheduleEndDate(e.target.value)}
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-purple-500 shadow-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Deduplication Switch */}
+                <div className="pt-2 border-t border-purple-200/60 dark:border-purple-800/40">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={preventDuplicateLeads}
+                      onChange={(e) => setPreventDuplicateLeads(e.target.checked)}
+                      className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-600 mt-0.5"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        Prevent Duplicate Sends to Same Lead (Recommended)
+                      </span>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        On each scheduled check, automatically skip contacts that were already sent this campaign in earlier checks. Only newly matching leads will receive the WhatsApp template.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            )}
 
             {/* Campaign Summary Card */}
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs">
@@ -987,29 +1339,42 @@ export default function CreateCampaign() {
                 </span>
               </div>
               <div className="flex justify-between">
+                <span className="text-slate-400">Schedule Mode:</span>
+                <span className="font-bold text-purple-600 dark:text-purple-400">
+                  {scheduleMode === "immediate"
+                    ? "Immediate Dispatch"
+                    : scheduleMode === "once"
+                    ? `Scheduled Once (${scheduledDate} at ${scheduledTime})`
+                    : `Recurring (${recurringFrequency === 'daily' ? 'Daily' : recurringFrequency === 'weekly' ? 'Weekly' : `${customDatesList.length} Selected Dates`} at ${scheduledTime})`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Target Lead Status:</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  {audienceCriteria.leadStatus.length > 0
+                    ? audienceCriteria.leadStatus.join(", ")
+                    : "All Statuses"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Target Services:</span>
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  {audienceCriteria.services.length > 0
+                    ? audienceCriteria.services.join(", ")
+                    : "All Services"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Current Matching Leads:</span>
+                <span className="font-bold text-purple-600 dark:text-purple-400">
+                  {audienceEstimate?.eligibleCount || 0} Leads
+                  {scheduleMode !== "immediate" && " (re-checked on run dates)"}
+                </span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-slate-400">Template:</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200">
                   {selectedTemplate?.name}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Target Recipients:</span>
-                <span className="font-bold text-purple-600 dark:text-purple-400">
-                  {audienceEstimate?.eligibleCount || 0} Leads
-                </span>
-              </div>
-              {selectedBatchTag && (
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Target Batch:</span>
-                  <span className="font-bold text-purple-600 dark:text-purple-400">
-                    🏷️ {selectedBatchTag}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-slate-400">Sending Speed:</span>
-                <span className="font-medium text-slate-700 dark:text-slate-300">
-                  5 messages / sec (Default)
                 </span>
               </div>
               <div className="flex justify-between">
@@ -1073,10 +1438,17 @@ export default function CreateCampaign() {
                 onClick={() => handleCreateAndLaunch(true)}
                 className="px-6 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>
-                  {loading ? "Launching..." : "Launch Now"}
-                </span>
+                {scheduleMode === "immediate" ? (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{loading ? "Launching..." : "Launch Now"}</span>
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{loading ? "Scheduling..." : "Schedule Campaign"}</span>
+                  </>
+                )}
               </button>
             </div>
           )}
