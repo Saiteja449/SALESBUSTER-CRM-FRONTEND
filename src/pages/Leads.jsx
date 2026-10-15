@@ -284,6 +284,12 @@ export default function Leads() {
     ? 1
     : Math.max(1, Math.ceil(totalLeadsCount / effectiveLimit));
 
+  // Only show the "Next Follow-up" column on Today Followups and Upcoming Followups (or when filtered to Follow Up)
+  const showFollowUpColumn =
+    leadTypeTab === "TodayFollowup" ||
+    leadTypeTab === "UpcomingFollowup" ||
+    status === "Follow Up";
+
   // Filter state indicators
   const hasActiveFilters = Boolean(
     search.trim() !== "" ||
@@ -945,7 +951,9 @@ export default function Leads() {
                 <th className="px-4 py-3.5">Service</th>
                 <th className="px-4 py-3.5">Source</th>
                 <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5">Next Follow-up</th>
+                {showFollowUpColumn && (
+                  <th className="px-4 py-3.5">Next Follow-up</th>
+                )}
                 {!isSalesRep && <th className="px-4 py-3.5">Assigned Rep</th>}
                 <th className="px-4 py-3.5">Enquired On</th>
                 <th className="px-4 py-3.5 text-right">Actions</th>
@@ -973,9 +981,11 @@ export default function Leads() {
                     <td className="px-4 py-3.5">
                       <div className="h-5 bg-brand-secondary/40 rounded-full w-20" />
                     </td>
-                    <td className="px-4 py-3.5">
-                      <div className="h-4 bg-brand-secondary/30 rounded w-28" />
-                    </td>
+                    {showFollowUpColumn && (
+                      <td className="px-4 py-3.5">
+                        <div className="h-4 bg-brand-secondary/30 rounded w-28" />
+                      </td>
+                    )}
                     {!isSalesRep && (
                       <td className="px-4 py-3.5">
                         <div className="h-4 bg-brand-secondary/30 rounded w-20" />
@@ -992,7 +1002,7 @@ export default function Leads() {
               ) : paginatedLeads.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={!isSalesRep ? 8 : 7}
+                    colSpan={(!isSalesRep ? 7 : 6) + (showFollowUpColumn ? 1 : 0)}
                     className="py-14 text-center"
                   >
                     <div className="flex flex-col items-center justify-center max-w-sm mx-auto px-4">
@@ -1127,9 +1137,11 @@ export default function Leads() {
                       </td>
 
                       {/* 5. Next Follow-up (Non-color Overdue Warning) */}
-                      <td className="px-4 py-3.5">
-                        {renderFollowUpIndicator(lead)}
-                      </td>
+                      {showFollowUpColumn && (
+                        <td className="px-4 py-3.5">
+                          {renderFollowUpIndicator(lead)}
+                        </td>
+                      )}
 
                       {/* 6. Assigned Representative */}
                       {!isSalesRep && (
@@ -1319,12 +1331,14 @@ export default function Leads() {
                   </div>
 
                   {/* Follow-up info */}
-                  <div className="p-2.5 rounded-xl bg-bg-main border border-brand-secondary/40 text-xs">
-                    <span className="text-[10px] text-brand-primary/50 block uppercase font-bold mb-1">
-                      Next Follow-up
-                    </span>
-                    {renderFollowUpIndicator(lead)}
-                  </div>
+                  {showFollowUpColumn && (
+                    <div className="p-2.5 rounded-xl bg-bg-main border border-brand-secondary/40 text-xs">
+                      <span className="text-[10px] text-brand-primary/50 block uppercase font-bold mb-1">
+                        Next Follow-up
+                      </span>
+                      {renderFollowUpIndicator(lead)}
+                    </div>
+                  )}
 
                   {/* Card Bottom Actions */}
                   <div className="flex items-center justify-between gap-2 pt-1 border-t border-brand-secondary/30">

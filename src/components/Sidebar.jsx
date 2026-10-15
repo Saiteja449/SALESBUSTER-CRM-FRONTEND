@@ -183,7 +183,7 @@ export default function Sidebar({
         {isCollapsed ? (
           <>
             <div
-              className="w-12 h-12 bg-white flex items-center justify-center"
+              className="w-12 h-10 bg-white flex items-center justify-center"
               title="SalesBuster AI"
             >
               <img

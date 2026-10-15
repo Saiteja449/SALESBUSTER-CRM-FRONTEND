@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import {
@@ -6,15 +6,11 @@ import {
   Bot,
   User,
   Send,
-  Paperclip,
   RefreshCw,
   Play,
   FileText,
   MapPin,
   Tag,
-  Plus,
-  Trash2,
-  Brain,
   Clock,
   Sparkles,
   TrendingUp,
@@ -23,14 +19,10 @@ import {
   CheckCheck,
   Smile,
   AlertCircle,
-  FolderMinus,
   Calendar,
   X,
-  UserPlus,
   QrCode,
-  Smartphone,
   Eye,
-  ShieldCheck,
   Copy,
   CheckCircle2,
   ChevronDown,
@@ -39,6 +31,9 @@ import {
   Users,
   SlidersHorizontal,
   Search,
+  ExternalLink,
+  ShieldCheck,
+  Filter,
 } from "lucide-react";
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
@@ -71,21 +66,25 @@ export default function WhatsAppChat() {
     Boolean(currentUser?.isOrgOwner);
   const isSalesRep =
     ["sales person", "sales representative", "sales_person"].includes(normalizedRole);
-  const [repSessionError, setRepSessionError] = useState("");        // phone_mismatch error
-  // const [pairingCodeData, setPairingCodeData] = useState(null);       // { sessionId, pairingCode } (Pairing code disabled)
-  const [repFilterUserId, setRepFilterUserId] = useState("all");     // Admin conv filter
-  const [teamStatuses, setTeamStatuses] = useState([]);              // Admin team overview
-  const [summaryModal, setSummaryModal] = useState(false);           // AI summary modal
-  const [chatSummary, setChatSummary] = useState(null);              // AI summary data
-  const [summaryLoading, setSummaryLoading] = useState(false);       // Summarize loading
+  const [repSessionError, setRepSessionError] = useState("");
+  const [repFilterUserId, setRepFilterUserId] = useState("all");
+  const [teamStatuses, setTeamStatuses] = useState([]);
+  const [summaryModal, setSummaryModal] = useState(false);
+  const [chatSummary, setChatSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Conversations List
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
   const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalConversations, setTotalConversations] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateFilter, setDateFilter] = useState("all"); // 'all' | 'today' | 'yesterday' | 'last7days' | 'last30days'
-  const [isQualPanelOpen, setIsQualPanelOpen] = useState(false); // Collapsible Lead Qualifications panel
+  const [dateFilter, setDateFilter] = useState("all");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [isQualPanelOpen, setIsQualPanelOpen] = useState(false);
 
   // Active Chat Message history
   const [messages, setMessages] = useState([]);
@@ -118,7 +117,7 @@ export default function WhatsAppChat() {
     notes: "",
   });
 
-  // Ticker for live countdowns
+  // Live countdown ticker
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => {
@@ -181,6 +180,74 @@ export default function WhatsAppChat() {
     return date.toLocaleDateString([], { month: "short", day: "numeric" });
   };
 
+  const getMessageDateLabel = (dateStr) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+    const nowDate = new Date();
+    const today = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+    const msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.floor((today - msgDay) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    return date.toLocaleDateString([], {
+      day: "numeric",
+      month: "short",
+      year: date.getFullYear() !== nowDate.getFullYear() ? "numeric" : undefined,
+    });
+  };
+
+  const primarySessionId = orgId ? `org_${orgId}` : "device_1";
+  const secondarySessionId = orgId ? `org_${orgId}_device_2` : "device_2";
+  const currentUserId = currentUser?.id || currentUser?._id;
+  const ownRepSessionId = orgId
+    ? `org_${orgId}_user_${currentUserId}`
+    : `user_${currentUserId}`;
+
+  const primarySession = sessions.find(
+    (s) =>
+      (isSalesRep && (s.isRepSession || s.sessionId === ownRepSessionId)) ||
+      (!isSalesRep && (s.sessionId === primarySessionId || s.isPrimary)) ||
+      s.sessionId === primarySessionId ||
+      s.isPrimary
+  ) || {
+    sessionId: isSalesRep ? ownRepSessionId : primarySessionId,
+    status: "disconnected",
+    qrCode: "",
+    connectedPhone: "",
+    connectedName: "",
+    label: isSalesRep ? "My WhatsApp Line" : "Line 1 (Primary)",
+    isPrimary: true,
+    isRepSession: isSalesRep,
+  };
+
+  const secondarySession = sessions.find(
+    (s) =>
+      s.sessionId === secondarySessionId ||
+      (!s.isPrimary && s.sessionId?.includes("device_2"))
+  ) || {
+    sessionId: secondarySessionId,
+    status: "disconnected",
+    qrCode: "",
+    connectedPhone: "",
+    connectedName: "",
+    label: "Line 2 (Secondary)",
+    isPrimary: false,
+  };
+
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return "";
+    const clean = String(phone).replace(/\D/g, "");
+    if (clean.length === 12 && clean.startsWith("91")) {
+      return `+91 ${clean.slice(2, 7)} ${clean.slice(7)}`;
+    }
+    if (clean.length === 10) {
+      return `+${clean.slice(0, 5)} ${clean.slice(5)}`;
+    }
+    return `+${clean}`;
+  };
+
   // Load Status on mount
   useEffect(() => {
     fetchSessionStatus();
@@ -197,18 +264,14 @@ export default function WhatsAppChat() {
       socket.emit("join_organization", orgId);
     }
 
-    // Socket.IO updates
     socket.on("whatsapp_status", (data) => {
       if (data.organizationId && orgId && String(data.organizationId) !== String(orgId)) {
         return;
       }
-      // ===== PHONE MISMATCH ERROR DETECTION =====
-      const currentUserId = currentUser?.id || currentUser?._id;
-      const ownRepSessionId = orgId
-        ? `org_${orgId}_user_${currentUserId}`
-        : `user_${currentUserId}`;
       if (isSalesRep && data.error === "phone_mismatch" && data.sessionId === ownRepSessionId) {
-        setRepSessionError(data.errorMessage || "Phone number mismatch. Please scan using your registered WhatsApp number.");
+        setRepSessionError(
+          data.errorMessage || "Phone number mismatch. Please scan using your registered WhatsApp number."
+        );
       } else if (
         isSalesRep &&
         data.sessionId === ownRepSessionId &&
@@ -216,7 +279,7 @@ export default function WhatsAppChat() {
       ) {
         setRepSessionError("");
       }
-      // ==========================================
+
       setSessions((prev) => {
         const existingIndex = prev.findIndex((s) => s.sessionId === data.sessionId);
         if (existingIndex >= 0) {
@@ -248,8 +311,7 @@ export default function WhatsAppChat() {
       });
     });
 
-    socket.on("conversation_updated", (data) => {
-      // Reload conversations list
+    socket.on("conversation_updated", () => {
       fetchConversations();
     });
 
@@ -294,22 +356,11 @@ export default function WhatsAppChat() {
       }
     });
 
-    /*
-    // Pairing code received from backend via Socket.IO (Currently disabled)
-    socket.on("whatsapp_pairing_code", (data) => {
-      if (data.organizationId && orgId && String(data.organizationId) !== String(orgId)) {
-        return;
-      }
-      setPairingCodeData({ sessionId: data.sessionId, pairingCode: data.pairingCode });
-    });
-    */
-
     return () => {
       socket.off("whatsapp_status");
       socket.off("conversation_updated");
       socket.off("ai_status_updated");
       socket.off("organization_updated");
-      // socket.off("whatsapp_pairing_code");
     };
   }, [orgId, isManager, isSalesRep, currentUser?.id, currentUser?._id]);
 
@@ -318,17 +369,14 @@ export default function WhatsAppChat() {
     if (!selectedConv) return;
     const currentLeadId = selectedConv.leadId?.id || selectedConv.leadId?._id;
 
-    // Join room
     if (currentLeadId) {
       socket.emit("join_lead_chat", currentLeadId);
     }
 
-    // Listen to new message logs
     socket.on("new_message", (msg) => {
       const msgLeadId = msg.leadId?._id || msg.leadId?.id || msg.leadId;
       if (String(msgLeadId) === String(currentLeadId)) {
         setMessages((prev) => {
-          // Prevent duplicates
           if (prev.some((m) => m.messageId === msg.messageId)) return prev;
           return [...prev, msg];
         });
@@ -336,7 +384,6 @@ export default function WhatsAppChat() {
       }
     });
 
-    // Listen to typing status
     socket.on("typing_status", (data) => {
       if (String(data.leadId) === String(currentLeadId)) {
         setIsTyping(data.isTyping);
@@ -350,7 +397,7 @@ export default function WhatsAppChat() {
         return String(cLeadId) === String(currentLeadId)
           ? { ...c, unreadCount: 0 }
           : c;
-      }),
+      })
     );
 
     return () => {
@@ -362,7 +409,6 @@ export default function WhatsAppChat() {
     };
   }, [selectedConv]);
 
-  // Scroll chat timeline to bottom
   const scrollToBottom = () => {
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -372,7 +418,6 @@ export default function WhatsAppChat() {
   const fetchSessionStatus = async () => {
     try {
       const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
-      // Handle new { sessions, whatsappLineLimit } response shape
       if (res.data && res.data.sessions) {
         const nextSessions = Array.isArray(res.data.sessions) ? res.data.sessions : [];
         setSessions(nextSessions);
@@ -394,7 +439,6 @@ export default function WhatsAppChat() {
           setWhatsappLineLimit(res.data.whatsappLineLimit);
         }
       } else {
-        // Fallback for legacy array response
         const nextSessions = Array.isArray(res.data) ? res.data : [];
         setSessions(nextSessions);
         if (isSalesRep) {
@@ -417,8 +461,6 @@ export default function WhatsAppChat() {
     }
   };
 
-  // Keep the open connection dialog synchronized while WhatsApp is pairing,
-  // and re-sync status whenever the modal is closed.
   useEffect(() => {
     if (!connectModalOpen) {
       fetchSessionStatus();
@@ -428,118 +470,148 @@ export default function WhatsAppChat() {
     return () => window.clearInterval(timer);
   }, [connectModalOpen, isSalesRep]);
 
-  // Periodic background status check
   useEffect(() => {
     const timer = window.setInterval(fetchSessionStatus, 30000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (pageNum = 1, append = false, queryOverrides = {}) => {
     try {
-      // The API scopes sales reps from their authenticated identity. Managers
-      // should receive all organization conversations and use the local rep filter.
-      const res = await axios.get(API_ENDPOINTS.WHATSAPP.CONVERSATIONS);
-      const data = res.data;
-      setConversations(data);
-      setConversationsLoading(false);
+      if (pageNum === 1 && !append) {
+        setConversationsLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
 
-      const searchParams = new URLSearchParams(location.search);
-      const targetLeadId = location.state?.selectLeadId || searchParams.get("leadId");
-      if (targetLeadId) {
-        const found = data.find((c) => {
-          const lId = c.leadId?._id || c.leadId?.id || c.leadId;
-          return String(lId) === String(targetLeadId);
-        });
-        if (found) {
-          handleSelectConversation(found);
-        } else {
-          // If no conversation thread exists yet, retrieve lead details and create a mock conversation
-          try {
-            const leadRes = await axios.get(
-              `${API_ENDPOINTS.LEADS.BASE}/${targetLeadId}`,
-            );
-            const newMockConv = {
-              id: `mock_${targetLeadId}`,
-              leadId: leadRes.data,
-              unreadCount: 0,
-              lastMessage: "No messages yet",
-              lastMessageTime: new Date(),
-            };
-            setConversations((prev) => {
-              if (
-                prev.some((c) => {
-                  const lId = c.leadId?._id || c.leadId?.id || c.leadId;
-                  return String(lId) === String(targetLeadId);
-                })
-              )
-                return prev;
-              return [newMockConv, ...prev];
-            });
-            handleSelectConversation(newMockConv);
-          } catch (err) {
-            console.error(
-              "Failed to load lead details for mock conversation",
-              err,
-            );
+      const activeSearch =
+        queryOverrides.search !== undefined ? queryOverrides.search : searchQuery;
+      const activeUnread =
+        queryOverrides.unreadOnly !== undefined ? queryOverrides.unreadOnly : unreadOnly;
+      const activeRep =
+        queryOverrides.repFilterUserId !== undefined
+          ? queryOverrides.repFilterUserId
+          : repFilterUserId;
+
+      const params = {
+        page: pageNum,
+        limit: 30,
+      };
+
+      if (activeSearch && activeSearch.trim()) {
+        params.search = activeSearch.trim();
+      }
+      if (activeUnread) {
+        params.unreadOnly = "true";
+      }
+      if (isManager && activeRep !== "all" && activeRep !== "admin") {
+        params.userId = activeRep;
+      }
+
+      const res = await axios.get(API_ENDPOINTS.WHATSAPP.CONVERSATIONS, { params });
+      const rawData = res.data;
+      const list = Array.isArray(rawData) ? rawData : (rawData?.conversations || []);
+      const total = typeof rawData?.total === "number" ? rawData.total : list.length;
+      const more = typeof rawData?.hasMore === "boolean" ? rawData.hasMore : false;
+
+      setTotalConversations(total);
+      setHasMore(more);
+      setPage(pageNum);
+
+      setConversations((prev) => {
+        if (append && pageNum > 1) {
+          const existingIds = new Set(prev.map((c) => String(c.id || c._id)));
+          const freshItems = list.filter((c) => !existingIds.has(String(c.id || c._id)));
+          return [...prev, ...freshItems];
+        }
+        return list;
+      });
+
+      setConversationsLoading(false);
+      setLoadingMore(false);
+
+      if (pageNum === 1) {
+        const searchParams = new URLSearchParams(location.search);
+        const targetLeadId = location.state?.selectLeadId || searchParams.get("leadId");
+        if (targetLeadId) {
+          const found = list.find((c) => {
+            const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+            return String(lId) === String(targetLeadId);
+          });
+          if (found) {
+            handleSelectConversation(found);
+          } else {
+            try {
+              const leadRes = await axios.get(
+                `${API_ENDPOINTS.LEADS.BASE}/${targetLeadId}`
+              );
+              const newMockConv = {
+                id: `mock_${targetLeadId}`,
+                leadId: leadRes.data,
+                unreadCount: 0,
+                lastMessage: "No messages yet",
+                lastMessageTime: new Date(),
+              };
+              setConversations((prev) => {
+                if (
+                  prev.some((c) => {
+                    const lId = c.leadId?._id || c.leadId?.id || c.leadId;
+                    return String(lId) === String(targetLeadId);
+                  })
+                )
+                  return prev;
+                return [newMockConv, ...prev];
+              });
+              handleSelectConversation(newMockConv);
+            } catch (err) {
+              console.error("Failed to load lead details for mock conversation", err);
+            }
           }
         }
       }
     } catch (err) {
       console.error("Failed to fetch conversations", err);
       setConversationsLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const primarySessionId = orgId ? `org_${orgId}` : "device_1";
-  const secondarySessionId = orgId ? `org_${orgId}_device_2` : "device_2";
-
-  const currentUserId = currentUser?.id || currentUser?._id;
-  const ownRepSessionId = orgId
-    ? `org_${orgId}_user_${currentUserId}`
-    : `user_${currentUserId}`;
-
-  const primarySession = sessions.find(
-    (s) =>
-      (isSalesRep && (s.isRepSession || s.sessionId === ownRepSessionId)) ||
-      (!isSalesRep && (s.sessionId === primarySessionId || s.isPrimary)) ||
-      s.sessionId === primarySessionId ||
-      s.isPrimary,
-  ) || {
-    sessionId: isSalesRep ? ownRepSessionId : primarySessionId,
-    status: "disconnected",
-    qrCode: "",
-    connectedPhone: "",
-    connectedName: "",
-    label: isSalesRep ? "My WhatsApp Line" : "Line 1 (Primary)",
-    isPrimary: true,
-    isRepSession: isSalesRep,
-  };
-
-  const secondarySession = sessions.find(
-    (s) =>
-      s.sessionId === secondarySessionId ||
-      (!s.isPrimary && s.sessionId?.includes("device_2")),
-  ) || {
-    sessionId: secondarySessionId,
-    status: "disconnected",
-    qrCode: "",
-    connectedPhone: "",
-    connectedName: "",
-    label: "Line 2 (Secondary)",
-    isPrimary: false,
-  };
-
-  const formatPhoneNumber = (phone) => {
-    if (!phone) return "";
-    const clean = String(phone).replace(/\D/g, "");
-    if (clean.length === 12 && clean.startsWith("91")) {
-      return `+91 ${clean.slice(2, 7)} ${clean.slice(7)}`;
+  const handleLoadMore = () => {
+    if (hasMore && !loadingMore && !conversationsLoading) {
+      fetchConversations(page + 1, true);
     }
-    if (clean.length === 10) {
-      return `+${clean.slice(0, 5)} ${clean.slice(5)}`;
-    }
-    return `+${clean}`;
   };
+
+  const handleConversationScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 60) {
+      if (hasMore && !loadingMore && !conversationsLoading) {
+        handleLoadMore();
+      }
+    }
+  };
+
+  // Debounce search query to trigger server-side pagination
+  const isInitialSearchRender = useRef(true);
+  useEffect(() => {
+    if (isInitialSearchRender.current) {
+      isInitialSearchRender.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      fetchConversations(1, false, { search: searchQuery });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Re-fetch conversations when sales rep filter changes
+  const isInitialRepRender = useRef(true);
+  useEffect(() => {
+    if (isInitialRepRender.current) {
+      isInitialRepRender.current = false;
+      return;
+    }
+    fetchConversations(1, false, { repFilterUserId });
+  }, [repFilterUserId]);
 
   const handleConnect = async (targetSessionId, deviceNum = 1) => {
     const sId =
@@ -553,8 +625,6 @@ export default function WhatsAppChat() {
     setSessionLoading(true);
     setConnectModalOpen(true);
     if (isSalesRep) setRepSessionError("");
-    // Clear pairing code when starting a fresh QR connection (disabled)
-    // setPairingCodeData(null);
     try {
       await axios.post(API_ENDPOINTS.WHATSAPP.CONNECT, {
         sessionId: sId,
@@ -569,37 +639,6 @@ export default function WhatsAppChat() {
       setSessionLoading(false);
     }
   };
-
-  /*
-  // Pairing code request handler (Currently disabled)
-  const handlePairingCodeRequest = async (targetSessionId, phoneNumber, deviceNum = 1) => {
-    const sId = targetSessionId || (deviceNum === 2 ? secondarySessionId : primarySessionId);
-    setSessionLoadingMap((prev) => ({ ...prev, [sId]: true }));
-    setSessionLoading(true);
-    setConnectModalOpen(true);
-    if (isSalesRep) setRepSessionError("");
-    // Clear any previous pairing code before requesting a fresh one
-    setPairingCodeData(null);
-    try {
-      await axios.post(API_ENDPOINTS.WHATSAPP.PAIRING_CODE, {
-        phoneNumber,
-        sessionId: sId,
-        device: deviceNum,
-        isSecondary: deviceNum === 2,
-      });
-      // Pairing code will arrive via 'whatsapp_pairing_code' socket event
-      setTimeout(fetchSessionStatus, 1500);
-    } catch (err) {
-      const errMsg =
-        err?.response?.data?.message || "Failed to request pairing code. Please try again.";
-      console.error("Failed to request WhatsApp pairing code:", err);
-      alert(errMsg);
-    } finally {
-      setSessionLoadingMap((prev) => ({ ...prev, [sId]: false }));
-      setSessionLoading(false);
-    }
-  };
-  */
 
   const handleLogout = async (sessionId) => {
     if (!sessionId) return;
@@ -626,7 +665,6 @@ export default function WhatsAppChat() {
     setMessagesLoading(true);
     setMessages([]);
 
-    // Set up lead qualification state fields
     const lead = conv.leadId;
     if (lead) {
       setQualForm({
@@ -642,7 +680,7 @@ export default function WhatsAppChat() {
 
     try {
       const res = await axios.get(
-        API_ENDPOINTS.WHATSAPP.CONVERSATION(conv.leadId?.id),
+        API_ENDPOINTS.WHATSAPP.CONVERSATION(conv.leadId?.id)
       );
       setMessages(res.data);
       setMessagesLoading(false);
@@ -653,7 +691,6 @@ export default function WhatsAppChat() {
     }
   };
 
-  // Toggle AI on/off for lead
   const handleToggleAI = async () => {
     if (!selectedConv) return;
     const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
@@ -664,7 +701,6 @@ export default function WhatsAppChat() {
         aiEnabled: nextState,
       });
 
-      // Update local state
       const updatedLead = res.data.lead;
       setSelectedConv((prev) => ({
         ...prev,
@@ -687,14 +723,13 @@ export default function WhatsAppChat() {
                 },
               }
             : c;
-        }),
+        })
       );
-    } catch (err) {
+    } catch {
       alert("Failed to toggle AI state.");
     }
   };
 
-  // Instant Resume AI (clears active 5-minute pause)
   const handleResumeAI = async () => {
     if (!selectedConv) return;
     const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
@@ -725,9 +760,9 @@ export default function WhatsAppChat() {
                 },
               }
             : c;
-        }),
+        })
       );
-    } catch (err) {
+    } catch {
       alert("Failed to resume AI.");
     }
   };
@@ -743,7 +778,6 @@ export default function WhatsAppChat() {
     setSendError("");
     setSendingMessage(true);
 
-    // Optimistically snooze AI for 5 minutes if AI is enabled for this lead
     if (selectedConv.leadId?.aiEnabled) {
       const optimisticPausedUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
       setSelectedConv((prev) => ({
@@ -765,7 +799,7 @@ export default function WhatsAppChat() {
                 },
               }
             : c;
-        }),
+        })
       );
     }
 
@@ -785,7 +819,6 @@ export default function WhatsAppChat() {
     }
   };
 
-  // AI Chat Summarization
   const handleSummarizeChat = async (forceRefresh = false) => {
     if (!selectedConv) return;
     const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
@@ -800,35 +833,34 @@ export default function WhatsAppChat() {
       );
       setChatSummary(res.data.data);
     } catch (err) {
-      setChatSummary({ error: err.response?.data?.message || "Failed to generate summary. Please try again." });
+      setChatSummary({
+        error: err.response?.data?.message || "Failed to generate summary. Please try again.",
+      });
     } finally {
       setSummaryLoading(false);
     }
   };
 
-  // Update lead qualification parameters in DB
   const handleUpdateQualification = async (e) => {
     e.preventDefault();
     if (!selectedConv) return;
     setSavingQual(true);
 
     try {
-      // Update CRM lead
       await axios.put(
         `${API_ENDPOINTS.LEADS.BASE}/${selectedConv.leadId?.id}`,
         {
           aiQualification: qualForm,
-        },
+        }
       );
       alert("AI Qualification fields updated successfully!");
-    } catch (err) {
+    } catch {
       alert("Failed to save updates.");
     } finally {
       setSavingQual(false);
     }
   };
 
-  // Add Tags
   const handleAddTag = async (e) => {
     e.preventDefault();
     if (!selectedConv || !newTagInput.trim()) return;
@@ -842,7 +874,7 @@ export default function WhatsAppChat() {
         `${API_ENDPOINTS.LEADS.BASE}/${selectedConv.leadId?.id}`,
         {
           aiTags: nextTags,
-        },
+        }
       );
 
       setSelectedConv((prev) => ({
@@ -850,35 +882,33 @@ export default function WhatsAppChat() {
         leadId: { ...prev.leadId, aiTags: res.data.aiTags },
       }));
       setNewTagInput("");
-    } catch (err) {
+    } catch {
       alert("Failed to add tag.");
     }
   };
 
-  // Delete Tag
   const handleDeleteTag = async (tagToDelete) => {
     if (!selectedConv) return;
     const nextTags = (selectedConv.leadId?.aiTags || []).filter(
-      (t) => t !== tagToDelete,
+      (t) => t !== tagToDelete
     );
     try {
       const res = await axios.put(
         `${API_ENDPOINTS.LEADS.BASE}/${selectedConv.leadId?.id}`,
         {
           aiTags: nextTags,
-        },
+        }
       );
 
       setSelectedConv((prev) => ({
         ...prev,
         leadId: { ...prev.leadId, aiTags: res.data.aiTags },
       }));
-    } catch (err) {
+    } catch {
       alert("Failed to remove tag.");
     }
   };
 
-  // Create follow up
   const handleCreateFollowUp = async (e) => {
     e.preventDefault();
     if (!selectedConv) return;
@@ -904,497 +934,419 @@ export default function WhatsAppChat() {
         priority: "Medium",
         notes: "",
       });
-    } catch (err) {
+    } catch {
       alert("Failed to schedule follow up.");
     }
   };
 
-  // Filter conversations — supports admin rep-filter dropdown & date-wise filter
-  const filteredConversations = conversations.filter((c) => {
-    const name = c.leadId?.name || "Unknown";
-    const phone = c.leadId?.phone || "";
-    const cleanQuery = searchQuery.toLowerCase();
-    const matchesSearch =
-      name.toLowerCase().includes(cleanQuery) || phone.includes(cleanQuery);
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((c) => {
+      const name = c.leadId?.name || "Unknown";
+      const phone = c.leadId?.phone || "";
+      const cleanQuery = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !cleanQuery ||
+        name.toLowerCase().includes(cleanQuery) ||
+        phone.includes(cleanQuery);
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    // Date-wise Filter
-    if (dateFilter !== "all") {
-      const rawDate = c.lastMessageTime || c.updatedAt || c.createdAt;
-      if (!rawDate) return false;
-      const itemDate = new Date(rawDate);
-      if (isNaN(itemDate.getTime())) return false;
+      if (unreadOnly && (c.unreadCount || 0) <= 0) {
+        return false;
+      }
 
-      const nowDate = new Date();
-      const today = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
-      const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
-      const diffDays = Math.floor((today.getTime() - itemDay.getTime()) / (1000 * 60 * 60 * 24));
+      if (dateFilter !== "all") {
+        const rawDate = c.lastMessageTime || c.updatedAt || c.createdAt;
+        if (!rawDate) return false;
+        const itemDate = new Date(rawDate);
+        if (isNaN(itemDate.getTime())) return false;
 
-      if (dateFilter === "today" && diffDays !== 0) return false;
-      if (dateFilter === "yesterday" && diffDays !== 1) return false;
-      if (dateFilter === "last7days" && (diffDays < 0 || diffDays > 7)) return false;
-      if (dateFilter === "last30days" && (diffDays < 0 || diffDays > 30)) return false;
-    }
+        const nowDate = new Date();
+        const today = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate());
+        const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+        const diffDays = Math.floor((today.getTime() - itemDay.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (!isManager || repFilterUserId === "all") return true;
-    if (repFilterUserId === "admin") {
-      // Admin org lines: sessions that are NOT _user_ sessions
-      const msgSessionId = c.leadId?.lastSessionId || "";
-      return !msgSessionId.includes("_user_");
-    }
-    // Filter by assigned rep
-    const assignedTo = c.leadId?.assignedTo?._id || c.leadId?.assignedTo;
-    const selectedRep = teamStatuses.find(
-      (rep) => String(rep.userId) === repFilterUserId,
-    );
-    return (
-      String(assignedTo) === repFilterUserId ||
-      (selectedRep?.name &&
-        String(assignedTo).toLowerCase() === selectedRep.name.toLowerCase())
-    );
-  });
+        if (dateFilter === "today" && diffDays !== 0) return false;
+        if (dateFilter === "yesterday" && diffDays !== 1) return false;
+        if (dateFilter === "last7days" && (diffDays < 0 || diffDays > 7)) return false;
+        if (dateFilter === "last30days" && (diffDays < 0 || diffDays > 30)) return false;
+      }
+
+      if (!isManager || repFilterUserId === "all") return true;
+      if (repFilterUserId === "admin") {
+        const msgSessionId = c.leadId?.lastSessionId || "";
+        return !msgSessionId.includes("_user_");
+      }
+
+      const assignedTo = c.leadId?.assignedTo?._id || c.leadId?.assignedTo;
+      const selectedRep = teamStatuses.find(
+        (rep) => String(rep.userId) === repFilterUserId
+      );
+      return (
+        String(assignedTo) === repFilterUserId ||
+        (selectedRep?.name &&
+          String(assignedTo).toLowerCase() === selectedRep.name.toLowerCase())
+      );
+    });
+  }, [conversations, searchQuery, unreadOnly, dateFilter, isManager, repFilterUserId, teamStatuses]);
 
   const hasActiveFilters = Boolean(
     searchQuery.trim() ||
+    unreadOnly ||
     dateFilter !== "all" ||
     (isManager && repFilterUserId !== "all")
   );
 
   const handleClearFilters = () => {
     setSearchQuery("");
+    setUnreadOnly(false);
     setDateFilter("all");
     setRepFilterUserId("all");
+    fetchConversations(1, false, { search: "", unreadOnly: false, repFilterUserId: "all" });
   };
 
+  // Channel Connection status helpers
+  const isDual = !isSalesRep && whatsappLineLimit >= 2;
+  const isPrimaryConnected = primarySession.status === "connected";
+  const isSecondaryConnected = isDual && secondarySession.status === "connected";
+  const isBothConnected = isDual
+    ? isPrimaryConnected && isSecondaryConnected
+    : isPrimaryConnected;
+  const isPrimaryQR = primarySession.status === "qr";
+  const isSecondaryQR = isDual && secondarySession.status === "qr";
+  const isAnyQR = isPrimaryQR || isSecondaryQR;
+  const isPrimaryConnecting =
+    primarySession.status === "connecting" || primarySession.status === "pairing";
+  const isSecondaryConnecting =
+    isDual && (secondarySession.status === "connecting" || secondarySession.status === "pairing");
+  const isAnyConnecting = isPrimaryConnecting || isSecondaryConnecting;
+
   return (
-    <div className="flex flex-col h-[calc(100vh-70px)] relative overflow-hidden bg-[#130a28] text-white">
-      {/* Top Header Connection Status Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 border-b border-[#361c5a] bg-[#1a0c35]">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#361c5a] rounded-xl">
-            <MessageSquare className="w-6 h-6 text-purple-400" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold tracking-tight">
-                WhatsApp AI Lead Hub
-              </h1>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                {whatsappLineLimit >= 2 ? "2 Channels" : "1 Channel"}
-              </span>
+    <div className="flex flex-col h-[calc(100dvh-65px)] -mb-6 relative overflow-hidden bg-bg-main text-text-primary font-sans select-none">
+      {/* Top Header Strip: Channel Connection Status & Quick Controls */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-bg-card border-b border-border-main shrink-0 z-10">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-[#00a884]/15 text-[#00a884] flex items-center justify-center shrink-0">
+              <MessageSquare className="w-4 h-4 fill-current" />
             </div>
-
-            {/* Dual Channel Status Badges */}
-            {/* <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1.5">
-              <div
-                onClick={() => setConnectModalOpen(true)}
-                className="flex items-center gap-1.5 bg-[#251347] hover:bg-[#2e1757] px-2.5 py-1 rounded-lg border border-[#3e206c] text-xs cursor-pointer transition-colors"
-                title="Click to manage Line 1"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    primarySession.status === "connected"
-                      ? "bg-emerald-500 animate-pulse"
-                      : primarySession.status === "qr"
-                        ? "bg-amber-400 animate-pulse"
-                        : primarySession.status === "connecting"
-                          ? "bg-blue-400 animate-spin"
-                          : "bg-slate-500"
-                  }`}
-                />
-                <span className="font-semibold text-purple-200">
-                  Line 1:
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-text-primary tracking-tight">
+                  WhatsApp Hub
                 </span>
-                <span
-                  className={`capitalize font-bold ${
-                    primarySession.status === "connected"
-                      ? "text-emerald-400"
-                      : primarySession.status === "qr"
-                        ? "text-amber-300"
-                        : primarySession.status === "connecting"
-                          ? "text-blue-300"
-                          : "text-slate-400"
-                  }`}
-                >
-                  {primarySession.status === "connected"
-                    ? primarySession.connectedPhone
-                      ? `+${primarySession.connectedPhone}`
-                      : "Connected"
-                    : primarySession.status === "qr"
-                      ? "QR Ready"
-                      : primarySession.status}
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#00a884]/10 text-[#00a884] border border-[#00a884]/25">
+                  {isDual ? "2 Channels" : "1 Channel"}
                 </span>
               </div>
-
-              {whatsappLineLimit >= 2 && (
-              <div
-                onClick={() => setConnectModalOpen(true)}
-                className="flex items-center gap-1.5 bg-[#251347] hover:bg-[#2e1757] px-2.5 py-1 rounded-lg border border-[#3e206c] text-xs cursor-pointer transition-colors"
-                title="Click to manage Line 2"
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    secondarySession.status === "connected"
-                      ? "bg-emerald-500 animate-pulse"
-                      : secondarySession.status === "qr"
-                        ? "bg-amber-400 animate-pulse"
-                        : secondarySession.status === "connecting"
-                          ? "bg-blue-400 animate-spin"
-                          : "bg-slate-500"
-                  }`}
-                />
-                <span className="font-semibold text-indigo-200">
-                  Line 2:
-                </span>
-                <span
-                  className={`capitalize font-bold ${
-                    secondarySession.status === "connected"
-                      ? "text-emerald-400"
-                      : secondarySession.status === "qr"
-                        ? "text-amber-300"
-                        : secondarySession.status === "connecting"
-                          ? "text-blue-300"
-                          : "text-slate-400"
-                  }`}
-                >
-                  {secondarySession.status === "connected"
-                    ? secondarySession.connectedPhone
-                      ? `+${secondarySession.connectedPhone}`
-                      : "Connected"
-                    : secondarySession.status === "qr"
-                      ? "QR Ready"
-                      : secondarySession.status}
-                </span>
-              </div>
-              )}
-            </div> */}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Top-Right Dynamic WhatsApp Connection / Status Controls */}
-          {(() => {
-            const isDual = !isSalesRep && whatsappLineLimit >= 2;
-            const isPrimaryConnected = primarySession.status === "connected";
-            const isSecondaryConnected =
-              isDual && secondarySession.status === "connected";
-            const isBothConnected = isDual
-              ? isPrimaryConnected && isSecondaryConnected
-              : isPrimaryConnected;
-            const isPrimaryQR = primarySession.status === "qr";
-            const isSecondaryQR = isDual && secondarySession.status === "qr";
-            const isAnyQR = isPrimaryQR || isSecondaryQR;
-            const isPrimaryConnecting =
-              primarySession.status === "connecting" ||
-              primarySession.status === "pairing";
-            const isSecondaryConnecting =
-              isDual &&
-              (secondarySession.status === "connecting" ||
-                secondarySession.status === "pairing");
-            const isAnyConnecting =
-              isPrimaryConnecting || isSecondaryConnecting;
-
-            // 1. Fully Connected (all available lines)
-            if (isBothConnected) {
-              return (
-                <button
-                  type="button"
-                  onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm hover:shadow-emerald-500/15 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
-                  title="WhatsApp Account Active · Click to manage or disconnect"
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span className="font-bold">
-                    {isDual
-                      ? "2 WhatsApp Channels Active"
-                      : primarySession.connectedPhone
-                      ? `Active (${formatPhoneNumber(primarySession.connectedPhone)})`
-                      : isSalesRep
-                      ? "My WhatsApp Connected"
-                      : "WhatsApp Connected"}
-                  </span>
-                </button>
-              );
-            }
-
-            // 2. Dual Line: Partially connected (1 of 2 connected)
-            if (isDual && (isPrimaryConnected || isSecondaryConnected)) {
-              if (isAnyQR) {
-                return (
-                  <button
-                    type="button"
-                    onClick={() => setConnectModalOpen(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
-                    title="Line 1 is active · Scan QR to connect Line 2"
-                  >
-                    <QrCode className="w-4 h-4" />
-                    <span>Scan QR (Line {isPrimaryQR ? "1" : "2"} Ready)</span>
-                  </button>
-                );
-              }
-              return (
-                <button
-                  type="button"
-                  onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs shadow-sm transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
-                  title="1 channel active · Click to connect second channel"
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span>1/2 Active</span>
-                  <span className="text-purple-300 font-normal">
-                    · Connect Line {isPrimaryConnected ? "2" : "1"}
-                  </span>
-                </button>
-              );
-            }
-
-            // 3. QR Ready to Scan
-            if (isAnyQR) {
-              return (
-                <button
-                  type="button"
-                  onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold py-2 px-3.5 rounded-xl text-xs shadow-lg shadow-amber-500/25 animate-pulse transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
-                  title="Scan QR Code with mobile WhatsApp"
-                >
-                  <QrCode className="w-4 h-4" />
-                  <span>
-                    Scan QR Code (
-                    {isDual && isPrimaryQR && isSecondaryQR
-                      ? "2 Lines Ready"
-                      : isDual && isSecondaryQR
-                      ? "Line 2 Ready"
-                      : "QR Ready"}
-                    )
-                  </span>
-                </button>
-              );
-            }
-
-            // 4. Connecting / Pairing
-            if (isAnyConnecting) {
-              return (
-                <button
-                  type="button"
-                  onClick={() => setConnectModalOpen(true)}
-                  className="flex items-center gap-2 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 font-semibold py-2 px-3.5 rounded-xl text-xs transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:outline-none"
-                  title="Connecting to WhatsApp..."
-                >
-                  <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
-                  <span>Connecting WhatsApp...</span>
-                </button>
-              );
-            }
-
-            // 5. Offline / Disconnected
-            return (
-              <button
-                type="button"
-                onClick={() => setConnectModalOpen(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
-                title="Click to connect WhatsApp"
-              >
-                <QrCode className="w-4 h-4" />
-                <span>
-                  {isSalesRep
-                    ? "Connect WhatsApp"
-                    : isDual
-                    ? "Connect Channels (2 Lines)"
-                    : "Connect WhatsApp"}
-                </span>
-              </button>
-            );
-          })()}
+        {/* Dynamic Channel Connection Status Button */}
+        <div className="flex items-center gap-2">
+          {isBothConnected ? (
+            <button
+              type="button"
+              onClick={() => setConnectModalOpen(true)}
+              className="flex items-center gap-2 bg-[#00a884]/10 hover:bg-[#00a884]/20 text-[#00a884] border border-[#00a884]/30 font-semibold py-1.5 px-3 rounded-full text-xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#00a884]"
+              title="WhatsApp Line Active · Click to manage"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00a884] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00a884]"></span>
+              </span>
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span className="font-medium text-xs">
+                {isDual
+                  ? "2 Lines Active"
+                  : primarySession.connectedPhone
+                  ? formatPhoneNumber(primarySession.connectedPhone)
+                  : "WhatsApp Connected"}
+              </span>
+            </button>
+          ) : isDual && (isPrimaryConnected || isSecondaryConnected) ? (
+            <button
+              type="button"
+              onClick={() => setConnectModalOpen(true)}
+              className="flex items-center gap-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-semibold py-1.5 px-3 rounded-full text-xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500"
+              title="1 channel active · Click to connect second line"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <span>1/2 Active · Connect Line {isPrimaryConnected ? "2" : "1"}</span>
+            </button>
+          ) : isAnyQR ? (
+            <button
+              type="button"
+              onClick={() => setConnectModalOpen(true)}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-1.5 px-3 rounded-full text-xs shadow-xs animate-pulse transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-amber-500"
+              title="Scan QR Code to connect"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Scan QR Code</span>
+            </button>
+          ) : isAnyConnecting ? (
+            <button
+              type="button"
+              onClick={() => setConnectModalOpen(true)}
+              className="flex items-center gap-2 bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/30 font-semibold py-1.5 px-3 rounded-full text-xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-sky-500"
+            >
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span>Connecting WhatsApp...</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConnectModalOpen(true)}
+              className="flex items-center gap-2 bg-[#00a884] hover:bg-[#008f72] text-white font-semibold py-1.5 px-3.5 rounded-full text-xs shadow-sm transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#00a884]"
+              title="Connect WhatsApp"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Connect WhatsApp</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Layout Pane */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* Left Side: Conversation List */}
+      {/* Main Two-Panel Workspace */}
+      <div className="flex flex-1 overflow-hidden min-h-0 select-text">
+        {/* Left Side: WhatsApp Conversation List */}
         <div
-          className={`w-full md:w-80 flex flex-col border-r border-[#361c5a] bg-[#1a0c35] shrink-0 ${
+          className={`w-full md:w-[360px] flex flex-col border-r border-border-main bg-bg-card shrink-0 ${
             selectedConv ? "hidden md:flex" : "flex"
           }`}
         >
-          <div className="p-3 border-b border-[#361c5a] space-y-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+          {/* Search & Filter Toolbar */}
+          <div className="p-2.5 border-b border-border-main space-y-2 bg-bg-card">
+            {/* Search Input Bar */}
+            <div className="relative flex items-center">
+              <Search className="absolute left-3 w-4 h-4 text-text-secondary pointer-events-none" />
               <input
                 id="whatsapp-conversation-search"
                 type="text"
-                aria-label="Search conversations by customer name or phone"
-                placeholder="Search conversations..."
+                aria-label="Search or start new chat"
+                placeholder="Search or start new chat"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-400/50 text-sm text-white placeholder-purple-300/40"
+                className="w-full bg-bg-secondary/60 hover:bg-bg-secondary focus:bg-bg-card border border-transparent focus:border-border-main rounded-lg pl-9 pr-9 py-1.5 text-xs text-text-primary placeholder:text-text-secondary outline-none transition-colors"
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-purple-400 hover:text-white rounded-md hover:bg-[#361c5a] focus-visible:ring-1 focus-visible:ring-purple-400"
-                  aria-label="Clear conversation search"
-                  title="Clear search"
+                  className="absolute right-2.5 p-1 text-text-secondary hover:text-text-primary rounded-md focus-visible:ring-1 focus-visible:ring-[#00a884]"
+                  aria-label="Clear search"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Sales Rep Filter with dropdown icon and leading Users icon */}
-            {isManager && (
-              <div className="relative">
-                <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
-                <select
-                  aria-label="Filter WhatsApp conversations by representative"
-                  value={repFilterUserId}
-                  onChange={(e) => setRepFilterUserId(e.target.value)}
-                  className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-400/50 text-xs text-white appearance-none cursor-pointer"
-                >
-                  <option value="all">All conversations (Team)</option>
-                  <option value="admin">Organization WhatsApp lines</option>
-                  {teamStatuses.map((rep) => (
-                    <option key={rep.userId} value={String(rep.userId)}>
-                      {rep.name || "Sales representative"}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
-              </div>
-            )}
-
-            {/* Date-wise Filter with dropdown icon and leading Calendar icon */}
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
+            {/* Quick Filter Chips: All, Unread, Date filters */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setUnreadOnly(false);
+                  setDateFilter("all");
+                }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+                  !unreadOnly && dateFilter === "all"
+                    ? "bg-[#00a884]/15 text-[#00a884] font-semibold"
+                    : "bg-bg-secondary text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnreadOnly((prev) => !prev)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
+                  unreadOnly
+                    ? "bg-[#00a884] text-white font-semibold"
+                    : "bg-bg-secondary text-text-secondary hover:text-text-primary"
+                }`}
+              >
+                Unread
+              </button>
               <select
                 aria-label="Filter conversations by date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full bg-[#21103f] border border-[#3e206c] rounded-xl pl-9 pr-9 py-2 outline-none focus:border-purple-400 focus-visible:ring-2 focus-visible:ring-purple-400/50 text-xs text-white appearance-none cursor-pointer"
+                className={`px-2 py-1 rounded-full text-[11px] font-medium bg-bg-secondary border-none outline-none cursor-pointer ${
+                  dateFilter !== "all" ? "text-[#00a884] font-semibold bg-[#00a884]/10" : "text-text-secondary"
+                }`}
               >
-                <option value="all">All Dates</option>
+                <option value="all">Any Date</option>
                 <option value="today">Today</option>
                 <option value="yesterday">Yesterday</option>
                 <option value="last7days">Last 7 Days</option>
                 <option value="last30days">Last 30 Days</option>
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 pointer-events-none" />
-            </div>
 
-            {/* Search count and active filter indicator */}
-            <div className="flex items-center justify-between px-1 text-[11px] text-purple-300/70">
-              <span>
-                {conversationsLoading
-                  ? "Loading conversations..."
-                  : `${filteredConversations.length} of ${conversations.length} ${
-                      conversations.length === 1 ? "chat" : "chats"
-                    }`}
-              </span>
+              {/* Manager: Sales Rep filter */}
+              {isManager && (
+                <select
+                  aria-label="Filter conversations by sales representative"
+                  value={repFilterUserId}
+                  onChange={(e) => setRepFilterUserId(e.target.value)}
+                  className={`px-2 py-1 rounded-full text-[11px] font-medium bg-bg-secondary border-none outline-none cursor-pointer max-w-[130px] truncate ${
+                    repFilterUserId !== "all" ? "text-[#00a884] font-semibold bg-[#00a884]/10" : "text-text-secondary"
+                  }`}
+                  title="Filter by Sales Representative"
+                >
+                  <option value="all">All Reps</option>
+                  <option value="admin">Org Line</option>
+                  {teamStatuses.map((rep) => (
+                    <option key={rep.userId} value={String(rep.userId)}>
+                      {rep.name || "Rep"}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               {hasActiveFilters && (
                 <button
                   type="button"
                   onClick={handleClearFilters}
-                  className="text-purple-400 hover:text-purple-200 underline font-semibold focus-visible:ring-1 focus-visible:ring-purple-400 rounded"
+                  className="text-[11px] text-[#00a884] hover:underline font-semibold ml-auto shrink-0 px-1"
                 >
-                  Reset filters
+                  Reset
                 </button>
               )}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto" role="region" aria-label="Conversation list">
+          {/* Conversation List Items */}
+          <div
+            className="flex-1 overflow-y-auto divide-y divide-border-main/50"
+            role="region"
+            aria-label="Conversation list"
+            onScroll={handleConversationScroll}
+          >
             {conversationsLoading ? (
-              <div className="p-6 text-center text-brand-secondary/50" role="status" aria-live="polite">
-                <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-purple-400" />
-                Loading conversations...
+              <div
+                className="flex flex-col items-center justify-center p-8 text-text-secondary"
+                role="status"
+                aria-live="polite"
+              >
+                <RefreshCw className="w-6 h-6 animate-spin text-[#00a884] mb-2" />
+                <span className="text-xs">Loading chats...</span>
               </div>
             ) : filteredConversations.length === 0 ? (
-              <div className="p-6 text-center text-brand-secondary/60 flex flex-col items-center">
-                <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-3 border border-purple-500/20">
-                  <MessageSquare className="w-6 h-6" />
+              <div className="p-8 text-center text-text-secondary flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-bg-secondary flex items-center justify-center text-text-secondary mb-3">
+                  <MessageSquare className="w-6 h-6 opacity-60" />
                 </div>
-                <h4 className="text-sm font-semibold text-white mb-1">
-                  {hasActiveFilters ? "No matches found" : "No active conversations"}
+                <h4 className="text-sm font-semibold text-text-primary mb-1">
+                  {hasActiveFilters ? "No chats match your filter" : "No chats yet"}
                 </h4>
-                <p className="text-xs text-brand-secondary/60 max-w-xs mb-3">
+                <p className="text-xs text-text-secondary max-w-xs mb-3">
                   {hasActiveFilters
-                    ? "Try adjusting your search terms, date range, or representative filter."
-                    : "When contacts message your connected WhatsApp line, conversations will show here."}
+                    ? "Try adjusting your search terms or resetting filters."
+                    : "When customer leads send a WhatsApp message, conversations appear here."}
                 </p>
                 {hasActiveFilters && (
                   <button
                     type="button"
                     onClick={handleClearFilters}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-bg-secondary hover:bg-bg-secondary/80 text-text-primary transition-colors"
                   >
-                    Clear Search & Filters
+                    Clear Filters
                   </button>
                 )}
               </div>
             ) : (
-              <ul className="divide-y divide-[#301855]/40" role="list">
+              <ul className="divide-y divide-border-main/40" role="list">
                 {filteredConversations.map((conv) => {
                   const lead = conv.leadId;
                   const isSelected = selectedConv?.id === conv.id;
                   const leadName = lead?.name || "Unknown Customer";
                   const status = lead?.status || "New";
+                  const hasUnread = (conv.unreadCount || 0) > 0;
 
                   return (
                     <li key={conv.id}>
                       <button
                         onClick={() => handleSelectConversation(conv)}
-                        className={`w-full flex items-start gap-3 p-3.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none focus-visible:bg-[#2f1658] ${
-                          isSelected ? "bg-[#2f1658]" : "hover:bg-[#24114d]"
+                        className={`w-full flex items-start gap-3 px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:bg-bg-secondary ${
+                          isSelected
+                            ? "bg-bg-secondary/90 dark:bg-[#2a3942]"
+                            : "hover:bg-bg-secondary/60 dark:hover:bg-[#202c33]"
                         }`}
                       >
-                        {/* Avatar */}
-                        <div className="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-sm shrink-0 border border-purple-500/30">
-                          {leadName.substring(0, 2).toUpperCase()}
+                        {/* Circular WhatsApp Avatar */}
+                        <div className="relative shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-[#374248] text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-sm">
+                            {leadName.substring(0, 2).toUpperCase()}
+                          </div>
+                          {lead?.aiEnabled && (
+                            <span
+                              className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-bg-card flex items-center justify-center ${
+                                isLeadAiPaused(lead) ? "bg-amber-500" : "bg-[#00a884]"
+                              }`}
+                              title={
+                                isLeadAiPaused(lead)
+                                  ? `AI Snoozed (${getRemainingPauseTime(lead.aiPausedUntil)})`
+                                  : "Gemini AI Active"
+                              }
+                            >
+                              <Bot className="w-2 h-2 text-white" />
+                            </span>
+                          )}
                         </div>
 
-                        {/* Details */}
+                        {/* Middle & Right Details */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
                             <h3
-                              className="font-bold text-sm truncate text-white"
+                              className="font-semibold text-sm text-text-primary truncate"
                               title={leadName}
                             >
                               {leadName}
                             </h3>
                             <span
-                              className="text-[10px] text-brand-secondary/60 font-medium whitespace-nowrap shrink-0"
-                              title={
-                                conv.lastMessageTime
-                                  ? new Date(conv.lastMessageTime).toLocaleString()
-                                  : ""
-                              }
+                              className={`text-[11px] font-medium whitespace-nowrap shrink-0 ${
+                                hasUnread
+                                  ? "text-[#00a884] font-semibold"
+                                  : "text-text-secondary"
+                              }`}
                             >
                               {formatConversationTime(conv.lastMessageTime)}
                             </span>
                           </div>
-                          <p
-                            className="text-xs text-brand-secondary/70 truncate mt-0.5"
-                            title={conv.lastMessage || ""}
-                          >
-                            {conv.lastMessage || "No messages yet"}
-                          </p>
 
-                          <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p
+                              className="text-xs text-text-secondary truncate"
+                              title={conv.lastMessage || ""}
+                            >
+                              {conv.lastMessage || "No messages yet"}
+                            </p>
+
+                            {/* Unread Message Counter Badge */}
+                            {hasUnread && (
+                              <span
+                                className="min-w-5 h-5 px-1.5 flex items-center justify-center bg-[#00a884] text-white text-[10px] font-bold rounded-full shadow-xs shrink-0"
+                                aria-label={`${conv.unreadCount} unread`}
+                              >
+                                {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Secondary CRM badges: Lead Status & Assigned Rep */}
+                          <div className="flex items-center justify-between gap-2 mt-1.5 pt-0.5">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[9px] rounded-md font-bold uppercase tracking-wider shrink-0">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-bg-secondary text-text-secondary shrink-0">
                                 {status}
                               </span>
                               {lead?.assignedTo && (
                                 <span
-                                  className="text-[9px] text-purple-300/60 truncate max-w-[90px]"
+                                  className="text-[10px] text-text-secondary truncate max-w-[100px]"
                                   title={`Assigned Rep: ${getAssignedRepName(lead)}`}
                                 >
                                   • {getAssignedRepName(lead)}
@@ -1402,35 +1354,13 @@ export default function WhatsAppChat() {
                               )}
                             </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {/* AI State badge */}
-                              {lead?.aiEnabled ? (
-                                isLeadAiPaused(lead) ? (
-                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/15 text-amber-400 text-[9px] rounded-md font-bold border border-amber-500/30">
-                                    <Clock className="w-2.5 h-2.5 animate-pulse" /> Snoozed ({getRemainingPauseTime(lead.aiPausedUntil)})
-                                  </span>
-                                ) : (
-                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 text-[9px] rounded-md font-bold">
-                                    <Brain className="w-2.5 h-2.5" /> AI Active
-                                  </span>
-                                )
-                              ) : (
-                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/10 text-amber-400 text-[9px] rounded-md font-bold">
-                                  <User className="w-2.5 h-2.5" /> Human
-                                </span>
-                              )}
-
-                              {/* Unread badge */}
-                              {conv.unreadCount > 0 && (
-                                <span
-                                  className="min-w-5 h-5 px-1.5 flex items-center justify-center bg-emerald-500 text-black text-[10px] font-extrabold rounded-full shadow-sm"
-                                  aria-label={`${conv.unreadCount} unread messages`}
-                                  title={`${conv.unreadCount} unread`}
-                                >
-                                  {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
-                                </span>
-                              )}
-                            </div>
+                            {/* AI / Snooze indicator */}
+                            {lead?.aiEnabled && isLeadAiPaused(lead) && (
+                              <span className="flex items-center gap-1 text-[10px] text-amber-500 font-semibold shrink-0">
+                                <Clock className="w-2.5 h-2.5 animate-pulse" />
+                                {getRemainingPauseTime(lead.aiPausedUntil)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </button>
@@ -1439,61 +1369,86 @@ export default function WhatsAppChat() {
                 })}
               </ul>
             )}
+
+            {/* Pagination Load More Controls */}
+            {hasMore && !conversationsLoading && (
+              <div className="p-3 text-center border-t border-border-main/40">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="w-full py-2 px-3 text-xs font-semibold rounded-lg bg-bg-secondary hover:bg-bg-secondary/80 text-text-primary transition-colors flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+                >
+                  {loadingMore ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#00a884]" />
+                      <span>Loading more chats...</span>
+                    </>
+                  ) : (
+                    <span>Load more chats</span>
+                  )}
+                </button>
+              </div>
+            )}
+            {!hasMore && !conversationsLoading && conversations.length > 0 && totalConversations > 0 && (
+              <div className="py-3 px-4 text-center text-[11px] text-text-secondary border-t border-border-main/20">
+                All {totalConversations} {totalConversations === 1 ? "chat" : "chats"} loaded
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Center: Message Logs timeline */}
+        {/* Center / Right: Selected Conversation Pane */}
         <div
-          className={`flex-1 flex flex-col bg-[#0f0822] min-w-0 ${
+          className={`flex-1 flex flex-col min-w-0 bg-[#efeae2] dark:bg-[#0b141a] relative ${
             selectedConv ? "flex" : "hidden md:flex"
           }`}
         >
           {selectedConv ? (
             <>
-              {/* Chat room Header */}
-              <div className="flex items-center justify-between p-3.5 border-b border-[#361c5a] bg-[#1a0c35] gap-2">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {/* Mobile Back Button to return to list */}
+              {/* WhatsApp Web Style Contact Header */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-bg-card border-b border-border-main gap-2 shrink-0 z-10 shadow-xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* Mobile Back Button */}
                   <button
                     type="button"
                     onClick={() => setSelectedConv(null)}
-                    className="md:hidden p-1.5 -ml-1 text-purple-300 hover:text-white rounded-lg hover:bg-[#251347] focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none transition-colors shrink-0"
+                    className="md:hidden p-1.5 -ml-1 text-text-secondary hover:text-text-primary rounded-full hover:bg-bg-secondary focus-visible:ring-2 focus-visible:ring-[#00a884] transition-colors shrink-0"
                     aria-label="Back to conversations list"
                     title="Back to conversations"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
 
-                  <div className="w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-sm shrink-0 border border-purple-500/20">
+                  {/* Header Avatar */}
+                  <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-[#374248] text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-sm shrink-0">
                     {(selectedConv.leadId?.name || "Unknown")
                       .substring(0, 2)
                       .toUpperCase()}
                   </div>
+
+                  {/* Contact Info */}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2
-                        className="font-bold text-sm text-white truncate max-w-[150px] sm:max-w-xs md:max-w-sm"
-                        title={selectedConv.leadId?.name || "Unknown Customer"}
+                        className="font-semibold text-sm text-text-primary truncate max-w-[160px] sm:max-w-xs"
+                        title={selectedConv.leadId?.name || "Customer"}
                       >
-                        {selectedConv.leadId?.name || "Unknown Customer"}
+                        {selectedConv.leadId?.name || "Customer"}
                       </h2>
-                      {/* Assigned Sales Person Badge */}
-                      {(() => {
-                        const repName = getAssignedRepName(selectedConv.leadId);
-                        return (
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 truncate max-w-[150px]"
-                            title={`Assigned Sales Representative: ${repName}`}
-                          >
-                            <UserCheck className="w-3 h-3 text-indigo-400 shrink-0" />
-                            <span className="truncate">{repName}</span>
-                          </span>
-                        );
-                      })()}
+                      {/* Assigned Rep Badge */}
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-bg-secondary text-text-secondary border border-border-main truncate max-w-[140px]"
+                        title={`Assigned Rep: ${getAssignedRepName(selectedConv.leadId)}`}
+                      >
+                        <UserCheck className="w-3 h-3 text-[#00a884] shrink-0" />
+                        <span className="truncate">{getAssignedRepName(selectedConv.leadId)}</span>
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-brand-secondary/70">
+
+                    <div className="flex items-center gap-1.5 text-xs text-text-secondary">
                       <span>
-                        WhatsApp: {formatPhoneNumber(selectedConv.leadId?.phone) || selectedConv.leadId?.phone || "N/A"}
+                        {formatPhoneNumber(selectedConv.leadId?.phone) || selectedConv.leadId?.phone || "N/A"}
                       </span>
                       {selectedConv.leadId?.phone && (
                         <button
@@ -1503,12 +1458,12 @@ export default function WhatsAppChat() {
                             setCopiedPhone(true);
                             setTimeout(() => setCopiedPhone(false), 2000);
                           }}
-                          className="text-purple-400 hover:text-purple-200 p-0.5 rounded hover:bg-[#251347] focus-visible:ring-1 focus-visible:ring-purple-400"
+                          className="text-text-secondary hover:text-text-primary p-0.5 rounded"
                           title="Copy phone number"
                           aria-label="Copy phone number"
                         >
                           {copiedPhone ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
+                            <Check className="w-3 h-3 text-[#00a884]" />
                           ) : (
                             <Copy className="w-3 h-3" />
                           )}
@@ -1518,177 +1473,174 @@ export default function WhatsAppChat() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  {/* Summarize Chat Button */}
-                  {selectedConv && (
-                    <button
-                      id="summarize-chat-btn"
-                      onClick={() => handleSummarizeChat(false)}
-                      disabled={summaryLoading}
-                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-600/30 transition-all disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
-                      title="Summarize conversation with AI"
-                      aria-label="Summarize conversation with AI"
-                    >
-                      {summaryLoading ? (
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                      )}
-                      <span className="hidden sm:inline">
-                        {summaryLoading ? "Analyzing..." : "Summarize"}
-                      </span>
-                    </button>
-                  )}
+                {/* Header Action Tools */}
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  {/* AI Summarize Chat Button */}
+                  <button
+                    id="summarize-chat-btn"
+                    onClick={() => handleSummarizeChat(false)}
+                    disabled={summaryLoading}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-bg-secondary border border-border-main transition-colors disabled:opacity-50"
+                    title="Summarize conversation with AI"
+                    aria-label="Summarize conversation with AI"
+                  >
+                    {summaryLoading ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-[#00a884]" />
+                    )}
+                    <span className="hidden sm:inline">Summarize</span>
+                  </button>
 
-                  {/* AI toggle slider */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-brand-secondary/80 font-bold hidden sm:inline">
-                      Auto-AI:
+                  {/* Auto-AI Toggle */}
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-bg-secondary/70 rounded-lg border border-border-main">
+                    <span className="text-[11px] text-text-secondary font-medium hidden sm:inline">
+                      Auto AI
                     </span>
                     <button
                       type="button"
                       onClick={handleToggleAI}
-                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none ${
-                        selectedConv.leadId?.aiEnabled
-                          ? "bg-purple-500"
-                          : "bg-[#361c5a]"
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:ring-2 focus-visible:ring-[#00a884] ${
+                        selectedConv.leadId?.aiEnabled ? "bg-[#00a884]" : "bg-slate-300 dark:bg-slate-600"
                       }`}
                       title={
                         selectedConv.leadId?.aiEnabled
-                          ? "Disable AI automated replies for this lead"
-                          : "Enable AI automated replies for this lead"
+                          ? "Disable automated AI replies"
+                          : "Enable automated AI replies"
                       }
-                      aria-label={
-                        selectedConv.leadId?.aiEnabled
-                          ? "Disable AI auto-reply"
-                          : "Enable AI auto-reply"
-                      }
+                      aria-label="Toggle automated AI replies"
                       role="switch"
                       aria-checked={Boolean(selectedConv.leadId?.aiEnabled)}
                     >
                       <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                          selectedConv.leadId?.aiEnabled
-                            ? "translate-x-5"
-                            : "translate-x-0"
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          selectedConv.leadId?.aiEnabled ? "translate-x-4" : "translate-x-0"
                         }`}
                       />
                     </button>
                   </div>
 
+                  {/* View Lead Details Link */}
                   <button
                     type="button"
                     onClick={() =>
                       navigate(`/lead-details/${selectedConv.leadId?.id || selectedConv.leadId?._id}`)
                     }
-                    className="text-xs font-bold text-purple-400 hover:text-purple-300 border border-purple-500/30 bg-purple-500/5 px-2.5 sm:px-3 py-1.5 rounded-lg focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none hidden sm:inline-block"
-                    title="View full lead record"
+                    className="text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-bg-secondary border border-border-main px-2.5 py-1.5 rounded-lg transition-colors hidden sm:flex items-center gap-1"
+                    title="Open full CRM Lead Details"
                   >
-                    View Lead
+                    <span>Lead</span>
+                    <ExternalLink className="w-3 h-3" />
                   </button>
 
-                  {/* Lead Qualifications Collapse / Expand Button */}
+                  {/* Lead Qualifications Toggle */}
                   <button
                     type="button"
                     onClick={() => setIsQualPanelOpen((prev) => !prev)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all border cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors border cursor-pointer ${
                       isQualPanelOpen
-                        ? "bg-purple-600/30 text-purple-200 border-purple-500/50"
-                        : "bg-[#251347] text-purple-300 hover:text-white border-[#3e206c] hover:border-purple-400"
+                        ? "bg-[#00a884]/15 text-[#00a884] border-[#00a884]/35"
+                        : "bg-bg-secondary/70 text-text-secondary hover:text-text-primary border-border-main"
                     }`}
-                    title={
-                      isQualPanelOpen
-                        ? "Collapse Lead Qualifications panel"
-                        : "Expand Lead Qualifications panel"
-                    }
-                    aria-label={
-                      isQualPanelOpen
-                        ? "Collapse Lead Qualifications panel"
-                        : "Expand Lead Qualifications panel"
-                    }
+                    title={isQualPanelOpen ? "Hide Lead Qualifications" : "Show Lead Qualifications"}
+                    aria-label="Toggle Lead Qualifications sidebar"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">
-                      {isQualPanelOpen ? "Hide Quals" : "Qualifications"}
-                    </span>
+                    <span className="hidden md:inline">Quals</span>
                   </button>
                 </div>
               </div>
 
-              {/* AI 5-Minute Pause / Snooze Banner */}
+              {/* AI 5-Minute Snooze Alert Banner */}
               {selectedConv.leadId?.aiEnabled && isLeadAiPaused(selectedConv.leadId) && (
-                <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-[#1a0c35] border-b border-amber-500/30 px-4 py-2.5 flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2.5 text-xs text-amber-300">
-                    <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 py-2 flex items-center justify-between shrink-0 z-10">
+                  <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-300">
+                    <Clock className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
                     <span>
-                      <strong className="text-amber-200">AI Snoozed (5 min):</strong> Manual message sent. Auto-resumes in{" "}
-                      <span className="font-mono font-bold text-amber-100 bg-amber-500/25 px-1.5 py-0.5 rounded">
+                      <strong>AI Snoozed (5 min):</strong> Manual message sent. Auto-resumes in{" "}
+                      <span className="font-mono font-bold bg-amber-500/20 px-1.5 py-0.5 rounded">
                         {getRemainingPauseTime(selectedConv.leadId.aiPausedUntil)}
                       </span>
                     </span>
                   </div>
                   <button
                     onClick={handleResumeAI}
-                    className="flex items-center gap-1.5 text-xs font-bold text-amber-200 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-3 py-1 rounded-md transition-all shadow-sm active:scale-95"
+                    className="flex items-center gap-1 text-xs font-bold text-amber-800 dark:text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-2.5 py-1 rounded-md transition-colors"
                   >
-                    <Play className="w-3 h-3 fill-current" /> Resume AI Now
+                    <Play className="w-3 h-3 fill-current" /> Resume AI
                   </button>
                 </div>
               )}
 
-              {/* Chat Timeline body */}
+              {/* Message History Timeline */}
               <div
-                className="flex-1 overflow-y-auto p-4 space-y-4"
+                className="flex-1 overflow-y-auto p-4 space-y-3"
                 role="region"
                 aria-label="Message history"
+                style={{
+                  backgroundImage:
+                    "radial-gradient(circle at center, rgba(0,0,0,0.03) 1px, transparent 1px)",
+                  backgroundSize: "20px 20px",
+                }}
               >
                 {messagesLoading ? (
                   <div
-                    className="flex flex-col items-center justify-center h-full text-brand-secondary/50"
+                    className="flex flex-col items-center justify-center h-full text-text-secondary"
                     role="status"
                     aria-live="polite"
                   >
-                    <RefreshCw className="w-8 h-8 animate-spin text-purple-400 mb-2" />
-                    Fetching chat transcripts...
+                    <RefreshCw className="w-7 h-7 animate-spin text-[#00a884] mb-2" />
+                    <span className="text-xs">Loading messages...</span>
                   </div>
                 ) : (
                   <>
-                    {messages.map((msg) => {
+                    {messages.map((msg, index) => {
                       const isIncoming = msg.direction === "incoming";
+                      const prevMsg = messages[index - 1];
+                      const currentDateLabel = getMessageDateLabel(msg.timestamp);
+                      const prevDateLabel = prevMsg ? getMessageDateLabel(prevMsg.timestamp) : null;
+                      const showDateDivider = currentDateLabel && currentDateLabel !== prevDateLabel;
 
                       return (
-                        <div
-                          key={msg.id || msg.messageId}
-                          className={`flex ${isIncoming ? "justify-start" : "justify-end"}`}
-                        >
-                          <div
-                            className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-3 shadow-md relative group break-words [overflow-wrap:anywhere] ${
-                              isIncoming
-                                ? "bg-[#281645] text-white rounded-tl-none border border-[#3e2164]"
-                                : "bg-purple-600 text-white rounded-tr-none"
-                            }`}
-                          >
-                            {/* AI Generated tag badge */}
-                            {!isIncoming && msg.aiGenerated && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-[#130a28]/40 text-purple-200 text-[8px] rounded font-semibold mb-1">
-                                <Bot className="w-2.5 h-2.5" /> AI Reply
+                        <React.Fragment key={msg.id || msg.messageId || index}>
+                          {/* Centered Date Separator Pill */}
+                          {showDateDivider && (
+                            <div className="flex justify-center my-2">
+                              <span className="bg-bg-card/90 text-text-secondary text-[11px] font-semibold px-3 py-1 rounded-lg shadow-2xs border border-border-main/50 uppercase tracking-wide">
+                                {currentDateLabel}
                               </span>
-                            )}
+                            </div>
+                          )}
 
-                            {/* Campaign or Human Agent badge */}
-                            {!isIncoming &&
-                              !msg.aiGenerated &&
-                              msg.senderName && (
-                                <span
+                          {/* Message Bubble Container */}
+                          <div className={`flex ${isIncoming ? "justify-start" : "justify-end"}`}>
+                            <div
+                              className={`max-w-[85%] sm:max-w-[72%] rounded-lg p-2.5 px-3 shadow-xs relative group break-words [overflow-wrap:anywhere] ${
+                                isIncoming
+                                  ? "bg-white dark:bg-[#202c33] text-gray-900 dark:text-[#e9edef] rounded-tl-none border border-black/5 dark:border-white/5"
+                                  : "bg-[#d9fdd3] dark:bg-[#005c4b] text-gray-900 dark:text-[#e9edef] rounded-tr-none border border-black/5 dark:border-white/5"
+                              }`}
+                            >
+                              {/* AI Reply Tag */}
+                              {!isIncoming && msg.aiGenerated && (
+                                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#00a884]/15 text-[#00a884] text-[9px] font-semibold mb-1">
+                                  <Bot className="w-2.5 h-2.5" />
+                                  <span>Gemini AI</span>
+                                </div>
+                              )}
+
+                              {/* Campaign or Rep Name Badge */}
+                              {!isIncoming && !msg.aiGenerated && msg.senderName && (
+                                <div
                                   className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold mb-1 ${
                                     msg.source === "cloud_api_campaign"
-                                      ? "bg-purple-500/20 text-purple-200 border border-purple-400/20"
-                                      : "bg-[#130a28]/25 text-white"
+                                      ? "bg-purple-500/15 text-purple-700 dark:text-purple-300"
+                                      : "bg-black/5 dark:bg-white/10 text-text-secondary"
                                   }`}
                                 >
                                   {msg.source === "cloud_api_campaign" ? (
                                     <>
-                                      <Send className="w-2.5 h-2.5 text-purple-300" />
+                                      <Send className="w-2.5 h-2.5" />
                                       <span>Campaign: {msg.senderName}</span>
                                     </>
                                   ) : (
@@ -1697,131 +1649,116 @@ export default function WhatsAppChat() {
                                       <span>{msg.senderName}</span>
                                     </>
                                   )}
-                                </span>
+                                </div>
                               )}
 
-                            {/* Image Attachment Rendering */}
-                            {msg.mediaUrl && msg.messageType === "image" && (
-                              <div className="mb-2 max-w-full sm:max-w-sm rounded-lg overflow-hidden border border-black/20">
-                                <img
-                                  src={
-                                    msg.mediaUrl?.startsWith("http")
-                                      ? msg.mediaUrl
-                                      : `${BACKEND_URL}${msg.mediaUrl}`
-                                  }
-                                  alt="WhatsApp attachment"
-                                  className="w-full object-contain max-h-60"
-                                />
-                              </div>
-                            )}
+                              {/* Image Attachment */}
+                              {msg.mediaUrl && msg.messageType === "image" && (
+                                <div className="mb-2 max-w-full sm:max-w-sm rounded-md overflow-hidden border border-black/10">
+                                  <img
+                                    src={
+                                      msg.mediaUrl?.startsWith("http")
+                                        ? msg.mediaUrl
+                                        : `${BACKEND_URL}${msg.mediaUrl}`
+                                    }
+                                    alt="WhatsApp attachment"
+                                    className="w-full object-contain max-h-60"
+                                  />
+                                </div>
+                              )}
 
-                            {/* Audio message handler */}
-                            {msg.mediaUrl && msg.messageType === "audio" && (
-                              <div className="mb-2 flex items-center gap-2 p-2 bg-black/20 rounded-lg max-w-full overflow-hidden">
-                                <Play className="w-4 h-4 text-purple-200 shrink-0" />
-                                <audio
-                                  controls
-                                  src={`${BACKEND_URL}${msg.mediaUrl}`}
-                                  className="h-8 max-w-full w-56 text-xs"
-                                  aria-label="Voice audio message"
-                                />
-                              </div>
-                            )}
+                              {/* Audio Message */}
+                              {msg.mediaUrl && msg.messageType === "audio" && (
+                                <div className="mb-2 flex items-center gap-2 p-2 bg-black/5 dark:bg-black/20 rounded-lg max-w-full overflow-hidden">
+                                  <Play className="w-4 h-4 text-[#00a884] shrink-0" />
+                                  <audio
+                                    controls
+                                    src={`${BACKEND_URL}${msg.mediaUrl}`}
+                                    className="h-8 max-w-full w-56 text-xs"
+                                    aria-label="Voice audio message"
+                                  />
+                                </div>
+                              )}
 
-                            {/* Doc Attachment */}
-                            {msg.mediaUrl && msg.messageType === "document" && (
-                              <a
-                                href={`${BACKEND_URL}${msg.mediaUrl}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="mb-2 flex items-center gap-2 p-2.5 bg-black/20 hover:bg-black/30 rounded-lg text-purple-100 hover:text-white border border-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
-                                aria-label={`Open document: ${msg.text || "Document Attachment"}`}
-                              >
-                                <FileText className="w-5 h-5 text-purple-300 shrink-0" />
-                                <span className="text-xs font-semibold truncate max-w-[200px]">
-                                  {msg.text || "Document Attachment"}
-                                </span>
-                              </a>
-                            )}
-
-                            {/* Location rendering */}
-                            {msg.messageType === "location" && (
-                              <div className="mb-2 flex items-center gap-2 p-2 bg-[#130a28]/35 rounded-lg text-xs font-medium">
-                                <MapPin className="w-4 h-4 text-red-400 shrink-0" />
-                                <span>{msg.text}</span>
-                              </div>
-                            )}
-
-                            {/* Text message content */}
-                            {msg.messageType !== "document" && (
-                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                                {msg.text}
-                              </p>
-                            )}
-
-                            {/* Date time and checkmarks status */}
-                            <div className="flex items-center justify-end gap-1.5 mt-1.5 text-[9px] text-brand-secondary/70">
-                              <span
-                                title={
-                                  msg.timestamp
-                                    ? new Date(msg.timestamp).toLocaleString([], {
-                                        dateStyle: "medium",
-                                        timeStyle: "short",
-                                      })
-                                    : ""
-                                }
-                              >
-                                {new Date(msg.timestamp).toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </span>
-
-                              {!isIncoming && (
-                                <span
-                                  className="inline-flex items-center"
-                                  title={
-                                    msg.status === "read"
-                                      ? "Read by customer"
-                                      : msg.status === "delivered"
-                                      ? "Delivered to device"
-                                      : "Sent to WhatsApp"
-                                  }
-                                  aria-label={
-                                    msg.status === "read"
-                                      ? "Read"
-                                      : msg.status === "delivered"
-                                      ? "Delivered"
-                                      : "Sent"
-                                  }
+                              {/* Document Attachment */}
+                              {msg.mediaUrl && msg.messageType === "document" && (
+                                <a
+                                  href={`${BACKEND_URL}${msg.mediaUrl}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mb-2 flex items-center gap-2 p-2 bg-black/5 dark:bg-black/20 hover:bg-black/10 rounded-lg text-text-primary border border-border-main transition-colors"
+                                  aria-label={`Open document: ${msg.text || "Document Attachment"}`}
                                 >
-                                  {msg.status === "read" ? (
-                                    <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                                  ) : msg.status === "delivered" ? (
-                                    <CheckCheck className="w-3.5 h-3.5 text-brand-secondary/60" />
-                                  ) : (
-                                    <Check className="w-3.5 h-3.5 text-brand-secondary/60" />
-                                  )}
-                                </span>
+                                  <FileText className="w-5 h-5 text-[#00a884] shrink-0" />
+                                  <span className="text-xs font-medium truncate max-w-[200px]">
+                                    {msg.text || "Document Attachment"}
+                                  </span>
+                                </a>
                               )}
+
+                              {/* Location Message */}
+                              {msg.messageType === "location" && (
+                                <div className="mb-2 flex items-center gap-2 p-2 bg-black/5 dark:bg-black/20 rounded-lg text-xs font-medium">
+                                  <MapPin className="w-4 h-4 text-red-500 shrink-0" />
+                                  <span>{msg.text}</span>
+                                </div>
+                              )}
+
+                              {/* Message Text */}
+                              {msg.messageType !== "document" && (
+                                <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                  {msg.text}
+                                </p>
+                              )}
+
+                              {/* Timestamp and Delivery Status Checks */}
+                              <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                <span>
+                                  {msg.timestamp
+                                    ? new Date(msg.timestamp).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
+                                    : ""}
+                                </span>
+
+                                {!isIncoming && (
+                                  <span
+                                    className="inline-flex items-center ml-0.5"
+                                    title={
+                                      msg.status === "read"
+                                        ? "Read"
+                                        : msg.status === "delivered"
+                                        ? "Delivered"
+                                        : "Sent"
+                                    }
+                                  >
+                                    {msg.status === "read" ? (
+                                      <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb]" />
+                                    ) : msg.status === "delivered" ? (
+                                      <CheckCheck className="w-3.5 h-3.5 text-gray-400" />
+                                    ) : (
+                                      <Check className="w-3.5 h-3.5 text-gray-400" />
+                                    )}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        </React.Fragment>
                       );
                     })}
 
-                    {/* Live typing status */}
+                    {/* Live Gemini AI typing indicator */}
                     {isTyping && (
                       <div className="flex justify-start">
                         <div
-                          className="bg-[#281645] text-purple-400 rounded-2xl rounded-tl-none p-3 border border-[#3e2164] flex items-center gap-2"
+                          className="bg-white dark:bg-[#202c33] text-[#00a884] rounded-lg rounded-tl-none p-2.5 shadow-xs flex items-center gap-2 text-xs font-semibold border border-black/5 dark:border-white/5"
                           role="status"
                           aria-live="polite"
                         >
                           <Bot className="w-4 h-4 animate-bounce" />
-                          <span className="text-xs font-semibold">
-                            Gemini AI is crafting reply...
-                          </span>
+                          <span>Gemini AI is crafting reply...</span>
                         </div>
                       </div>
                     )}
@@ -1830,40 +1767,36 @@ export default function WhatsAppChat() {
                 )}
               </div>
 
-              {/* Chat Input footer — Admin sees view-only banner; reps get send input */}
+              {/* Chat Composer Footer */}
               {isManager ? (
                 <div
-                  className="p-3.5 border-t border-[#361c5a] bg-[#1a0c35] flex items-center justify-center gap-2 text-xs font-semibold text-purple-200"
+                  className="p-3 border-t border-border-main bg-bg-card flex items-center justify-center gap-2 text-xs font-medium text-text-secondary shrink-0"
                   role="status"
                 >
-                  <Eye className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                  <Eye className="w-4 h-4 text-[#00a884] shrink-0" />
                   <span>
-                    <span className="font-bold text-purple-300">
-                      Admin Oversight Mode:
-                    </span>{" "}
-                    View-only access. Only{" "}
-                    <span className="text-purple-100 font-bold">
-                      {selectedConv?.leadId?.assignedTo?.name ||
-                        "the assigned representative"}
-                    </span>{" "}
-                    or organization line can send messages.
+                    <strong>Admin Oversight Mode:</strong> View-only access. Messages are handled by{" "}
+                    <strong>
+                      {selectedConv?.leadId?.assignedTo?.name || "the assigned representative"}
+                    </strong>{" "}
+                    or organization line.
                   </span>
                 </div>
               ) : (
-                <div className="border-t border-[#361c5a] bg-[#1a0c35]">
+                <div className="border-t border-border-main bg-bg-card shrink-0">
                   {sendError && (
                     <div
-                      className="px-4 py-2 bg-red-900/30 border-b border-red-500/30 text-red-200 text-xs flex items-center justify-between gap-2"
+                      className="px-4 py-2 bg-red-500/10 border-b border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center justify-between gap-2"
                       role="alert"
                     >
                       <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        <AlertCircle className="w-4 h-4 shrink-0" />
                         <span>{sendError}</span>
                       </div>
                       <button
                         type="button"
                         onClick={() => setSendError("")}
-                        className="text-red-300 hover:text-white p-0.5 rounded focus-visible:ring-1 focus-visible:ring-red-400"
+                        className="p-0.5 rounded hover:bg-red-500/20"
                         aria-label="Dismiss error"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1873,19 +1806,17 @@ export default function WhatsAppChat() {
 
                   <form
                     onSubmit={handleSend}
-                    className="p-3 flex items-center gap-2"
+                    className="p-2.5 sm:p-3 flex items-center gap-2"
                   >
-                    <label
-                      htmlFor="whatsapp-chat-message-input"
-                      className="sr-only"
-                    >
-                      Type WhatsApp message
+                    <label htmlFor="whatsapp-chat-message-input" className="sr-only">
+                      Type a message
                     </label>
-                    <div className="flex-1 relative flex items-center bg-[#21103f] border border-[#3e206c] focus-within:border-purple-400 focus-within:ring-1 focus-within:ring-purple-400/50 rounded-xl px-3.5 py-2 transition-all">
+
+                    <div className="flex-1 relative flex items-center bg-bg-secondary/70 hover:bg-bg-secondary focus-within:bg-bg-card border border-transparent focus-within:border-border-main rounded-lg px-3 py-2 transition-colors">
                       <input
                         id="whatsapp-chat-message-input"
                         type="text"
-                        placeholder="Type a WhatsApp message... (Press Enter to send)"
+                        placeholder="Type a message (Press Enter to send)"
                         value={inputValue}
                         onChange={(e) => {
                           setInputValue(e.target.value);
@@ -1897,15 +1828,15 @@ export default function WhatsAppChat() {
                             handleSend(e);
                           }
                         }}
-                        className="w-full bg-transparent outline-none text-white text-sm placeholder-purple-300/40"
+                        className="w-full bg-transparent outline-none text-text-primary text-xs sm:text-sm placeholder:text-text-secondary"
                       />
                       {inputValue && (
                         <button
                           type="button"
                           onClick={() => setInputValue("")}
-                          className="text-purple-400 hover:text-white p-1 rounded-md focus-visible:ring-1 focus-visible:ring-purple-400 ml-1"
-                          title="Clear message text"
-                          aria-label="Clear message text"
+                          className="text-text-secondary hover:text-text-primary p-0.5 ml-1"
+                          title="Clear message"
+                          aria-label="Clear message"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -1915,18 +1846,14 @@ export default function WhatsAppChat() {
                     <button
                       type="submit"
                       disabled={!inputValue.trim() || sendingMessage}
-                      className="p-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:hover:bg-purple-600 disabled:cursor-not-allowed rounded-xl text-white transition-all shrink-0 shadow-lg focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
-                      title={
-                        !inputValue.trim()
-                          ? "Type a message to send"
-                          : "Send message"
-                      }
+                      className="p-2.5 bg-[#00a884] hover:bg-[#008f72] disabled:opacity-40 disabled:hover:bg-[#00a884] disabled:cursor-not-allowed rounded-full text-white transition-all shrink-0 shadow-xs focus-visible:ring-2 focus-visible:ring-[#00a884] cursor-pointer"
+                      title={inputValue.trim() ? "Send message" : "Type a message to send"}
                       aria-label="Send WhatsApp message"
                     >
                       {sendingMessage ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <RefreshCw className="w-4 h-4 animate-spin" />
                       ) : (
-                        <Send className="w-5 h-5" />
+                        <Send className="w-4 h-4" />
                       )}
                     </button>
                   </form>
@@ -1934,51 +1861,28 @@ export default function WhatsAppChat() {
               )}
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 sm:p-8 text-brand-secondary/50">
+            /* WhatsApp Web Styled Splash / Empty State */
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 sm:p-8 bg-bg-main">
               {primarySession.status === "disconnected" &&
               (isSalesRep || secondarySession.status === "disconnected") ? (
-                <div className="max-w-md w-full p-6 sm:p-8 rounded-2xl bg-[#1e0e3c] border border-[#3e206c] flex flex-col items-center shadow-xl animate-fadeIn text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mb-4 border border-purple-500/20">
+                <div className="max-w-md w-full p-6 sm:p-8 rounded-2xl bg-bg-card border border-border-main flex flex-col items-center shadow-sm text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-[#00a884]/10 text-[#00a884] flex items-center justify-center mb-4">
                     <QrCode className="w-7 h-7" />
                   </div>
-                  <h2 className="text-lg font-bold text-white mb-2">
-                    {isSalesRep
-                      ? "Connect Your WhatsApp Line"
-                      : "Connect WhatsApp Channels"}
+                  <h2 className="text-lg font-bold text-text-primary mb-2">
+                    {isSalesRep ? "Connect Your WhatsApp" : "Connect WhatsApp Lines"}
                   </h2>
-                  <p className="text-xs text-brand-secondary/80 mb-5 leading-relaxed max-w-sm">
+                  <p className="text-xs text-text-secondary mb-5 leading-relaxed max-w-sm">
                     {isSalesRep
-                      ? "Connect your authorized WhatsApp account to start chatting with customer leads directly."
+                      ? "Link your mobile WhatsApp account to engage with leads directly and leverage automated CRM logging."
                       : whatsappLineLimit >= 2
-                      ? "Your organization supports 2 simultaneous WhatsApp connections. Click below to view and link both lines."
-                      : "Connect your organization WhatsApp account to activate automated lead capture and real-time CRM sync."}
+                      ? "Your organization supports 2 simultaneous WhatsApp connections. Click below to view and link channels."
+                      : "Connect your organization WhatsApp account to activate real-time chat sync and automated AI qualification."}
                   </p>
-
-                  {/* Step-by-step guidance */}
-                  <div className="w-full bg-[#130a28]/60 border border-[#361c5a] rounded-xl p-3.5 mb-5 text-left text-xs space-y-2">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-purple-300">
-                      Quick Setup Steps:
-                    </p>
-                    <ol className="list-decimal list-inside space-y-1 text-purple-200/80 text-[11px]">
-                      <li>
-                        Click the <strong className="text-white">Connect</strong>{" "}
-                        button below to open the QR modal.
-                      </li>
-                      <li>
-                        Open <strong className="text-white">WhatsApp</strong> on
-                        your phone &gt;{" "}
-                        <strong className="text-white">Linked Devices</strong>.
-                      </li>
-                      <li>
-                        Scan the QR code displayed on screen to start syncing
-                        chats.
-                      </li>
-                    </ol>
-                  </div>
 
                   <button
                     onClick={() => setConnectModalOpen(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-lg shadow-purple-500/25 transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
+                    className="flex items-center gap-2 bg-[#00a884] hover:bg-[#008f72] text-white font-bold py-2.5 px-5 rounded-xl text-xs shadow-sm transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-[#00a884]"
                   >
                     <QrCode className="w-4 h-4" />
                     <span>
@@ -1992,15 +1896,14 @@ export default function WhatsAppChat() {
                 </div>
               ) : (
                 <div className="max-w-sm flex flex-col items-center">
-                  <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-4 border border-purple-500/20">
-                    <MessageSquare className="w-8 h-8 text-purple-400" />
+                  <div className="w-16 h-16 rounded-full bg-[#00a884]/10 text-[#00a884] flex items-center justify-center mb-4">
+                    <MessageSquare className="w-8 h-8 fill-current" />
                   </div>
-                  <h2 className="text-xl font-bold text-white mb-2">
-                    Select a Conversation
+                  <h2 className="text-xl font-bold text-text-primary mb-2">
+                    WhatsApp Web for SalesBuster
                   </h2>
-                  <p className="text-xs sm:text-sm text-brand-secondary/70 leading-relaxed">
-                    Pick a chat thread from the left panel to begin managing
-                    customer inquiries, review AI actions, or qualify leads.
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Select a conversation from the left to start chatting with customer leads, view AI suggestions, and manage qualifications.
                   </p>
                 </div>
               )}
@@ -2008,60 +1911,38 @@ export default function WhatsAppChat() {
           )}
         </div>
 
-        {/* Right side: AI Qualification insights sidebar */}
+        {/* Right Collapsible Panel: Lead Qualifications & CRM Actions */}
         {selectedConv && isQualPanelOpen && (
-          <div className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 md:static md:w-80 border-l border-[#361c5a] bg-[#1a0c35] flex flex-col overflow-y-auto shrink-0 p-4 space-y-6 transition-all duration-300 shadow-2xl md:shadow-none">
-            {/* Qualification Form */}
-            <div>
-              <div className="flex items-center justify-between mb-4 border-b border-[#361c5a] pb-2 text-white">
-                <div className="flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-indigo-400" />
-                  <h2 className="font-bold text-sm uppercase tracking-wide">
-                    Lead Qualifications
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsQualPanelOpen(false)}
-                  title="Close qualifications panel"
-                  aria-label="Close qualifications panel"
-                  className="p-1 rounded-lg hover:bg-[#251347] text-purple-300 hover:text-white transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+          <div className="fixed inset-y-0 right-0 z-40 w-full sm:w-96 xl:static xl:w-84 border-l border-border-main bg-bg-card flex flex-col overflow-y-auto shrink-0 p-4 space-y-5 shadow-2xl xl:shadow-none transition-all">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border-main pb-3">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-[#00a884]" />
+                <h3 className="font-bold text-sm text-text-primary uppercase tracking-wide">
+                  Lead Qualifications
+                </h3>
               </div>
-
-              <form
-                onSubmit={handleUpdateQualification}
-                className="space-y-3.5"
+              <button
+                type="button"
+                onClick={() => setIsQualPanelOpen(false)}
+                className="p-1 rounded-lg hover:bg-bg-secondary text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+                aria-label="Close qualifications panel"
+                title="Close qualifications"
               >
-                {/* Service / Product Line */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                    Service / Product Line
-                  </label>
-                  <div className="space-y-1.5">
-                    {activeServices && activeServices.length > 0 && (
-                      <select
-                        value={qualForm.intent || ""}
-                        onChange={(e) =>
-                          setQualForm({
-                            ...qualForm,
-                            intent: e.target.value,
-                          })
-                        }
-                        className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
-                      >
-                        <option value="">Select Service / Custom...</option>
-                        {activeServices.map((s) => (
-                          <option key={s.code} value={s.name}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <input
-                      type="text"
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleUpdateQualification} className="space-y-3.5">
+              {/* Service / Product line */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">
+                  Service / Product Line
+                </label>
+                <div className="space-y-1.5">
+                  {activeServices && activeServices.length > 0 && (
+                    <select
                       value={qualForm.intent || ""}
                       onChange={(e) =>
                         setQualForm({
@@ -2069,243 +1950,215 @@ export default function WhatsAppChat() {
                           intent: e.target.value,
                         })
                       }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
-                      placeholder="Or specify custom service / requirement..."
-                    />
-                  </div>
+                      className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                    >
+                      <option value="">Select Service / Custom...</option>
+                      {activeServices.map((s) => (
+                        <option key={s.code} value={s.name}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <input
+                    type="text"
+                    value={qualForm.intent || ""}
+                    onChange={(e) =>
+                      setQualForm({
+                        ...qualForm,
+                        intent: e.target.value,
+                      })
+                    }
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                    placeholder="Or specify requirement..."
+                  />
                 </div>
+              </div>
 
-                {/* Configured Qualification Fields from Organization */}
-                {qualificationFields && qualificationFields.length > 0
-                  ? qualificationFields.map((field) => {
-                      const val = qualForm[field.key] ?? "";
-                      return (
-                        <div key={field.key}>
-                          <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                            {field.label || field.key}
-                            {field.required && (
-                              <span className="text-red-400 ml-0.5">*</span>
-                            )}
-                          </label>
-                          {field.type === "select" &&
-                          field.options &&
-                          field.options.length > 0 ? (
-                            <select
-                              value={val}
-                              onChange={(e) =>
-                                setQualForm({
-                                  ...qualForm,
-                                  [field.key]: e.target.value,
-                                })
-                              }
-                              className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
-                            >
-                              <option value="">Select...</option>
-                              {field.options.map((opt, i) => (
-                                <option key={i} value={opt}>
-                                  {opt}
-                                </option>
-                              ))}
-                            </select>
-                          ) : field.type === "boolean" ? (
-                            <select
-                              value={
-                                val === true || val === "true" || val === "Yes"
-                                  ? "Yes"
-                                  : val === false ||
-                                      val === "false" ||
-                                      val === "No"
-                                    ? "No"
-                                    : ""
-                              }
-                              onChange={(e) =>
-                                setQualForm({
-                                  ...qualForm,
-                                  [field.key]: e.target.value,
-                                })
-                              }
-                              className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
-                            >
-                              <option value="">Not Specified</option>
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
-                          ) : (
-                            <input
-                              type={field.type === "number" ? "number" : "text"}
-                              value={val}
-                              onChange={(e) =>
-                                setQualForm({
-                                  ...qualForm,
-                                  [field.key]: e.target.value,
-                                })
-                              }
-                              className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
-                              placeholder={
-                                field.description || `Enter ${field.label}...`
-                              }
-                            />
-                          )}
-                        </div>
-                      );
-                    })
-                  : null}
-
-                {/* Additional captured attributes in lead.aiQualification not covered by schema */}
-                {Object.entries(qualForm)
-                  .filter(([k]) => {
-                    const excluded = [
-                      "city",
-                      "preferredCallDate",
-                      "preferredCallTime",
-                      "preferredVisitDate",
-                      "urgency",
-                      "interestScore",
-                      "intent",
-                      "liftType",
-                      "_id",
-                      "__v",
-                      "id",
-                      ...(qualificationFields || []).map((f) => f.key),
-                    ];
-                    return !excluded.includes(k);
-                  })
-                  .map(([key, value]) => {
-                    const label = key
-                      .replace(/([A-Z])/g, " $1")
-                      .replace(/^./, (str) => str.toUpperCase());
+              {/* Dynamic Org Qualification Fields */}
+              {qualificationFields && qualificationFields.length > 0
+                ? qualificationFields.map((field) => {
+                    const val = qualForm[field.key] ?? "";
                     return (
-                      <div key={key}>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                          {label}
+                      <div key={field.key}>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">
+                          {field.label || field.key}
+                          {field.required && <span className="text-red-500 ml-0.5">*</span>}
                         </label>
-                        <input
-                          type="text"
-                          value={value ?? ""}
-                          onChange={(e) =>
-                            setQualForm({ ...qualForm, [key]: e.target.value })
-                          }
-                          className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none focus:border-purple-500"
-                          placeholder={`Enter ${label}...`}
-                        />
+                        {field.type === "select" && field.options && field.options.length > 0 ? (
+                          <select
+                            value={val}
+                            onChange={(e) =>
+                              setQualForm({
+                                ...qualForm,
+                                [field.key]: e.target.value,
+                              })
+                            }
+                            className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                          >
+                            <option value="">Select...</option>
+                            {field.options.map((opt, i) => (
+                              <option key={i} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        ) : field.type === "boolean" ? (
+                          <select
+                            value={
+                              val === true || val === "true" || val === "Yes"
+                                ? "Yes"
+                                : val === false || val === "false" || val === "No"
+                                ? "No"
+                                : ""
+                            }
+                            onChange={(e) =>
+                              setQualForm({
+                                ...qualForm,
+                                [field.key]: e.target.value,
+                              })
+                            }
+                            className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                          >
+                            <option value="">Not Specified</option>
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                          </select>
+                        ) : (
+                          <input
+                            type={field.type === "number" ? "number" : "text"}
+                            value={val}
+                            onChange={(e) =>
+                              setQualForm({
+                                ...qualForm,
+                                [field.key]: e.target.value,
+                              })
+                            }
+                            className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                            placeholder={field.description || `Enter ${field.label}...`}
+                          />
+                        )}
                       </div>
                     );
-                  })}
+                  })
+                : null}
 
+              {/* City */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">
+                  City / Location
+                </label>
+                <input
+                  type="text"
+                  value={qualForm.city}
+                  onChange={(e) =>
+                    setQualForm({ ...qualForm, city: e.target.value })
+                  }
+                  className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                  placeholder="e.g. Hyderabad, Vijayawada"
+                />
+              </div>
+
+              {/* Callback Date & Time */}
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                    City / Site Location
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">
+                    Callback Date
                   </label>
                   <input
                     type="text"
-                    value={qualForm.city}
+                    value={qualForm.preferredCallDate}
                     onChange={(e) =>
-                      setQualForm({ ...qualForm, city: e.target.value })
+                      setQualForm({ ...qualForm, preferredCallDate: e.target.value })
                     }
-                    className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                    placeholder="e.g. Hyderabad, Vijayawada"
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                    placeholder="e.g. Tomorrow"
                   />
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Callback Date
-                    </label>
-                    <input
-                      type="text"
-                      value={qualForm.preferredCallDate}
-                      onChange={(e) =>
-                        setQualForm({ ...qualForm, preferredCallDate: e.target.value })
-                      }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                      placeholder="e.g. Tomorrow, Monday"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Callback Time
-                    </label>
-                    <input
-                      type="text"
-                      value={qualForm.preferredCallTime}
-                      onChange={(e) =>
-                        setQualForm({ ...qualForm, preferredCallTime: e.target.value })
-                      }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                      placeholder="e.g. 11:00 AM, Evening"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">
+                    Callback Time
+                  </label>
+                  <input
+                    type="text"
+                    value={qualForm.preferredCallTime}
+                    onChange={(e) =>
+                      setQualForm({ ...qualForm, preferredCallTime: e.target.value })
+                    }
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                    placeholder="e.g. 11:00 AM"
+                  />
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Urgency
-                    </label>
-                    <select
-                      value={qualForm.urgency}
-                      onChange={(e) =>
-                        setQualForm({ ...qualForm, urgency: e.target.value })
-                      }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                    >
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-secondary/60 mb-1">
-                      Interest Score (0-10)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={qualForm.interestScore}
-                      onChange={(e) =>
-                        setQualForm({
-                          ...qualForm,
-                          interestScore: parseInt(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full bg-[#21103f] border border-[#3e206c] text-white text-xs rounded-lg p-2 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={savingQual}
-                  className="w-full bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white font-bold py-2 rounded-lg text-xs transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
-                >
-                  {savingQual ? "Saving..." : "Update Qualification Data"}
-                </button>
-              </form>
-            </div>
-
-            {/* AI Tags Section */}
-            <div>
-              <div className="flex items-center gap-2 mb-3 border-b border-[#361c5a] pb-2 text-white">
-                <Tag className="w-5 h-5 text-purple-400" />
-                <h2 className="font-bold text-sm uppercase tracking-wide">
-                  Lead Tags
-                </h2>
               </div>
 
-              <div className="flex flex-wrap gap-1.5 mb-3">
+              {/* Urgency & Score */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">
+                    Urgency
+                  </label>
+                  <select
+                    value={qualForm.urgency}
+                    onChange={(e) =>
+                      setQualForm({ ...qualForm, urgency: e.target.value })
+                    }
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">
+                    Score (0-10)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={qualForm.interestScore}
+                    onChange={(e) =>
+                      setQualForm({
+                        ...qualForm,
+                        interestScore: parseInt(e.target.value) || 0,
+                      })
+                    }
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-2 outline-none focus:border-[#00a884]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingQual}
+                className="w-full bg-[#00a884] hover:bg-[#008f72] disabled:opacity-50 text-white font-bold py-2 rounded-lg text-xs transition-colors cursor-pointer"
+              >
+                {savingQual ? "Saving..." : "Save Qualifications"}
+              </button>
+            </form>
+
+            {/* AI Tags Section */}
+            <div className="pt-2 border-t border-border-main">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <Tag className="w-4 h-4 text-[#00a884]" />
+                <span className="font-bold text-xs uppercase tracking-wide text-text-primary">
+                  Lead Tags
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 mb-2.5">
                 {(selectedConv.leadId?.aiTags || []).map((tag, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 text-purple-300 rounded-full text-xs font-semibold"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-bg-secondary text-text-primary rounded-full text-xs font-medium border border-border-main"
                   >
                     {tag}
                     <button
                       type="button"
                       onClick={() => handleDeleteTag(tag)}
-                      className="text-purple-400 hover:text-red-400 transition-colors ml-1 font-bold text-[10px] focus-visible:ring-1 focus-visible:ring-purple-400 rounded"
-                      title={`Remove ${tag} tag`}
+                      className="text-text-secondary hover:text-red-500 ml-1 font-bold"
+                      title={`Remove tag ${tag}`}
                       aria-label={`Remove tag ${tag}`}
                     >
                       ×
@@ -2321,51 +2174,50 @@ export default function WhatsAppChat() {
                   aria-label="New lead tag"
                   value={newTagInput}
                   onChange={(e) => setNewTagInput(e.target.value)}
-                  className="flex-grow bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white text-xs rounded-lg p-2 outline-none focus-visible:ring-1 focus-visible:ring-purple-400"
+                  className="flex-grow bg-bg-secondary border border-border-main text-text-primary text-xs rounded-lg p-1.5 outline-none focus:border-[#00a884]"
                 />
                 <button
                   type="submit"
-                  className="px-3 bg-[#3e206c] hover:bg-[#592e9c] text-white rounded-lg text-xs font-semibold focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
+                  className="px-3 bg-bg-secondary hover:bg-bg-secondary/80 text-text-primary border border-border-main rounded-lg text-xs font-semibold"
                 >
                   Add
                 </button>
               </form>
             </div>
 
-            {/* Summary Insights */}
-            <div>
-              <div className="flex items-center gap-2 mb-3 border-b border-[#361c5a] pb-2 text-white">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h2 className="font-bold text-sm uppercase tracking-wide">
-                  Conversation Insights
-                </h2>
+            {/* Conversation Insights */}
+            <div className="pt-2 border-t border-border-main">
+              <div className="flex items-center gap-1.5 mb-2.5">
+                <Sparkles className="w-4 h-4 text-[#00a884]" />
+                <span className="font-bold text-xs uppercase tracking-wide text-text-primary">
+                  Insights
+                </span>
               </div>
 
-              <div className="space-y-3.5 bg-[#21103f]/40 p-3 rounded-xl border border-[#351b5a]/60 text-xs">
+              <div className="space-y-2.5 bg-bg-secondary/50 p-2.5 rounded-lg border border-border-main text-xs">
                 <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-secondary/50 mb-1">
-                    AI Summary
-                  </h4>
-                  <p className="text-brand-secondary/90 leading-relaxed font-medium">
-                    {selectedConv.leadId?.conversationSummary ||
-                      "No summary compiled yet."}
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary block mb-0.5">
+                    Summary
+                  </span>
+                  <p className="text-text-primary leading-relaxed">
+                    {selectedConv.leadId?.conversationSummary || "No summary compiled yet."}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-secondary/50 mb-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary block mb-0.5">
                       Sentiment
-                    </h4>
-                    <span className="font-bold text-white text-xs">
+                    </span>
+                    <span className="font-bold text-text-primary">
                       {selectedConv.leadId?.sentiment || "Neutral"}
                     </span>
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-secondary/50 mb-0.5">
-                      Prob. Conversion
-                    </h4>
-                    <span className="font-bold text-purple-400 text-xs flex items-center gap-0.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary block mb-0.5">
+                      Conversion
+                    </span>
+                    <span className="font-bold text-[#00a884] flex items-center gap-0.5">
                       <TrendingUp className="w-3.5 h-3.5" />
                       {selectedConv.leadId?.probabilityOfConversion ?? 50}%
                     </span>
@@ -2373,70 +2225,61 @@ export default function WhatsAppChat() {
                 </div>
 
                 <div>
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-brand-secondary/50 mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary block mb-0.5">
                     Next Action
-                  </h4>
-                  <p className="text-white font-semibold">
+                  </span>
+                  <p className="font-semibold text-text-primary">
                     {selectedConv.leadId?.nextAction || "None"}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Action Tools */}
-            <div>
-              <div className="flex items-center gap-2 mb-3 border-b border-[#361c5a] pb-2 text-white">
-                <UserCheck className="w-5 h-5 text-purple-400" />
-                <h2 className="font-bold text-sm uppercase tracking-wide">
-                  CRM Actions
-                </h2>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFollowUpOpen(true)}
-                  className="flex items-center justify-center gap-2 w-full bg-[#361c5a] hover:bg-[#482575] text-white py-2 rounded-lg text-xs font-semibold transition-all border border-[#502b7b] focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
-                >
-                  <Calendar className="w-4 h-4 text-purple-400" />
-                  Schedule Follow Up
-                </button>
-              </div>
+            {/* CRM Actions */}
+            <div className="pt-2 border-t border-border-main">
+              <button
+                type="button"
+                onClick={() => setFollowUpOpen(true)}
+                className="flex items-center justify-center gap-2 w-full bg-bg-secondary hover:bg-bg-secondary/80 text-text-primary py-2 rounded-lg text-xs font-semibold transition-colors border border-border-main cursor-pointer"
+              >
+                <Calendar className="w-4 h-4 text-[#00a884]" />
+                Schedule Follow Up
+              </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Follow Up scheduling modal */}
+      {/* Follow Up Scheduling Modal */}
       {followUpOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs">
-          <div className="w-96 bg-[#1a0c35] text-white rounded-2xl shadow-2xl border border-[#361c5a] p-5">
-            <div className="flex items-center justify-between mb-4 border-b border-[#361c5a] pb-2">
-              <h3 className="font-bold text-md flex items-center gap-1.5">
-                <Calendar className="w-5 h-5 text-purple-400" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm bg-bg-card text-text-primary rounded-2xl shadow-xl border border-border-main p-5 animate-fadeIn">
+            <div className="flex items-center justify-between mb-4 border-b border-border-main pb-2">
+              <h3 className="font-bold text-sm flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-[#00a884]" />
                 Schedule CRM Follow Up
               </h3>
               <button
                 type="button"
                 onClick={() => setFollowUpOpen(false)}
-                className="p-1 hover:bg-[#361c5a] rounded-lg text-brand-secondary/80 focus-visible:ring-1 focus-visible:ring-purple-400"
-                aria-label="Close follow up modal"
+                className="p-1 hover:bg-bg-secondary rounded-lg text-text-secondary"
+                aria-label="Close modal"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateFollowUp} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateFollowUp} className="space-y-3.5 text-xs">
               <div>
-                <label className="block text-brand-secondary/65 font-bold uppercase tracking-wider mb-1 text-[9px]">
-                  Method Mode
+                <label className="block text-text-secondary font-bold uppercase tracking-wider mb-1 text-[9px]">
+                  Mode
                 </label>
                 <select
                   value={followUpData.type}
                   onChange={(e) =>
                     setFollowUpData({ ...followUpData, type: e.target.value })
                   }
-                  className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                  className="w-full bg-bg-secondary border border-border-main text-text-primary rounded-lg p-2 outline-none focus:border-[#00a884]"
                 >
                   <option value="WhatsApp">WhatsApp Message</option>
                   <option value="Call">Phone Call</option>
@@ -2445,10 +2288,10 @@ export default function WhatsAppChat() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-brand-secondary/65 font-bold uppercase tracking-wider mb-1 text-[9px]">
-                    Schedule Date
+                  <label className="block text-text-secondary font-bold uppercase tracking-wider mb-1 text-[9px]">
+                    Date
                   </label>
                   <input
                     type="date"
@@ -2457,12 +2300,12 @@ export default function WhatsAppChat() {
                     onChange={(e) =>
                       setFollowUpData({ ...followUpData, date: e.target.value })
                     }
-                    className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary rounded-lg p-2 outline-none focus:border-[#00a884]"
                   />
                 </div>
                 <div>
-                  <label className="block text-brand-secondary/65 font-bold uppercase tracking-wider mb-1 text-[9px]">
-                    Schedule Time
+                  <label className="block text-text-secondary font-bold uppercase tracking-wider mb-1 text-[9px]">
+                    Time
                   </label>
                   <input
                     type="text"
@@ -2471,34 +2314,28 @@ export default function WhatsAppChat() {
                     onChange={(e) =>
                       setFollowUpData({ ...followUpData, time: e.target.value })
                     }
-                    className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
-                    placeholder="e.g. 11:00 AM"
+                    className="w-full bg-bg-secondary border border-border-main text-text-primary rounded-lg p-2 outline-none focus:border-[#00a884]"
+                    placeholder="11:00 AM"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-brand-secondary/65 font-bold uppercase tracking-wider mb-1 text-[9px]">
+                <label className="block text-text-secondary font-bold uppercase tracking-wider mb-1 text-[9px]">
                   Priority
                 </label>
                 <div className="flex gap-4 mt-1">
                   {["Low", "Medium", "High"].map((p) => (
-                    <label
-                      key={p}
-                      className="flex items-center gap-1.5 cursor-pointer"
-                    >
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer">
                       <input
                         type="radio"
                         name="priority"
                         value={p}
                         checked={followUpData.priority === p}
                         onChange={(e) =>
-                          setFollowUpData({
-                            ...followUpData,
-                            priority: e.target.value,
-                          })
+                          setFollowUpData({ ...followUpData, priority: e.target.value })
                         }
-                        className="text-purple-400 focus:ring-0 bg-transparent border-[#3e206c] focus-visible:ring-2 focus-visible:ring-purple-400"
+                        className="text-[#00a884] focus:ring-0"
                       />
                       <span>{p}</span>
                     </label>
@@ -2507,8 +2344,8 @@ export default function WhatsAppChat() {
               </div>
 
               <div>
-                <label className="block text-brand-secondary/65 font-bold uppercase tracking-wider mb-1 text-[9px]">
-                  Task Notes / Details
+                <label className="block text-text-secondary font-bold uppercase tracking-wider mb-1 text-[9px]">
+                  Notes
                 </label>
                 <textarea
                   rows={3}
@@ -2517,14 +2354,14 @@ export default function WhatsAppChat() {
                   onChange={(e) =>
                     setFollowUpData({ ...followUpData, notes: e.target.value })
                   }
-                  className="w-full bg-[#21103f] border border-[#3e206c] focus:border-purple-400 text-white rounded-lg p-2.5 outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
-                  placeholder="Task instruction for sales agent..."
+                  className="w-full bg-bg-secondary border border-border-main text-text-primary rounded-lg p-2 outline-none focus:border-[#00a884]"
+                  placeholder="Task instruction for sales rep..."
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors shadow-lg focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
+                className="w-full bg-[#00a884] hover:bg-[#008f72] text-white font-bold py-2.5 rounded-lg text-xs transition-colors cursor-pointer"
               >
                 Schedule Task
               </button>
@@ -2533,7 +2370,7 @@ export default function WhatsAppChat() {
         </div>
       )}
 
-      {/* WhatsApp QR Connection Modal — adapts to single or dual line */}
+      {/* WhatsApp QR Connection Modal */}
       <WhatsAppConnectModal
         isOpen={connectModalOpen}
         onClose={() => {
@@ -2548,128 +2385,116 @@ export default function WhatsAppChat() {
             : [primarySession]
         }
         onConnect={handleConnect}
-        // onPairingCodeRequest={handlePairingCodeRequest}
         onDisconnect={handleLogout}
         onRefresh={fetchSessionStatus}
         loadingSessions={sessionLoadingMap}
-        organizationName={
-          organization?.name || currentUser?.organizationName || ""
-        }
+        organizationName={organization?.name || currentUser?.organizationName || ""}
         whatsappLineLimit={isSalesRep ? 1 : whatsappLineLimit}
         currentUser={currentUser}
         repSessionError={repSessionError}
-        // pairingCodeData={pairingCodeData}
       />
 
-
-      {/* ===== AI CHAT SUMMARY MODAL ===== */}
+      {/* AI Chat Summary Modal */}
       {summaryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#1a0c35] border border-purple-500/30 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <div className="bg-bg-card border border-border-main rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-fadeIn text-text-primary">
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-purple-700/30 shrink-0">
+            <div className="flex items-center justify-between p-4 border-b border-border-main shrink-0">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-                <h2 className="text-white font-bold text-base">AI Chat Summary</h2>
+                <Sparkles className="w-5 h-5 text-[#00a884]" />
+                <h2 className="font-bold text-base text-text-primary">AI Chat Summary</h2>
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => handleSummarizeChat(true)}
                   title="Re-analyze conversation"
-                  aria-label="Re-analyze conversation with AI"
-                  className="p-1.5 rounded-lg text-purple-400 hover:text-purple-200 hover:bg-purple-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
+                  aria-label="Re-analyze conversation"
+                  className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors"
                 >
                   <RefreshCw className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setSummaryModal(false)}
-                  title="Close summary modal"
-                  aria-label="Close summary modal"
-                  className="p-1.5 rounded-lg text-purple-400 hover:text-white hover:bg-purple-500/10 transition-colors focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:outline-none"
+                  title="Close modal"
+                  aria-label="Close modal"
+                  className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             {/* Content */}
-            <div className="p-5 space-y-4 overflow-y-auto">
-              {/* Loading */}
+            <div className="p-4 space-y-4 overflow-y-auto">
               {summaryLoading && (
                 <div className="flex flex-col items-center justify-center py-10 gap-3">
-                  <RefreshCw className="w-7 h-7 text-purple-400 animate-spin" />
-                  <p className="text-purple-300 text-sm font-medium">Analyzing conversation with AI...</p>
+                  <RefreshCw className="w-7 h-7 text-[#00a884] animate-spin" />
+                  <p className="text-text-secondary text-sm font-medium">Analyzing conversation with AI...</p>
                 </div>
               )}
 
-              {/* Error */}
               {chatSummary?.error && !summaryLoading && (
-                <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-300 text-sm flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  {chatSummary.error}
+                <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{chatSummary.error}</span>
                 </div>
               )}
 
-              {/* Results */}
               {chatSummary && !chatSummary.error && !summaryLoading && (
                 <>
-                  {/* Executive Summary */}
-                  <div className="p-4 bg-purple-900/20 border border-purple-500/20 rounded-xl">
-                    <p className="text-[10px] text-purple-400 font-bold mb-1.5 uppercase tracking-wider">Executive Overview</p>
-                    <p className="text-sm text-white leading-relaxed">{chatSummary.summary}</p>
+                  <div className="p-3.5 bg-bg-secondary/70 border border-border-main rounded-xl">
+                    <p className="text-[10px] text-[#00a884] font-bold mb-1 uppercase tracking-wider">Executive Overview</p>
+                    <p className="text-xs sm:text-sm text-text-primary leading-relaxed">{chatSummary.summary}</p>
                   </div>
 
-                  {/* Sentiment */}
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-purple-400 font-semibold">Customer Sentiment:</span>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                      chatSummary.sentiment === "High Intent" ? "bg-green-500/20 border-green-500/40 text-green-300" :
-                      chatSummary.sentiment === "Warm" ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" :
-                      chatSummary.sentiment === "Cold" || chatSummary.sentiment === "Hesitant" ? "bg-red-500/20 border-red-500/40 text-red-300" :
-                      chatSummary.sentiment === "Price Sensitive" ? "bg-amber-500/20 border-amber-500/40 text-amber-300" :
-                      "bg-purple-600/30 border-purple-500/40 text-purple-200"
+                    <span className="text-xs text-text-secondary font-semibold">Customer Sentiment:</span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                      chatSummary.sentiment === "High Intent" || chatSummary.sentiment === "Warm"
+                        ? "bg-[#00a884]/15 border-[#00a884]/30 text-[#00a884]"
+                        : chatSummary.sentiment === "Cold" || chatSummary.sentiment === "Hesitant"
+                        ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
+                        : "bg-bg-secondary border-border-main text-text-primary"
                     }`}>
                       {chatSummary.sentiment || "Neutral"}
                     </span>
                   </div>
 
-                  {/* Key Points */}
                   {chatSummary.keyPoints?.length > 0 && (
                     <div>
-                      <p className="text-[10px] text-purple-400 font-bold mb-2 uppercase tracking-wider">Key Discussion Points</p>
-                      <ul className="space-y-1.5">
+                      <p className="text-[10px] text-[#00a884] font-bold mb-1.5 uppercase tracking-wider">Key Discussion Points</p>
+                      <ul className="space-y-1">
                         {chatSummary.keyPoints.map((pt, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-purple-100">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" />
-                            {pt}
+                          <li key={i} className="flex items-start gap-2 text-xs text-text-primary">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[#00a884] mt-0.5 shrink-0" />
+                            <span>{pt}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
 
-                  {/* Next Steps */}
                   {chatSummary.nextSteps?.length > 0 && (
                     <div>
-                      <p className="text-[10px] text-purple-400 font-bold mb-2 uppercase tracking-wider">Recommended Next Steps</p>
-                      <ul className="space-y-1.5">
+                      <p className="text-[10px] text-[#00a884] font-bold mb-1.5 uppercase tracking-wider">Recommended Next Steps</p>
+                      <ul className="space-y-1">
                         {chatSummary.nextSteps.map((step, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-purple-100">
-                            <span className="w-4 h-4 flex-shrink-0 bg-purple-600 rounded-full flex items-center justify-center text-[9px] font-bold text-white mt-0.5">{i + 1}</span>
-                            {step}
+                          <li key={i} className="flex items-start gap-2 text-xs text-text-primary">
+                            <span className="w-4 h-4 shrink-0 bg-[#00a884] rounded-full flex items-center justify-center text-[9px] font-bold text-white mt-0.5">
+                              {i + 1}
+                            </span>
+                            <span>{step}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   )}
 
-                  {/* Metadata & Copy */}
-                  <div className="flex items-center justify-between pt-2 border-t border-purple-700/30">
-                    <span className="text-xs text-purple-500">
+                  <div className="flex items-center justify-between pt-2 border-t border-border-main">
+                    <span className="text-[11px] text-text-secondary">
                       {chatSummary.messagesAnalyzed} messages analyzed
-                      {chatSummary.generatedAt ? ` · ${new Date(chatSummary.generatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}` : ""}
                     </span>
                     <button
                       type="button"
@@ -2683,11 +2508,9 @@ export default function WhatsAppChat() {
                         ].join("");
                         navigator.clipboard.writeText(text);
                       }}
-                      className="text-xs text-purple-400 hover:text-purple-200 flex items-center gap-1 transition-colors px-2 py-1 rounded-md focus-visible:ring-1 focus-visible:ring-purple-400 focus-visible:outline-none"
-                      title="Copy summary to clipboard"
-                      aria-label="Copy summary to clipboard"
+                      className="text-xs text-[#00a884] hover:underline flex items-center gap-1 font-semibold px-2 py-1"
                     >
-                      <Copy className="w-3.5 h-3.5" /> Copy
+                      <Copy className="w-3.5 h-3.5" /> Copy Summary
                     </button>
                   </div>
                 </>
@@ -2696,7 +2519,6 @@ export default function WhatsAppChat() {
           </div>
         </div>
       )}
-      {/* ===== END AI CHAT SUMMARY MODAL ===== */}
     </div>
   );
 }
