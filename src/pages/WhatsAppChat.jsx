@@ -34,6 +34,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Filter,
+  Paperclip,
 } from "lucide-react";
 import { socket } from "../utils/socket.js";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
@@ -94,6 +95,8 @@ export default function WhatsAppChat() {
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [sendError, setSendError] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   // AI Lead Qualification Form
   const [qualForm, setQualForm] = useState({
@@ -770,7 +773,7 @@ export default function WhatsAppChat() {
   const handleSend = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!selectedConv) return;
-    if (!inputValue.trim() || sendingMessage) return;
+    if (!inputValue.trim() && !selectedFile) return;
 
     const messageText = inputValue.trim();
     const leadId = selectedConv.leadId?._id || selectedConv.leadId?.id;
@@ -801,6 +804,36 @@ export default function WhatsAppChat() {
             : c;
         })
       );
+    }
+
+    if (selectedFile) {
+      try {
+        const formData = new FormData();
+        formData.append("leadId", leadId);
+        formData.append("file", selectedFile);
+        if (messageText) formData.append("caption", messageText);
+        formData.append("senderName", currentUser?.name || "System");
+
+        const token =
+          localStorage.getItem("salesbuster_token") ||
+          localStorage.getItem("kranthi_token");
+
+        await axios.post(`${BACKEND_URL}/api/whatsapp/send-document`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        setSelectedFile(null);
+      } catch (err) {
+        setSendError(
+          err.response?.data?.message ||
+            "Failed to send document. Please verify your WhatsApp connection and try again."
+        );
+      } finally {
+        setSendingMessage(false);
+      }
+      return;
     }
 
     try {
@@ -1686,13 +1719,22 @@ export default function WhatsAppChat() {
                                   href={`${BACKEND_URL}${msg.mediaUrl}`}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="mb-2 flex items-center gap-2 p-2 bg-black/5 dark:bg-black/20 hover:bg-black/10 rounded-lg text-text-primary border border-border-main transition-colors"
-                                  aria-label={`Open document: ${msg.text || "Document Attachment"}`}
+                                  className="mb-2 flex items-center gap-2.5 p-2.5 bg-black/5 dark:bg-black/20 hover:bg-black/10 rounded-xl text-text-primary border border-border-main transition-colors shadow-2xs"
+                                  aria-label={`Open document: ${msg.fileName || msg.text || "Document Attachment"}`}
                                 >
-                                  <FileText className="w-5 h-5 text-[#00a884] shrink-0" />
-                                  <span className="text-xs font-medium truncate max-w-[200px]">
-                                    {msg.text || "Document Attachment"}
-                                  </span>
+                                  <div className="w-8 h-8 rounded-lg bg-teal-500/10 text-[#00a884] flex items-center justify-center shrink-0">
+                                    <FileText className="w-4 h-4" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold truncate">
+                                      {msg.fileName || (msg.mediaUrl ? msg.mediaUrl.split("/").pop() : "Document Attachment")}
+                                    </p>
+                                    <span className="text-[10px] text-text-secondary uppercase">
+                                      {msg.mediaUrl?.endsWith(".docx") || msg.fileName?.endsWith(".docx")
+                                        ? "Word Document"
+                                        : "PDF Document"}
+                                    </span>
+                                  </div>
                                 </a>
                               )}
 
@@ -1704,8 +1746,8 @@ export default function WhatsAppChat() {
                                 </div>
                               )}
 
-                              {/* Message Text */}
-                              {msg.messageType !== "document" && (
+                              {/* Message Text / Caption */}
+                              {Boolean(msg.text && (msg.messageType !== "document" || msg.fileName || (msg.text && !msg.text.startsWith("doc-")))) && (
                                 <p className="text-[13px] leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                   {msg.text}
                                 </p>
@@ -1804,6 +1846,29 @@ export default function WhatsAppChat() {
                     </div>
                   )}
 
+                  {/* Attached File Pill */}
+                  {selectedFile && (
+                    <div className="mx-2.5 sm:mx-3 mb-1 px-3 py-1.5 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-between text-xs animate-fadeIn">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                        <span className="font-bold text-teal-700 dark:text-teal-300 truncate">
+                          {selectedFile.name}
+                        </span>
+                        <span className="text-[10px] text-text-secondary shrink-0">
+                          ({(selectedFile.size / 1024).toFixed(0)} KB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFile(null)}
+                        className="text-text-secondary hover:text-text-primary p-1 cursor-pointer ml-2"
+                        title="Remove attachment"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
                   <form
                     onSubmit={handleSend}
                     className="p-2.5 sm:p-3 flex items-center gap-2"
@@ -1812,11 +1877,41 @@ export default function WhatsAppChat() {
                       Type a message
                     </label>
 
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (file.size > 25 * 1024 * 1024) {
+                            alert("Document exceeds 25 MB limit.");
+                            return;
+                          }
+                          setSelectedFile(file);
+                        }
+                      }}
+                    />
+
+                    {/* Paperclip button */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer shrink-0 ${
+                        selectedFile ? "text-teal-600 dark:text-teal-400 bg-teal-500/10" : ""
+                      }`}
+                      title="Attach PDF or Word document (.pdf, .docx, .doc)"
+                    >
+                      <Paperclip className="w-4 h-4" />
+                    </button>
+
                     <div className="flex-1 relative flex items-center bg-bg-secondary/70 hover:bg-bg-secondary focus-within:bg-bg-card border border-transparent focus-within:border-border-main rounded-lg px-3 py-2 transition-colors">
                       <input
                         id="whatsapp-chat-message-input"
                         type="text"
-                        placeholder="Type a message (Press Enter to send)"
+                        placeholder={selectedFile ? "Add a caption for this document..." : "Type a message (Press Enter to send)"}
                         value={inputValue}
                         onChange={(e) => {
                           setInputValue(e.target.value);
@@ -1845,9 +1940,9 @@ export default function WhatsAppChat() {
 
                     <button
                       type="submit"
-                      disabled={!inputValue.trim() || sendingMessage}
+                      disabled={(!inputValue.trim() && !selectedFile) || sendingMessage}
                       className="p-2.5 bg-[#00a884] hover:bg-[#008f72] disabled:opacity-40 disabled:hover:bg-[#00a884] disabled:cursor-not-allowed rounded-full text-white transition-all shrink-0 shadow-xs focus-visible:ring-2 focus-visible:ring-[#00a884] cursor-pointer"
-                      title={inputValue.trim() ? "Send message" : "Type a message to send"}
+                      title={inputValue.trim() || selectedFile ? "Send message" : "Type a message or attach a document"}
                       aria-label="Send WhatsApp message"
                     >
                       {sendingMessage ? (

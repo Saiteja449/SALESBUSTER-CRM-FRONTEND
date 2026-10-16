@@ -69,6 +69,7 @@ import { useSupportModal } from "../context/SupportModalContext.jsx";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
 import KBGeneratorPromptCard from "../components/KBGeneratorPromptCard.jsx";
+import IntegrationsTab from "../components/IntegrationsTab.jsx";
 
 // Wizard steps configuration
 const STEPS = [
@@ -2880,6 +2881,21 @@ export default function OrganizationProfile() {
               <Building2 size={15} className="shrink-0" />
               <span className="whitespace-nowrap">Subscription & Seats</span>
               <span className="hidden xl:inline text-[10px] opacity-80">(Step 8)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("integrations");
+              }}
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "integrations"
+                  ? "bg-pilot-blue text-white shadow-sm"
+                  : "text-text-secondary hover:text-text-primary hover:bg-bg-card/50"
+              }`}
+            >
+              <Globe size={15} className="shrink-0" />
+              <span className="whitespace-nowrap">Website & Webhooks</span>
             </button>
 
             <button
@@ -6286,6 +6302,14 @@ export default function OrganizationProfile() {
       {activeTab === "billing" && (
         <div className="space-y-6 animate-fadeIn">
           {renderSubscriptionAndSeatsContent()}
+        </div>
+      )}
+      {activeTab === "integrations" && (
+        <div className="space-y-6 animate-fadeIn w-full min-w-0">
+          <IntegrationsTab
+            orgData={orgData || cachedOrg}
+            onRefreshOrg={fetchOrganizationProfile}
+          />
         </div>
       )}
 
