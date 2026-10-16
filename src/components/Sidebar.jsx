@@ -193,7 +193,7 @@ export default function Sidebar({
         {isCollapsed ? (
           <>
             <div
-              className="w-12 h-10 bg-white flex items-center justify-center"
+              className="w-12 h-10 bg-white dark:bg-white/95 rounded-xl p-1 flex items-center justify-center shadow-xs border border-slate-200/50 dark:border-slate-700/50"
               title="SalesBuster AI"
             >
               <img
@@ -216,7 +216,7 @@ export default function Sidebar({
           </>
         ) : (
           <>
-            <div className="flex-1 h-13 bg-white flex items-center justify-center ">
+            <div className="flex-1 h-12 bg-white dark:bg-white/95 rounded-xl px-3 py-1 flex items-center justify-center shadow-xs border border-slate-200/50 dark:border-slate-700/50">
               <img
                 src={crmLogo}
                 alt="SalesBuster AI"

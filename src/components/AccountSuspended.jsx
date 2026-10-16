@@ -120,7 +120,7 @@ export default function AccountSuspended() {
       </div>
 
       {/* Main Card Container */}
-      <div className="max-w-2xl w-full bg-white dark:bg-[#132a3c] border border-slate-200 dark:border-slate-700/80 rounded-3xl shadow-xl p-6 sm:p-10 text-center relative z-10 transition-all">
+      <div className="max-w-2xl w-full bg-white dark:bg-bg-card border border-slate-200 dark:border-border-main rounded-3xl shadow-xl p-6 sm:p-10 text-center relative z-10 transition-all">
         
         {/* Brand Logo Header - Clean, crisp white badge */}
         <div className="mb-6 flex justify-center">
