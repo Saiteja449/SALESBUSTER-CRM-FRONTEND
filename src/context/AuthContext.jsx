@@ -484,6 +484,19 @@ export function AuthProvider({ children }) {
     currentUser?.role === "Sales Manager" ||
     currentUser?.role === "Super Admin";
 
+  const isSuperAdmin =
+    userRole === "super admin" ||
+    userRole === "super_admin" ||
+    currentUser?.role === "Super Admin";
+
+  const hasWhatsAppCampaignsAddon = Boolean(
+    isSuperAdmin || organization?.addons?.whatsappCampaigns
+  );
+
+  const hasBIAnalystAddon = Boolean(
+    isSuperAdmin || organization?.addons?.biAnalyst
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -505,6 +518,9 @@ export function AuthProvider({ children }) {
         isOrganizationBlocked,
         isSalesPerson,
         isManager,
+        isSuperAdmin,
+        hasWhatsAppCampaignsAddon,
+        hasBIAnalystAddon,
         login,
         logout,
         fetchUsers,

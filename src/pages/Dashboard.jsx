@@ -134,31 +134,47 @@ export default function Dashboard() {
   const [repWaStatus, setRepWaStatus] = useState(null); // Sales rep's own session status
   const [teamWaStatuses, setTeamWaStatuses] = useState([]); // Admin team overview
   const [waWidgetLoading, setWaWidgetLoading] = useState(false);
+  const [waWidgetError, setWaWidgetError] = useState(null);
+
+  const fetchWaWidget = async () => {
+    setWaWidgetLoading(true);
+    setWaWidgetError(null);
+    try {
+      if (isRepUser) {
+        const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
+        const sessions = res.data?.sessions || [];
+        setRepWaStatus(sessions[0] || null);
+      } else if (isManagerRole) {
+        const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS);
+        setTeamWaStatuses(res.data?.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load WhatsApp status:", err);
+      const errMsg =
+        err.response?.status === 403
+          ? "Access restricted: Manager permissions required."
+          : err.response?.data?.message || err.message || "Failed to load WhatsApp status.";
+      setWaWidgetError(errMsg);
+    } finally {
+      setWaWidgetLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchWaWidget = async () => {
-      setWaWidgetLoading(true);
-      try {
-        if (isRepUser) {
-          const res = await axios.get(API_ENDPOINTS.WHATSAPP.STATUS);
-          const sessions = res.data?.sessions || [];
-          setRepWaStatus(sessions[0] || null);
-        } else if (isManagerRole) {
-          const res = await axios.get(API_ENDPOINTS.WHATSAPP.TEAM_STATUS);
-          setTeamWaStatuses(res.data?.data || []);
-        }
-      } catch (err) {
-        // Non-fatal — widget just won't show data
-      } finally {
-        setWaWidgetLoading(false);
-      }
-    };
     if (currentUser) fetchWaWidget();
   }, [currentUser, isRepUser, isManagerRole]);
 
-  const connectedTeamCount = teamWaStatuses.filter(
-    (r) => r.status === "connected"
-  ).length;
+  const connectedTeamCount = useMemo(() => {
+    return (teamWaStatuses || []).filter((r) => r.status === "connected").length;
+  }, [teamWaStatuses]);
+
+  const disconnectedReps = useMemo(() => {
+    return (teamWaStatuses || []).filter((r) => r.status !== "connected");
+  }, [teamWaStatuses]);
+
+  const connectedReps = useMemo(() => {
+    return (teamWaStatuses || []).filter((r) => r.status === "connected");
+  }, [teamWaStatuses]);
 
   // Quick Add Sales Person Modal State
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -334,14 +350,61 @@ export default function Dashboard() {
       }
     };
 
+    const handleWaStatusUpdate = (data) => {
+      if (!data) return;
+
+      if (isRepUser) {
+        if (!data.sessionId || (currentUser?._id && data.sessionId.includes(String(currentUser._id)))) {
+          setRepWaStatus((prev) => ({
+            ...(prev || {}),
+            status: data.status,
+            connectedPhone: data.connectedPhone !== undefined ? data.connectedPhone : prev?.connectedPhone,
+            connectedName: data.connectedName !== undefined ? data.connectedName : prev?.connectedName,
+            qrCode: data.qrCode !== undefined ? data.qrCode : prev?.qrCode,
+          }));
+        }
+      } else if (isManagerRole) {
+        setTeamWaStatuses((prev) => {
+          let matched = false;
+          const updated = prev.map((rep) => {
+            const isMatch =
+              (data.userId && String(rep.userId) === String(data.userId)) ||
+              (data.sessionId && rep.sessionId === data.sessionId) ||
+              (data.sessionId && rep.userId && data.sessionId.includes(String(rep.userId)));
+
+            if (isMatch) {
+              matched = true;
+              return {
+                ...rep,
+                status: data.status,
+                connectedPhone: data.connectedPhone !== undefined ? data.connectedPhone : rep.connectedPhone,
+                connectedName: data.connectedName !== undefined ? data.connectedName : rep.connectedName,
+                errorMessage: data.status === "connected" ? "" : rep.errorMessage,
+              };
+            }
+            return rep;
+          });
+
+          // If session was not yet in array, trigger fresh fetch to populate complete record
+          if (!matched && data.sessionId) {
+            fetchWaWidget();
+          }
+
+          return updated;
+        });
+      }
+    };
+
     socket.on("global_settings_updated", handleSettingsUpdate);
     socket.on("rep_ai_settings_updated", handleRepAISettingsUpdate);
+    socket.on("whatsapp_status", handleWaStatusUpdate);
 
     return () => {
       socket.off("global_settings_updated", handleSettingsUpdate);
       socket.off("rep_ai_settings_updated", handleRepAISettingsUpdate);
+      socket.off("whatsapp_status", handleWaStatusUpdate);
     };
-  }, [currentUser]);
+  }, [currentUser, isRepUser, isManagerRole]);
 
   const handleToggleGlobalAI = async () => {
     const newVal = !globalSettings.globalAIEnabled;
@@ -477,14 +540,16 @@ export default function Dashboard() {
   const overdueFollowupsCount = stats.overdueFollowupsCount || 0;
   const todaysFollowupsCount = stats.todaysFollowupsCount || 0;
 
-  // WhatsApp connection check
-  const isWaDisconnected = isRepUser
-    ? Boolean(repWaStatus && repWaStatus.status !== "connected")
-    : Boolean(
-        isManagerRole &&
-          teamWaStatuses.length > 0 &&
-          connectedTeamCount < teamWaStatuses.length
-      );
+  // WhatsApp connection check (suppressed if an API error occurred to prevent false alarm)
+  const isWaDisconnected =
+    !waWidgetError &&
+    (isRepUser
+      ? Boolean(repWaStatus && repWaStatus.status !== "connected")
+      : Boolean(
+          isManagerRole &&
+            teamWaStatuses.length > 0 &&
+            connectedTeamCount < teamWaStatuses.length
+        ));
 
   const hasUrgentWork =
     overdueFollowupsCount > 0 ||
@@ -686,38 +751,81 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 mt-3.5">
               {/* Item C: WhatsApp Disconnected Warning */}
               {isWaDisconnected && (
-                <div className="p-3.5 rounded-xl bg-bg-main border border-red-500/40 flex flex-col justify-between shadow-2xs">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-500 shrink-0 mt-0.5">
-                      <WifiOff className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-brand-primary">
-                          WhatsApp Line Offline
-                        </span>
-                        <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded-full bg-red-500/20 text-red-400">
-                          Action Needed
-                        </span>
+                <div
+                  className={`p-3.5 sm:p-4 rounded-xl bg-bg-main border border-red-500/40 flex flex-col justify-between shadow-2xs ${
+                    isManagerRole && disconnectedReps.length > 1
+                      ? "col-span-1 md:col-span-2"
+                      : ""
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-500 shrink-0 mt-0.5">
+                        <WifiOff className="w-4 h-4" />
                       </div>
-                      <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
-                        {isRepUser
-                          ? "Your WhatsApp session is disconnected. Reconnect now so incoming messages and auto-replies remain active."
-                          : `${teamWaStatuses.length - connectedTeamCount} sales representative WhatsApp line(s) are offline.`}
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs sm:text-sm font-bold text-brand-primary">
+                            {isRepUser
+                              ? "WhatsApp Line Offline"
+                              : `WhatsApp Offline (${disconnectedReps.length} Sales ${
+                                  disconnectedReps.length === 1 ? "Rep" : "Reps"
+                                })`}
+                          </span>
+                          <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400">
+                            Action Needed
+                          </span>
+                        </div>
+                        <p className="text-xs text-brand-primary/70 mt-1 leading-relaxed">
+                          {isRepUser
+                            ? "Your WhatsApp session is disconnected. Reconnect now so incoming messages and auto-replies remain active."
+                            : "The following sales representatives have not connected their WhatsApp accounts. Incoming messages and automated replies cannot run through their lines."}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="mt-3 pt-2.5 border-t border-brand-secondary/40 flex justify-end">
                     <button
                       type="button"
                       onClick={() => navigate("/whatsapp")}
-                      className="flex items-center gap-1.5 text-xs font-bold text-red-500 hover:text-red-600 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none"
+                      className="self-start sm:self-auto flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer shrink-0 shadow-2xs"
                     >
-                      <span>Reconnect WhatsApp</span>
+                      <span>{isRepUser ? "Reconnect" : "Open WhatsApp Hub"}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
+
+                  {/* Explicit list of disconnected sales persons for manager view */}
+                  {isManagerRole && disconnectedReps.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-brand-secondary/40">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-red-500 mb-2 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>Disconnected Sales Persons ({disconnectedReps.length}):</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {disconnectedReps.map((rep) => (
+                          <div
+                            key={rep.userId || rep.sessionId || rep.email}
+                            className="p-2.5 rounded-lg bg-brand-light border border-red-500/20 flex items-center justify-between gap-2 shadow-2xs"
+                          >
+                            <div className="min-w-0 pr-1">
+                              <div className="text-xs font-bold text-brand-primary truncate flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0 animate-pulse" />
+                                <span className="truncate">{rep.name || "Sales Rep"}</span>
+                              </div>
+                              <div className="text-[10px] text-brand-primary/60 truncate pl-3">
+                                {rep.profilePhone || rep.email || "No contact info"}
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 shrink-0 capitalize">
+                              {rep.status === "qr"
+                                ? "QR Needed"
+                                : rep.status || "Offline"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {/* Item D: Organization Setup Checklist (if incomplete) */}
@@ -1098,6 +1206,175 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* Sales Team WhatsApp Connection Overview for Managers */}
+          {isManagerRole && (
+            <div className="mt-4 pt-4 border-t border-brand-secondary/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-brand-primary">
+                    Sales Team WhatsApp Status:
+                  </span>
+                  {waWidgetError ? (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-500/15 text-red-500 border border-red-500/30 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Status Error
+                    </span>
+                  ) : waWidgetLoading && teamWaStatuses.length === 0 ? (
+                    <span className="text-[10px] font-semibold text-brand-primary/60 animate-pulse">
+                      Checking status...
+                    </span>
+                  ) : disconnectedReps.length > 0 ? (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-red-500/15 text-red-500 border border-red-500/30 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      {disconnectedReps.length} Disconnected
+                    </span>
+                  ) : teamWaStatuses.length > 0 ? (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      All {teamWaStatuses.length} Connected
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-brand-primary/60">
+                      No sales representatives
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={fetchWaWidget}
+                    disabled={waWidgetLoading}
+                    className="p-1 px-2 rounded-lg text-brand-primary/60 hover:text-brand-primary hover:bg-brand-secondary/30 transition-colors cursor-pointer text-xs flex items-center gap-1 disabled:opacity-50"
+                    title="Refresh WhatsApp statuses"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${waWidgetLoading ? "animate-spin" : ""}`} />
+                    <span className="text-[11px] font-semibold">Refresh</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/whatsapp")}
+                    className="text-[11px] font-bold text-pilot-blue hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <span>Manage All in Hub</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Status List / Cards / Error States */}
+              {waWidgetError ? (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-red-600 dark:text-red-400">
+                        Unable to load WhatsApp team connectivity
+                      </p>
+                      <p className="text-[11px] text-brand-primary/70 mt-0.5">
+                        {waWidgetError}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchWaWidget}
+                    disabled={waWidgetLoading}
+                    className="self-start sm:self-auto px-3 py-1.5 rounded-lg text-xs font-bold bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    Retry Connection Check
+                  </button>
+                </div>
+              ) : disconnectedReps.length > 0 ? (
+                <div className="p-3 sm:p-4 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/25">
+                  <div className="text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                    <WifiOff className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Sales Persons Not Connected to WhatsApp:</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {disconnectedReps.map((rep) => (
+                      <div
+                        key={rep.userId || rep.sessionId || rep.email}
+                        className="p-3 rounded-xl bg-brand-light border border-brand-secondary/70 flex items-center justify-between gap-3 shadow-2xs hover:border-amber-500/40 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-brand-primary truncate flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 animate-pulse" />
+                            <span className="truncate">{rep.name || "Sales Rep"}</span>
+                          </div>
+                          <div className="text-[11px] text-brand-primary/60 truncate pl-3.5 mt-0.5">
+                            {rep.profilePhone || rep.email || "No phone registered"}
+                          </div>
+                          {rep.errorMessage && (
+                            <div className="text-[10px] text-red-500/90 truncate pl-3.5 mt-0.5">
+                              {rep.errorMessage}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                          <span
+                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md capitalize ${
+                              rep.status === "qr"
+                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                                : rep.status === "connecting"
+                                  ? "bg-blue-500/15 text-blue-500 border border-blue-500/30"
+                                  : "bg-red-500/15 text-red-500 border border-red-500/30"
+                            }`}
+                          >
+                            {rep.status === "qr" ? "QR Scan Needed" : rep.status || "Disconnected"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => navigate("/whatsapp")}
+                            className="text-[10px] font-bold text-pilot-blue hover:underline cursor-pointer"
+                          >
+                            Connect &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : teamWaStatuses.length > 0 ? (
+                <div className="p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                      Great news! All {teamWaStatuses.length} sales representatives are connected and active on WhatsApp.
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {teamWaStatuses.slice(0, 5).map((rep) => (
+                      <span
+                        key={rep.userId || rep.email}
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-brand-light border border-emerald-500/20 text-brand-primary"
+                      >
+                        ✓ {rep.name}
+                      </span>
+                    ))}
+                    {teamWaStatuses.length > 5 && (
+                      <span className="text-[10px] text-brand-primary/60 font-medium">
+                        +{teamWaStatuses.length - 5} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : !waWidgetLoading ? (
+                <div className="p-3 rounded-xl bg-brand-light border border-brand-secondary/60 text-xs text-brand-primary/60 flex items-center justify-between">
+                  <span>No sales representatives are currently registered in this organization.</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddUserModal(true)}
+                    className="text-[11px] font-bold text-pilot-blue hover:underline cursor-pointer"
+                  >
+                    + Add Sales Rep
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       </section>
 

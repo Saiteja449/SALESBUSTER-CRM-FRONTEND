@@ -60,10 +60,14 @@ import {
   PhoneMissed,
   PhoneCall,
   ImageIcon,
+  Send,
+  BarChart3,
+  Brain,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
 import { API_ENDPOINTS, BACKEND_URL } from "../utils/constants.js";
+import { socket } from "../utils/socket.js";
 import KBGeneratorPromptCard from "../components/KBGeneratorPromptCard.jsx";
 
 // Wizard steps configuration
@@ -794,8 +798,16 @@ export default function OrganizationProfile() {
         date: new Date().toISOString().slice(0, 10),
         chatApiCalls: 0,
         audioApiCalls: 0,
+        whatsappAiCalls: 0,
+        callsApiCalls: 0,
+        biAnalystCalls: 0,
         totalApiCalls: 0,
-        dailyQuotaLimit: 1500,
+        dailyQuotaLimit: 500,
+        quotaSplit: {
+          whatsappAi: 250,
+          calls: 250,
+          biAnalyst: 0,
+        },
         lastResetAt: new Date().toISOString(),
       },
     };
@@ -813,7 +825,12 @@ export default function OrganizationProfile() {
   const [refreshingUsage, setRefreshingUsage] = useState(false);
   const [resetCountdown, setResetCountdown] = useState("");
   const [showEditLimitModal, setShowEditLimitModal] = useState(false);
-  const [customDailyLimit, setCustomDailyLimit] = useState(1500);
+  const [customDailyLimit, setCustomDailyLimit] = useState(500);
+  const [quotaSplitState, setQuotaSplitState] = useState({
+    whatsappAi: 250,
+    calls: 250,
+    biAnalyst: 0,
+  });
   const [quotaLimitError, setQuotaLimitError] = useState("");
   const [savingLimit, setSavingLimit] = useState(false);
   const [missedCallEditingTab, setMissedCallEditingTab] = useState("diff");
@@ -1124,10 +1141,47 @@ export default function OrganizationProfile() {
     setTimeout(() => setRefreshingUsage(false), 500);
   };
 
-  const handleUpdateDailyLimit = async (newLimit) => {
-    const targetLimit = Number(newLimit !== undefined ? newLimit : customDailyLimit);
-    if (!Number.isInteger(targetLimit) || targetLimit < 100 || targetLimit > 100000) {
-      setQuotaLimitError("Enter a whole number between 100 and 100,000 calls per day.");
+  // Live socket update for real-time daily usage counters
+  useEffect(() => {
+    const handleUsageUpdated = (payload) => {
+      if (payload?.dailyAiUsage) {
+        setAiSettings((prev) => ({
+          ...prev,
+          dailyAiUsage: {
+            ...(prev.dailyAiUsage || {}),
+            ...payload.dailyAiUsage,
+          },
+        }));
+      }
+    };
+
+    socket.on("daily_ai_usage_updated", handleUsageUpdated);
+    return () => {
+      socket.off("daily_ai_usage_updated", handleUsageUpdated);
+    };
+  }, []);
+
+  const openQuotaSplitModal = () => {
+    const isBiActive = Boolean(orgData?.addons?.biAnalyst);
+    const existingSplit = aiSettings.dailyAiUsage?.quotaSplit || (isBiActive ? { whatsappAi: 250, calls: 150, biAnalyst: 100 } : { whatsappAi: 300, calls: 200, biAnalyst: 0 });
+    setQuotaSplitState({
+      whatsappAi: existingSplit.whatsappAi !== undefined ? Number(existingSplit.whatsappAi) : (isBiActive ? 250 : 300),
+      calls: existingSplit.calls !== undefined ? Number(existingSplit.calls) : (isBiActive ? 150 : 200),
+      biAnalyst: isBiActive ? (Number(existingSplit.biAnalyst) || 0) : 0,
+    });
+    setQuotaLimitError("");
+    setShowEditLimitModal(true);
+  };
+
+  const handleSaveQuotaSplit = async () => {
+    const isBiActive = Boolean(orgData?.addons?.biAnalyst);
+    const whatsapp = Math.max(0, parseInt(quotaSplitState.whatsappAi, 10) || 0);
+    const calls = Math.max(0, parseInt(quotaSplitState.calls, 10) || 0);
+    const bi = isBiActive ? Math.max(0, parseInt(quotaSplitState.biAnalyst, 10) || 0) : 0;
+    const total = whatsapp + calls + bi;
+
+    if (total > 500) {
+      setQuotaLimitError(`Total allocated quota (${total}) exceeds the fixed 500 daily conversation limit.`);
       return;
     }
     setQuotaLimitError("");
@@ -1137,8 +1191,8 @@ export default function OrganizationProfile() {
         localStorage.getItem("salesbuster_token") ||
         localStorage.getItem("kranthi_token");
       const res = await axios.put(
-        API_ENDPOINTS.ORGANIZATIONS.AI_SETTINGS,
-        { dailyQuotaLimit: targetLimit },
+        `${BACKEND_URL}/api/organizations/my-org/quota-split`,
+        { whatsappAi: whatsapp, calls, biAnalyst: bi },
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -1147,7 +1201,8 @@ export default function OrganizationProfile() {
           ...prev,
           dailyAiUsage: {
             ...(prev.dailyAiUsage || {}),
-            dailyQuotaLimit: targetLimit,
+            dailyQuotaLimit: 500,
+            quotaSplit: { whatsappAi: whatsapp, calls, biAnalyst: bi },
           },
         }));
         const orgId = orgData?._id || cachedOrg?._id || "default";
@@ -1157,7 +1212,8 @@ export default function OrganizationProfile() {
             const parsedCache = JSON.parse(localCached);
             parsedCache.dailyAiUsage = {
               ...(parsedCache.dailyAiUsage || {}),
-              dailyQuotaLimit: targetLimit,
+              dailyQuotaLimit: 500,
+              quotaSplit: { whatsappAi: whatsapp, calls, biAnalyst: bi },
             };
             localStorage.setItem(
               `sb_ai_settings_${orgId}`,
@@ -1165,14 +1221,12 @@ export default function OrganizationProfile() {
             );
           } catch (e) {}
         }
-        setSaveToast(
-          `Daily AI API limit successfully updated to ${targetLimit.toLocaleString()} calls/day.`,
-        );
+        setSaveToast("Daily conversation quota split successfully updated!");
         setShowEditLimitModal(false);
       }
     } catch (err) {
-      alert(
-        err.response?.data?.message || "Failed to update daily AI API limit.",
+      setQuotaLimitError(
+        err.response?.data?.message || "Failed to update daily conversation quota split.",
       );
     } finally {
       setSavingLimit(false);
@@ -2115,20 +2169,34 @@ export default function OrganizationProfile() {
       date: new Date().toISOString().slice(0, 10),
       chatApiCalls: 0,
       audioApiCalls: 0,
+      whatsappAiCalls: 0,
+      callsApiCalls: 0,
+      biAnalystCalls: 0,
       totalApiCalls: 0,
-      dailyQuotaLimit: 1500,
+      dailyQuotaLimit: 500,
     };
-    const chatCalls = Number(dailyUsage.chatApiCalls) || 0;
-    const audioCalls = Number(dailyUsage.audioApiCalls) || 0;
+    const whatsappCalls = Number(dailyUsage.whatsappAiCalls ?? dailyUsage.chatApiCalls) || 0;
+    const callsCalls = Number(dailyUsage.callsApiCalls ?? dailyUsage.audioApiCalls) || 0;
+    const biCalls = Number(dailyUsage.biAnalystCalls) || 0;
     const totalCalls =
       dailyUsage.totalApiCalls !== undefined
         ? Number(dailyUsage.totalApiCalls)
-        : chatCalls + audioCalls;
-    const quotaLimit = Number(dailyUsage.dailyQuotaLimit) || 1500;
+        : whatsappCalls + callsCalls + biCalls;
+
+    const quotaLimit = 500;
+    const isBiActive = Boolean(org.addons?.biAnalyst);
+    const split = dailyUsage.quotaSplit || (isBiActive ? { whatsappAi: 250, calls: 150, biAnalyst: 100 } : { whatsappAi: 300, calls: 200, biAnalyst: 0 });
+    const whatsappLimit = Number(split.whatsappAi) !== undefined ? Number(split.whatsappAi) : (isBiActive ? 250 : 300);
+    const callsLimit = Number(split.calls) !== undefined ? Number(split.calls) : (isBiActive ? 150 : 200);
+    const biLimit = isBiActive ? (Number(split.biAnalyst) || 0) : 0;
+
     const usagePercent = Math.min(
       100,
       Math.round((totalCalls / quotaLimit) * 100),
     );
+    const whatsappPercent = whatsappLimit > 0 ? Math.min(100, Math.round((whatsappCalls / whatsappLimit) * 100)) : 0;
+    const callsPercent = callsLimit > 0 ? Math.min(100, Math.round((callsCalls / callsLimit) * 100)) : 0;
+    const biPercent = biLimit > 0 ? Math.min(100, Math.round((biCalls / biLimit) * 100)) : 0;
 
     return (
       <div className="p-6 rounded-3xl bg-gradient-to-br from-bg-card via-bg-secondary/30 to-bg-card border border-border-main space-y-5 shadow-2xs animate-fadeIn">
@@ -2141,21 +2209,20 @@ export default function OrganizationProfile() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xs font-black text-text-primary uppercase tracking-wider">
-                  Daily AI API Usage & Quota Monitor
+                  Daily AI Conversation Quota & Split Monitor
                 </h3>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Refreshes Daily
+                  Fixed 500 / Day
                 </span>
               </div>
               <p className="text-[11px] text-text-secondary mt-0.5">
-                Real-time count of API calls utilized today for WhatsApp chats
-                and voice call intelligence.
+                500 daily conversations split across WhatsApp AI, Voice Calls, and BI Analyst.
               </p>
             </div>
           </div>
 
-          {/* Reset Countdown, Set Limit & Refresh Buttons */}
+          {/* Reset Countdown, Split Quota & Refresh Buttons */}
           <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end flex-wrap">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-secondary border border-border-main text-[11px] font-medium text-text-secondary">
               <Calendar size={12} className="text-pilot-blue" />
@@ -2169,15 +2236,12 @@ export default function OrganizationProfile() {
 
             <button
               type="button"
-              onClick={() => {
-                setCustomDailyLimit(quotaLimit);
-                setShowEditLimitModal(true);
-              }}
-              title="Configure your daily API quota limit"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pilot-blue text-white hover:bg-pilot-blue-hover text-[11px] font-bold transition-all cursor-pointer shadow-xs"
+              onClick={openQuotaSplitModal}
+              title="Configure your daily conversation quota split"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-pilot-blue text-white hover:bg-pilot-blue-hover text-[11px] font-bold transition-all cursor-pointer shadow-xs"
             >
               <Sliders size={12} />
-              <span>Set Limit</span>
+              <span>Split Quota</span>
             </button>
 
             <button
@@ -2198,34 +2262,27 @@ export default function OrganizationProfile() {
           </div>
         </div>
 
-        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300">
-          <strong>Daily quota protection:</strong> when this limit is reached, automated AI replies pause until the counter resets at midnight UTC.
-        </div>
-
         {/* Overall Quota Progress Meter */}
         <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-2">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-text-primary">
-                Today's Gemini Calls:
+                Total Daily Conversations:
               </span>
               <span className="font-mono text-pilot-blue font-bold">
                 {totalCalls.toLocaleString()}{" "}
                 <span className="text-text-secondary font-normal">
-                  / {quotaLimit.toLocaleString()} calls
+                  / 500 conversations
                 </span>
               </span>
               <button
                 type="button"
-                onClick={() => {
-                  setCustomDailyLimit(quotaLimit);
-                  setShowEditLimitModal(true);
-                }}
+                onClick={openQuotaSplitModal}
                 className="text-[10px] font-bold text-pilot-blue hover:underline flex items-center gap-1 ml-1 cursor-pointer bg-pilot-blue/10 px-2 py-0.5 rounded-md border border-pilot-blue/20"
-                title="Update daily quota limit"
+                title="Update daily quota split"
               >
-                <Edit2 size={10} />
-                <span>Edit Limit</span>
+                <Sliders size={10} />
+                <span>Adjust Split</span>
               </button>
             </div>
             <span
@@ -2258,100 +2315,192 @@ export default function OrganizationProfile() {
           </div>
 
           <div className="flex items-center justify-between text-[10px] text-text-secondary pt-0.5">
-            <span>0 calls</span>
-            <div className="flex items-center gap-1">
-              <span>Configured Daily Limit:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setCustomDailyLimit(quotaLimit);
-                  setShowEditLimitModal(true);
-                }}
-                className="font-bold text-pilot-blue hover:underline flex items-center gap-1 cursor-pointer transition-colors"
-                title="Click to update daily quota limit"
-              >
-                <span>{quotaLimit.toLocaleString()} requests/day</span>
-                <Edit2 size={10} className="text-pilot-blue" />
-              </button>
-            </div>
-            <span>{quotaLimit.toLocaleString()} calls max</span>
+            <span>0 conversations</span>
+            <span>Allocated: {whatsappLimit + callsLimit + biLimit} / 500</span>
+            <span>500 fixed limit</span>
           </div>
         </div>
 
-        {/* Breakdown Cards for Specific Purposes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Purpose 1: WhatsApp AI Chats */}
-          <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-pilot-blue/30 transition-all space-y-3 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
-                  <Bot size={16} />
+        {/* Breakdown Cards for 3 Channels */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Channel 1: WhatsApp AI Chat Bot */}
+          <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-pilot-blue/30 transition-all space-y-3 shadow-2xs flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
+                    <Bot size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-text-primary">
+                      WhatsApp AI
+                    </h4>
+                    <span className="text-[10px] text-text-secondary">
+                      Chats & qualification
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-black text-text-primary">
-                    WhatsApp AI Chats
-                  </h4>
-                  <span className="text-[10px] text-text-secondary">
-                    Text replies & lead qualification
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20">
+                  {whatsappLimit} Limit
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between pt-1">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-text-primary tracking-tight font-mono">
+                    {whatsappCalls.toLocaleString()}
+                  </span>
+                  <span className="text-xs text-text-secondary font-medium">
+                    / {whatsappLimit.toLocaleString()} used
                   </span>
                 </div>
+                <span className={`text-[10px] font-bold ${whatsappPercent >= 90 ? "text-red-500" : "text-text-secondary"}`}>
+                  {whatsappPercent}%
+                </span>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-pilot-blue/10 text-pilot-blue border border-pilot-blue/20">
-                Chats Purpose
-              </span>
-            </div>
 
-            <div className="flex items-baseline gap-2 pt-1">
-              <span className="text-2xl font-black text-text-primary tracking-tight font-mono">
-                {chatCalls.toLocaleString()}
-              </span>
-              <span className="text-xs text-text-secondary font-medium">
-                calls used today
-              </span>
+              <div className="w-full h-1.5 bg-bg-card border border-border-main rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    whatsappPercent >= 90 ? "bg-red-500" : whatsappPercent >= 70 ? "bg-amber-500" : "bg-pilot-blue"
+                  }`}
+                  style={{ width: `${Math.max(whatsappCalls > 0 ? 4 : 0, whatsappPercent)}%` }}
+                />
+              </div>
             </div>
 
             <div className="pt-2 border-t border-border-main/60 flex items-center justify-between text-[10px] text-text-secondary">
-              <span>Auto-replies, FAQs & dynamic lead queries</span>
+              <span>Auto-replies & inquiries</span>
               <span className="font-mono text-pilot-blue font-semibold shrink-0">
-                1 call / message
+                1 call / msg
               </span>
             </div>
           </div>
 
-          {/* Purpose 2: Audio & Voice Calls */}
-          <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-violet-500/30 transition-all space-y-3 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
-                  <Phone size={16} />
+          {/* Channel 2: Audio & Voice Calls */}
+          <div className="p-4 rounded-2xl bg-bg-secondary/50 border border-border-main hover:border-violet-500/30 transition-all space-y-3 shadow-2xs flex flex-col justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
+                    <Phone size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-text-primary">
+                      Voice Calls
+                    </h4>
+                    <span className="text-[10px] text-text-secondary">
+                      Recording transcription
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-xs font-black text-text-primary">
-                    Audio & Voice Calls
-                  </h4>
-                  <span className="text-[10px] text-text-secondary">
-                    Call recording transcription & analysis
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-500 border border-violet-500/20">
+                  {callsLimit} Limit
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between pt-1">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black text-text-primary tracking-tight font-mono">
+                    {callsCalls.toLocaleString()}
+                  </span>
+                  <span className="text-xs text-text-secondary font-medium">
+                    / {callsLimit.toLocaleString()} used
                   </span>
                 </div>
+                <span className={`text-[10px] font-bold ${callsPercent >= 90 ? "text-red-500" : "text-text-secondary"}`}>
+                  {callsPercent}%
+                </span>
               </div>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-500 border border-violet-500/20">
-                Audio Purpose
-              </span>
-            </div>
 
-            <div className="flex items-baseline gap-2 pt-1">
-              <span className="text-2xl font-black text-text-primary tracking-tight font-mono">
-                {audioCalls.toLocaleString()}
-              </span>
-              <span className="text-xs text-text-secondary font-medium">
-                calls used today
-              </span>
+              <div className="w-full h-1.5 bg-bg-card border border-border-main rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    callsPercent >= 90 ? "bg-red-500" : callsPercent >= 70 ? "bg-amber-500" : "bg-violet-500"
+                  }`}
+                  style={{ width: `${Math.max(callsCalls > 0 ? 4 : 0, callsPercent)}%` }}
+                />
+              </div>
             </div>
 
             <div className="pt-2 border-t border-border-main/60 flex items-center justify-between text-[10px] text-text-secondary">
-              <span>Sales recordings, transcription & sentiment</span>
+              <span>Sales call sentiment</span>
               <span className="font-mono text-violet-500 font-semibold shrink-0">
                 1 call / audio
+              </span>
+            </div>
+          </div>
+
+          {/* Channel 3: BI Analyst */}
+          <div className={`p-4 rounded-2xl border transition-all space-y-3 shadow-2xs flex flex-col justify-between ${
+            isBiActive
+              ? "bg-bg-secondary/50 border-border-main hover:border-emerald-500/30"
+              : "bg-bg-secondary/20 border-dashed border-border-main/60 opacity-80"
+          }`}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                    isBiActive ? "bg-emerald-500/10 text-emerald-500" : "bg-slate-500/10 text-slate-400"
+                  }`}>
+                    {isBiActive ? <BarChart3 size={16} /> : <Lock size={16} />}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-text-primary">
+                      BI Analyst
+                    </h4>
+                    <span className="text-[10px] text-text-secondary">
+                      {isBiActive ? "CRM AI & voice query" : "Add-on required"}
+                    </span>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                  isBiActive
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                    : "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                }`}>
+                  {isBiActive ? `${biLimit} Limit` : "Inactive"}
+                </span>
+              </div>
+
+              {isBiActive ? (
+                <>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-2xl font-black text-text-primary tracking-tight font-mono">
+                        {biCalls.toLocaleString()}
+                      </span>
+                      <span className="text-xs text-text-secondary font-medium">
+                        / {biLimit.toLocaleString()} used
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-bold ${biPercent >= 90 ? "text-red-500" : "text-text-secondary"}`}>
+                      {biPercent}%
+                    </span>
+                  </div>
+
+                  <div className="w-full h-1.5 bg-bg-card border border-border-main rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        biPercent >= 90 ? "bg-red-500" : biPercent >= 70 ? "bg-amber-500" : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${Math.max(biCalls > 0 ? 4 : 0, biPercent)}%` }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="py-2.5 text-center">
+                  <p className="text-[11px] text-text-secondary italic">
+                    Add-on not active. Quota cannot be allocated.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-border-main/60 flex items-center justify-between text-[10px] text-text-secondary">
+              <span>{isBiActive ? "BI queries & voice assistant" : "Unlock in Add-ons"}</span>
+              <span className="font-mono text-emerald-500 font-semibold shrink-0">
+                {isBiActive ? "1 call / query" : "0 allocated"}
               </span>
             </div>
           </div>
@@ -2362,15 +2511,11 @@ export default function OrganizationProfile() {
           <div className="flex items-center gap-2">
             <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
             <span>
-              <strong>Everyday Refresh:</strong> Usage counters automatically
-              reset to 0 every day at 00:00 UTC.
+              <strong>Everyday Refresh:</strong> Fixed 500 conversations reset automatically to 0 every day at 00:00 UTC.
             </span>
           </div>
           <span className="font-mono text-[10px] text-text-secondary">
-            Today:{" "}
-            <strong className="text-text-primary">
-              {dailyUsage.date || new Date().toISOString().slice(0, 10)}
-            </strong>
+            Today: {dailyUsage.date || new Date().toISOString().slice(0, 10)}
           </span>
         </div>
       </div>
@@ -2586,6 +2731,70 @@ export default function OrganizationProfile() {
             <Info className="w-3.5 h-3.5 text-text-secondary shrink-0 mt-0.5" />
             <p className="text-[10px] text-text-secondary leading-relaxed">
               WhatsApp connection mode is managed by your system administrator. Contact support to upgrade your connection plan.
+            </p>
+          </div>
+        </div>
+
+        {/* Card 4: Organization Add-ons */}
+        <div className="bg-bg-card border border-border-main rounded-3xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border-main">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-pilot-blue" />
+              <h3 className="font-bold text-xs text-text-primary">
+                Organization Add-ons
+              </h3>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-pilot-blue/10 text-pilot-blue">
+              Modular Features
+            </span>
+          </div>
+
+          <div className="space-y-3 text-xs">
+            {/* WhatsApp Campaigns Add-on */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-bg-secondary/40 border border-border-main/50">
+              <div className="space-y-0.5">
+                <div className="font-bold text-text-primary flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5 text-emerald-500" />
+                  WhatsApp Campaigns
+                </div>
+                <div className="text-[11px] text-text-secondary">
+                  Bulk messaging, template sync, & audience batches
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                org.addons?.whatsappCampaigns
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-slate-500/10 text-slate-500"
+              }`}>
+                {org.addons?.whatsappCampaigns ? "Active" : "Not Active"}
+              </span>
+            </div>
+
+            {/* BI Analyst Add-on */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-bg-secondary/40 border border-border-main/50">
+              <div className="space-y-0.5">
+                <div className="font-bold text-text-primary flex items-center gap-1.5">
+                  <Bot className="w-3.5 h-3.5 text-pilot-blue" />
+                  BI Analyst
+                </div>
+                <div className="text-[11px] text-text-secondary">
+                  AI CRM intelligence & Multimodal Live voice analytics
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                org.addons?.biAnalyst
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-slate-500/10 text-slate-500"
+              }`}>
+                {org.addons?.biAnalyst ? "Active" : "Not Active"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-secondary/50 border border-border-main">
+            <Info className="w-3.5 h-3.5 text-text-secondary shrink-0 mt-0.5" />
+            <p className="text-[10px] text-text-secondary leading-relaxed">
+              Add-ons are managed by your administrator. Contact support to unlock WhatsApp Campaigns or BI Analyst for your organization.
             </p>
           </div>
         </div>
@@ -6097,7 +6306,7 @@ export default function OrganizationProfile() {
 
       {showEditLimitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-bg-card border border-border-main rounded-3xl max-w-md w-full shadow-2xl overflow-hidden animate-scaleUp">
+          <div className="bg-bg-card border border-border-main rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden animate-scaleUp">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-5 border-b border-border-main">
               <div className="flex items-center gap-3">
@@ -6106,10 +6315,10 @@ export default function OrganizationProfile() {
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-text-primary">
-                    Update Daily AI API Limit
+                    Split Daily 500 Conversation Quota
                   </h3>
                   <p className="text-[11px] text-text-secondary">
-                    Configure maximum daily requests capacity
+                    Distribute fixed 500 daily conversations across active channels
                   </p>
                 </div>
               </div>
@@ -6123,84 +6332,292 @@ export default function OrganizationProfile() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-4">
-              <div className="p-3.5 rounded-2xl bg-bg-secondary/50 border border-border-main text-xs space-y-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-text-secondary">Consumed Today:</span>
-                  <span className="font-mono font-bold text-pilot-blue">
-                    {(
-                      Number(aiSettings.dailyAiUsage?.totalApiCalls) || 0
-                    ).toLocaleString()}{" "}
-                    calls
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1 border-t border-border-main/50">
-                  <span>
-                    WhatsApp Chats:{" "}
-                    <strong className="text-text-primary font-bold">
-                      {Number(aiSettings.dailyAiUsage?.chatApiCalls || 0)}
-                    </strong>
-                  </span>
-                  <span>
-                    Audio Calls:{" "}
-                    <strong className="text-text-primary font-bold">
-                      {Number(aiSettings.dailyAiUsage?.audioApiCalls || 0)}
-                    </strong>
-                  </span>
-                </div>
-              </div>
+            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              {/* Allocation Summary Meter */}
+              {(() => {
+                const isBiActive = Boolean(org.addons?.biAnalyst);
+                const whatsapp = Math.max(0, parseInt(quotaSplitState.whatsappAi, 10) || 0);
+                const calls = Math.max(0, parseInt(quotaSplitState.calls, 10) || 0);
+                const bi = isBiActive ? Math.max(0, parseInt(quotaSplitState.biAnalyst, 10) || 0) : 0;
+                const totalAllocated = whatsapp + calls + bi;
+                const remaining = 500 - totalAllocated;
+                const isOver = totalAllocated > 500;
 
-              <div>
-                <label className="block text-xs font-black text-text-primary uppercase tracking-wider mb-2">
-                  Daily Quota Limit (Requests / Day)
-                </label>
-                <div className="relative">
-                  <input
-                    id="daily-quota-limit"
-                    type="number"
-                    min="100"
-                    max="100000"
-                    step="1"
-                    value={customDailyLimit}
-                    onChange={(e) => { setCustomDailyLimit(e.target.value); setQuotaLimitError(""); }}
-                    placeholder="e.g. 1500"
-                    aria-invalid={Boolean(quotaLimitError)}
-                    aria-describedby={quotaLimitError ? "daily-quota-error" : undefined}
-                    className="w-full bg-bg-secondary/40 border border-border-main text-text-primary text-base font-bold font-mono rounded-2xl px-4 py-3.5 outline-none focus:border-pilot-blue focus:ring-1 focus:ring-pilot-blue transition-all"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-text-secondary">
-                    calls / day
-                  </span>
-                </div>
-                {quotaLimitError && <p id="daily-quota-error" className="text-[11px] text-red-600 dark:text-red-400 mt-1" role="alert">{quotaLimitError}</p>}
-                <span className="text-[11px] text-text-secondary mt-1.5 block">
-                  Counters automatically refresh back to 0 every day at 00:00
-                  UTC.
-                </span>
-              </div>
+                return (
+                  <div className="space-y-4">
+                    <div className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                      isOver
+                        ? "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
+                        : totalAllocated === 500
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                        : "bg-bg-secondary/60 border-border-main text-text-secondary"
+                    }`}>
+                      <div className="flex items-center justify-between font-bold">
+                        <span>Total Quota Allocated:</span>
+                        <span className="font-mono text-sm">
+                          {totalAllocated} / 500 conversations
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-bg-card border border-border-main/50 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            isOver ? "bg-red-500" : totalAllocated === 500 ? "bg-emerald-500" : "bg-pilot-blue"
+                          }`}
+                          style={{ width: `${Math.min(100, (totalAllocated / 500) * 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] pt-1">
+                        <span>
+                          {isOver ? (
+                            <strong className="text-red-500">Exceeds limit by {totalAllocated - 500}</strong>
+                          ) : remaining > 0 ? (
+                            <span>{remaining} unallocated conversations remaining</span>
+                          ) : (
+                            <strong className="text-emerald-500">100% fully allocated</strong>
+                          )}
+                        </span>
+                        {remaining > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setQuotaSplitState((prev) => ({
+                                ...prev,
+                                whatsappAi: (parseInt(prev.whatsappAi, 10) || 0) + remaining,
+                              }))
+                            }
+                            className="text-[10px] font-bold text-pilot-blue hover:underline cursor-pointer"
+                          >
+                            Add +{remaining} to WhatsApp
+                          </button>
+                        )}
+                      </div>
+                    </div>
 
-              {/* Preset quick buttons */}
-              <div>
-                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block mb-2">
-                  Quick Select Presets
-                </span>
-                <div className="grid grid-cols-3 gap-2">
-                  {[500, 1000, 1500, 3000, 5000, 10000].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setCustomDailyLimit(preset)}
-                      className={`py-2 px-2.5 rounded-xl border text-xs font-bold font-mono transition-all cursor-pointer ${
-                        Number(customDailyLimit) === preset
-                          ? "bg-pilot-blue text-white border-pilot-blue shadow-xs"
-                          : "bg-bg-secondary/50 border-border-main text-text-primary hover:bg-bg-secondary hover:border-pilot-blue/40"
-                      }`}
-                    >
-                      {preset.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                    {/* Channel 1: WhatsApp AI Slider & Input */}
+                    <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-pilot-blue/10 text-pilot-blue flex items-center justify-center shrink-0">
+                            <Bot size={15} />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-text-primary">WhatsApp AI Chat Bot</span>
+                            <p className="text-[10px] text-text-secondary">Text replies & qualification</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max="500"
+                            step="5"
+                            value={quotaSplitState.whatsappAi}
+                            onChange={(e) =>
+                              setQuotaSplitState((prev) => ({
+                                ...prev,
+                                whatsappAi: Math.max(0, parseInt(e.target.value, 10) || 0),
+                              }))
+                            }
+                            className="w-20 text-center bg-bg-card border border-border-main text-text-primary font-mono font-bold text-sm rounded-xl py-1 px-2 focus:border-pilot-blue outline-none"
+                          />
+                          <span className="text-[10px] text-text-secondary font-bold">calls</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="500"
+                        step="5"
+                        value={quotaSplitState.whatsappAi}
+                        onChange={(e) =>
+                          setQuotaSplitState((prev) => ({
+                            ...prev,
+                            whatsappAi: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-pilot-blue cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Channel 2: Audio & Voice Calls Slider & Input */}
+                    <div className="p-4 rounded-2xl bg-bg-secondary/40 border border-border-main space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0">
+                            <Phone size={15} />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-text-primary">Audio & Voice Calls</span>
+                            <p className="text-[10px] text-text-secondary">Call recording transcription & analysis</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max="500"
+                            step="5"
+                            value={quotaSplitState.calls}
+                            onChange={(e) =>
+                              setQuotaSplitState((prev) => ({
+                                ...prev,
+                                calls: Math.max(0, parseInt(e.target.value, 10) || 0),
+                              }))
+                            }
+                            className="w-20 text-center bg-bg-card border border-border-main text-text-primary font-mono font-bold text-sm rounded-xl py-1 px-2 focus:border-violet-500 outline-none"
+                          />
+                          <span className="text-[10px] text-text-secondary font-bold">calls</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="500"
+                        step="5"
+                        value={quotaSplitState.calls}
+                        onChange={(e) =>
+                          setQuotaSplitState((prev) => ({
+                            ...prev,
+                            calls: Number(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-violet-500 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Channel 3: BI Analyst Slider & Input */}
+                    <div className={`p-4 rounded-2xl border space-y-2.5 ${
+                      isBiActive
+                        ? "bg-bg-secondary/40 border-border-main"
+                        : "bg-bg-secondary/20 border-dashed border-border-main opacity-70"
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                            isBiActive ? "bg-emerald-500/10 text-emerald-500" : "bg-slate-500/10 text-slate-400"
+                          }`}>
+                            {isBiActive ? <BarChart3 size={15} /> : <Lock size={15} />}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-text-primary">BI Analyst</span>
+                              {!isBiActive && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                                  Add-on Inactive
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-text-secondary">
+                              {isBiActive ? "CRM AI queries & Gemini Live voice" : "Unlock in Add-ons to allocate quota"}
+                            </p>
+                          </div>
+                        </div>
+                        {isBiActive ? (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="0"
+                              max="500"
+                              step="5"
+                              value={quotaSplitState.biAnalyst}
+                              onChange={(e) =>
+                                setQuotaSplitState((prev) => ({
+                                  ...prev,
+                                  biAnalyst: Math.max(0, parseInt(e.target.value, 10) || 0),
+                                }))
+                              }
+                              className="w-20 text-center bg-bg-card border border-border-main text-text-primary font-mono font-bold text-sm rounded-xl py-1 px-2 focus:border-emerald-500 outline-none"
+                            />
+                            <span className="text-[10px] text-text-secondary font-bold">calls</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-mono font-bold text-text-secondary">0 calls</span>
+                        )}
+                      </div>
+                      {isBiActive && (
+                        <input
+                          type="range"
+                          min="0"
+                          max="500"
+                          step="5"
+                          value={quotaSplitState.biAnalyst}
+                          onChange={(e) =>
+                            setQuotaSplitState((prev) => ({
+                              ...prev,
+                              biAnalyst: Number(e.target.value),
+                            }))
+                          }
+                          className="w-full accent-emerald-500 cursor-pointer"
+                        />
+                      )}
+                    </div>
+
+                    {/* Preset Split Options */}
+                    <div>
+                      <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block mb-2">
+                        Quick Recommended Presets
+                      </span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {isBiActive ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setQuotaSplitState({ whatsappAi: 200, calls: 150, biAnalyst: 150 })}
+                              className="py-2 px-2 rounded-xl border border-border-main bg-bg-secondary/40 hover:bg-bg-secondary text-text-primary text-[11px] font-bold transition-all text-center cursor-pointer"
+                            >
+                              Balanced (200/150/150)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQuotaSplitState({ whatsappAi: 300, calls: 100, biAnalyst: 100 })}
+                              className="py-2 px-2 rounded-xl border border-border-main bg-bg-secondary/40 hover:bg-bg-secondary text-text-primary text-[11px] font-bold transition-all text-center cursor-pointer"
+                            >
+                              WhatsApp Focus (300/100/100)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQuotaSplitState({ whatsappAi: 150, calls: 250, biAnalyst: 100 })}
+                              className="py-2 px-2 rounded-xl border border-border-main bg-bg-secondary/40 hover:bg-bg-secondary text-text-primary text-[11px] font-bold transition-all text-center cursor-pointer"
+                            >
+                              Calls Focus (150/250/100)
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setQuotaSplitState({ whatsappAi: 250, calls: 250, biAnalyst: 0 })}
+                              className="py-2 px-2 rounded-xl border border-border-main bg-bg-secondary/40 hover:bg-bg-secondary text-text-primary text-[11px] font-bold transition-all text-center cursor-pointer"
+                            >
+                              Balanced (250 / 250)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQuotaSplitState({ whatsappAi: 350, calls: 150, biAnalyst: 0 })}
+                              className="py-2 px-2 rounded-xl border border-border-main bg-bg-secondary/40 hover:bg-bg-secondary text-text-primary text-[11px] font-bold transition-all text-center cursor-pointer"
+                            >
+                              WhatsApp Focus (350 / 150)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQuotaSplitState({ whatsappAi: 150, calls: 350, biAnalyst: 0 })}
+                              className="py-2 px-2 rounded-xl border border-border-main bg-bg-secondary/40 hover:bg-bg-secondary text-text-primary text-[11px] font-bold transition-all text-center cursor-pointer"
+                            >
+                              Calls Focus (150 / 350)
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {quotaLimitError && (
+                      <p className="text-[11px] text-red-600 dark:text-red-400 font-medium" role="alert">
+                        {quotaLimitError}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}
@@ -6215,8 +6632,14 @@ export default function OrganizationProfile() {
               </button>
               <button
                 type="button"
-                onClick={() => handleUpdateDailyLimit()}
-                disabled={savingLimit}
+                onClick={handleSaveQuotaSplit}
+                disabled={
+                  savingLimit ||
+                  Math.max(0, parseInt(quotaSplitState.whatsappAi, 10) || 0) +
+                    Math.max(0, parseInt(quotaSplitState.calls, 10) || 0) +
+                    (Boolean(org.addons?.biAnalyst) ? Math.max(0, parseInt(quotaSplitState.biAnalyst, 10) || 0) : 0) >
+                    500
+                }
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white text-xs font-black transition-all shadow-md shadow-pilot-blue/20 cursor-pointer disabled:opacity-50"
               >
                 {savingLimit ? (
@@ -6224,7 +6647,7 @@ export default function OrganizationProfile() {
                 ) : (
                   <Check size={14} />
                 )}
-                <span>{savingLimit ? "Saving..." : "Save Daily Limit"}</span>
+                <span>{savingLimit ? "Saving..." : "Save Quota Split"}</span>
               </button>
             </div>
           </div>

@@ -35,6 +35,8 @@ export default function Sidebar({
     organization,
     isManager,
     isSalesPerson,
+    hasWhatsAppCampaignsAddon,
+    hasBIAnalystAddon,
   } = useAuth();
   const { unreadCount } = useNotifications();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -92,6 +94,7 @@ export default function Sidebar({
                 text: "WhatsApp Campaigns",
                 icon: <Send className="w-5 h-5" />,
                 path: "/whatsapp/campaigns",
+                isUpgradeTab: !hasWhatsAppCampaignsAddon,
               },
             ]
           : []),
@@ -101,6 +104,7 @@ export default function Sidebar({
                 text: "BI Analyst",
                 icon: <Bot className="w-5 h-5" />,
                 path: "/bi-analyst",
+                isUpgradeTab: !hasBIAnalystAddon,
               },
             ]
           : []),
@@ -166,6 +170,12 @@ export default function Sidebar({
     if (
       item.path === "/whatsapp/campaigns" &&
       location.pathname.startsWith("/whatsapp/campaigns")
+    ) {
+      return true;
+    }
+    if (
+      item.path === "/bi-analyst" &&
+      location.pathname.startsWith("/bi-analyst")
     ) {
       return true;
     }
@@ -309,6 +319,25 @@ export default function Sidebar({
                           </span>
                         )}
 
+                        {/* Upgrade to use Tab Badge */}
+                        {!isCollapsed && item.isUpgradeTab && (
+                          <span
+                            title="Upgrade to use this add-on"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0 shadow-2xs"
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>Upgrade to use</span>
+                          </span>
+                        )}
+
+                        {/* Collapsed Upgrade Indicator */}
+                        {isCollapsed && item.isUpgradeTab && (
+                          <span
+                            className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-500 rounded-full ring-2 ring-brand-light"
+                            aria-hidden="true"
+                          />
+                        )}
+
                         {/* Notification Badge */}
                         {item.badge !== undefined && item.badge > 0 && (
                           isCollapsed ? (
@@ -334,6 +363,11 @@ export default function Sidebar({
                           className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5"
                         >
                           <span>{item.text}</span>
+                          {item.isUpgradeTab && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500 text-slate-900 text-[9px] font-extrabold uppercase">
+                              Upgrade to use
+                            </span>
+                          )}
                           {item.badge !== undefined && item.badge > 0 && (
                             <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-bold">
                               {item.badge}

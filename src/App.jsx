@@ -37,6 +37,7 @@ import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import AccountSuspended from "./components/AccountSuspended.jsx";
 import CalendlySupportModal from "./components/CalendlySupportModal.jsx";
+import AddonUpgradePrompt from "./components/AddonUpgradePrompt.jsx";
 
 function PublicRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -55,7 +56,7 @@ function PublicRoute({ children }) {
 }
 
 function CampaignsRoute({ children }) {
-  const { isSalesPerson, isManager, currentUser } = useAuth();
+  const { isSalesPerson, isManager, currentUser, hasWhatsAppCampaignsAddon } = useAuth();
   const isAuthorized =
     !isSalesPerson &&
     (isManager ||
@@ -65,6 +66,30 @@ function CampaignsRoute({ children }) {
 
   if (!isAuthorized) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (!hasWhatsAppCampaignsAddon) {
+    return <AddonUpgradePrompt addon="whatsappCampaigns" />;
+  }
+
+  return children ? children : <Outlet />;
+}
+
+function BIAnalystRoute({ children }) {
+  const { isSalesPerson, isManager, currentUser, hasBIAnalystAddon } = useAuth();
+  const isAuthorized =
+    !isSalesPerson &&
+    (isManager ||
+      currentUser?.role === "Sales Manager" ||
+      currentUser?.role === "Super Admin" ||
+      currentUser?.isOrgOwner);
+
+  if (!isAuthorized) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (!hasBIAnalystAddon) {
+    return <AddonUpgradePrompt addon="biAnalyst" />;
   }
 
   return children ? children : <Outlet />;
@@ -234,9 +259,9 @@ export default function App() {
             <Route
               path="/bi-analyst"
               element={
-                <CampaignsRoute>
+                <BIAnalystRoute>
                   <BIAnalyst />
-                </CampaignsRoute>
+                </BIAnalystRoute>
               }
             />
             <Route path="/test-ai" element={<TestAI />} />
