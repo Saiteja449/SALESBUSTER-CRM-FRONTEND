@@ -10,6 +10,7 @@ import {
   Info,
   User,
   Phone,
+  PhoneCall,
   Calendar,
   Clock,
   ExternalLink,
@@ -1068,7 +1069,7 @@ export default function Leads() {
                               <span>{lead.company}</span>
                             </span>
                           )}
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <a
                               href={`tel:${lead.phone}`}
                               className="text-[11px] text-brand-primary/75 hover:text-emerald-600 flex items-center gap-1"
@@ -1092,6 +1093,40 @@ export default function Leads() {
                                 <Copy className="w-3 h-3" />
                               )}
                             </button>
+                            {(() => {
+                              const leadTotalCalls =
+                                lead.callCount ||
+                                (Array.isArray(lead.repCallCounts)
+                                  ? lead.repCallCounts.reduce(
+                                      (acc, curr) => acc + (curr.count || 0),
+                                      0,
+                                    )
+                                  : 0) ||
+                                (lead.recordings?.length || 0);
+                              if (leadTotalCalls <= 0) return null;
+                              const repBreakdownTooltip =
+                                Array.isArray(lead.repCallCounts) &&
+                                lead.repCallCounts.length > 0
+                                  ? lead.repCallCounts
+                                      .map(
+                                        (r) =>
+                                          `${r.salespersonName || "Rep"}: ${r.count} ${r.count === 1 ? "call" : "calls"}`,
+                                      )
+                                      .join(" • ")
+                                  : `${leadTotalCalls} calls`;
+                              return (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0"
+                                  title={`Call breakdown: ${repBreakdownTooltip}`}
+                                >
+                                  <PhoneCall className="w-2.5 h-2.5" />
+                                  <span>
+                                    {leadTotalCalls}{" "}
+                                    {leadTotalCalls === 1 ? "call" : "calls"}
+                                  </span>
+                                </span>
+                              );
+                            })()}
                           </div>
                           {lead.email && (
                             <span className="text-[10px] text-brand-primary/50 truncate max-w-[200px]">
@@ -1305,13 +1340,33 @@ export default function Leads() {
                       <span className="text-[10px] text-brand-primary/50 block uppercase font-bold">
                         Phone
                       </span>
-                      <a
-                        href={`tel:${lead.phone}`}
-                        className="font-semibold text-brand-primary hover:text-emerald-600 flex items-center gap-1 mt-0.5"
-                      >
-                        <Phone className="w-3 h-3 text-emerald-500" />
-                        <span>{lead.phone}</span>
-                      </a>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <a
+                          href={`tel:${lead.phone}`}
+                          className="font-semibold text-brand-primary hover:text-emerald-600 flex items-center gap-1"
+                        >
+                          <Phone className="w-3 h-3 text-emerald-500" />
+                          <span>{lead.phone}</span>
+                        </a>
+                        {(() => {
+                          const leadTotalCalls =
+                            lead.callCount ||
+                            (Array.isArray(lead.repCallCounts)
+                              ? lead.repCallCounts.reduce(
+                                  (acc, curr) => acc + (curr.count || 0),
+                                  0,
+                                )
+                              : 0) ||
+                            (lead.recordings?.length || 0);
+                          if (leadTotalCalls <= 0) return null;
+                          return (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                              <PhoneCall className="w-2.5 h-2.5" />
+                              <span>{leadTotalCalls} calls</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
 
                     <div>

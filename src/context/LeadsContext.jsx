@@ -91,6 +91,42 @@ export function LeadsProvider({ children }) {
     };
   }, []);
 
+  // Listen for real-time lead call updates (callCount, repCallCounts, lastCallAt, recordings)
+  useEffect(() => {
+    const handleLeadCallUpdated = (data) => {
+      if (data?.leadId) {
+        setLeads((prev) =>
+          prev.map((lead) => {
+            if (String(lead.id || lead._id) === String(data.leadId)) {
+              const recItem = data.newRecording || data.recording;
+              let updatedRecs = lead.recordings || [];
+              if (recItem) {
+                const recId = String(recItem._id || recItem.id || "");
+                const exists = recId && updatedRecs.some((r) => String(r._id || r.id) === recId);
+                if (!exists) {
+                  updatedRecs = [...updatedRecs, recItem];
+                }
+              }
+              return {
+                ...lead,
+                callCount: data.callCount ?? lead.callCount,
+                repCallCounts: data.repCallCounts ?? lead.repCallCounts,
+                lastCallAt: data.lastCallAt ?? lead.lastCallAt,
+                recordings: updatedRecs,
+              };
+            }
+            return lead;
+          }),
+        );
+      }
+    };
+
+    socket.on("lead_call_updated", handleLeadCallUpdated);
+    return () => {
+      socket.off("lead_call_updated", handleLeadCallUpdated);
+    };
+  }, []);
+
   const refreshData = React.useCallback(async () => {
     try {
       const [leadsRes, followupsRes] = await Promise.all([

@@ -631,6 +631,7 @@ export default function SalesPersonDetails() {
                     <tr>
                       <th className="px-4 py-3">Client / Organization</th>
                       <th className="px-4 py-3">Phone & Contact</th>
+                      <th className="px-4 py-3 text-center">Calls by this Rep</th>
                       <th className="px-4 py-3">Service</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Follow-up / Enquired</th>
@@ -638,7 +639,48 @@ export default function SalesPersonDetails() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border-main text-xs">
-                    {displayedLeads.map((lead) => (
+                    {displayedLeads.map((lead) => {
+                      const repCallsCount = (() => {
+                        if (Array.isArray(lead.repCallCounts)) {
+                          const entry = lead.repCallCounts.find((r) => {
+                            if (repId && r.salespersonId) {
+                              return (
+                                String(r.salespersonId).toLowerCase() ===
+                                String(repId).toLowerCase()
+                              );
+                            }
+                            if (repUser?.name && r.salespersonName) {
+                              return (
+                                r.salespersonName.toLowerCase() ===
+                                repUser.name.toLowerCase()
+                              );
+                            }
+                            return false;
+                          });
+                          if (entry) return entry.count || 0;
+                        }
+                        if (Array.isArray(lead.recordings)) {
+                          const recCount = lead.recordings.filter((r) => {
+                            if (repId && r.salespersonId) {
+                              return (
+                                String(r.salespersonId).toLowerCase() ===
+                                String(repId).toLowerCase()
+                              );
+                            }
+                            if (repUser?.name && r.salespersonName) {
+                              return (
+                                r.salespersonName.toLowerCase() ===
+                                repUser.name.toLowerCase()
+                              );
+                            }
+                            return false;
+                          }).length;
+                          if (recCount > 0) return recCount;
+                        }
+                        return 0;
+                      })();
+
+                      return (
                       <tr
                         key={lead.id}
                         className="hover:bg-bg-secondary/40 transition-colors group"
@@ -671,6 +713,23 @@ export default function SalesPersonDetails() {
                             </a>
                           ) : (
                             <span className="text-text-secondary">—</span>
+                          )}
+                        </td>
+
+                        {/* Calls by this Rep */}
+                        <td className="px-4 py-3.5 text-center">
+                          {repCallsCount > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                              <PhoneCall size={11} />
+                              <span>
+                                {repCallsCount}{" "}
+                                {repCallsCount === 1 ? "call" : "calls"}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-text-secondary/60 bg-bg-secondary/40 border border-border-main/50">
+                              0 calls
+                            </span>
                           )}
                         </td>
 
@@ -725,7 +784,8 @@ export default function SalesPersonDetails() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>
@@ -748,13 +808,33 @@ export default function SalesPersonDetails() {
                         <p className="text-[11px] text-text-secondary">{lead.company}</p>
                       )}
                     </div>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] shrink-0 ${getStatusBadgeStyle(
-                        lead.status,
-                      )}`}
-                    >
-                      {lead.status || "New"}
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {(() => {
+                        const count =
+                          lead.repCallCounts?.find(
+                            (r) =>
+                              (repId &&
+                                String(r.salespersonId).toLowerCase() ===
+                                  String(repId).toLowerCase()) ||
+                              (repUser?.name &&
+                                r.salespersonName?.toLowerCase() ===
+                                  repUser.name.toLowerCase()),
+                          )?.count || 0;
+                        return count > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                            <PhoneCall size={9} />
+                            {count} {count === 1 ? "call" : "calls"}
+                          </span>
+                        ) : null;
+                      })()}
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] shrink-0 ${getStatusBadgeStyle(
+                          lead.status,
+                        )}`}
+                      >
+                        {lead.status || "New"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between text-xs text-text-secondary pt-2 border-t border-border-main/50">
