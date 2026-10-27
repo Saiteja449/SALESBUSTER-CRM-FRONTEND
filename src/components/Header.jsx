@@ -232,7 +232,7 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
                   {/* Sales Managers Only: Profile Details & Organization Details */}
                   {isManager && (
                     <>
-                      <button
+                      {/* <button
                         type="button"
                         role="menuitem"
                         onClick={() => {
@@ -256,7 +256,7 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
                             View personal representative stats
                           </div>
                         </div>
-                      </button>
+                      </button> */}
 
                       <button
                         type="button"
