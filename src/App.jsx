@@ -36,7 +36,7 @@ import BIAnalyst from "./pages/BIAnalyst.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import AccountSuspended from "./components/AccountSuspended.jsx";
-import CalendlySupportModal from "./components/CalendlySupportModal.jsx";
+import SupportCenterModal from "./components/support/SupportCenterModal.jsx";
 import AddonUpgradePrompt from "./components/AddonUpgradePrompt.jsx";
 
 function PublicRoute({ children }) {
@@ -269,7 +269,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-        <CalendlySupportModal />
+        <SupportCenterModal />
       </RootProvider>
     </BrowserRouter>
   );

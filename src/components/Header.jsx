@@ -12,6 +12,8 @@ import {
   ChevronDown,
   Mail,
   Phone,
+  AlertCircle,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
@@ -22,7 +24,7 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { organization, isManager, currentUser, logout } = useAuth();
-  const { openSupportModal } = useSupportModal();
+  const { openInstantAiSupport, openReportIssue, openMyTickets } = useSupportModal();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const profileMenuRef = useRef(null);
@@ -133,38 +135,30 @@ export default function Header({ handleDrawerToggle, onQuickAddLead }) {
 
          
 
-          {isManager && (
-            <>
-              <button
-                type="button"
-                onClick={() =>
-                  openSupportModal(
-                    "Book 1-on-1 Human Assistance & Consultation Session with our team.",
-                  )
-                }
-                title="Book Human Assistance & Support Meeting (Calendly)"
-                className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:border-purple-500/40 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
-              >
-                <Headphones className="w-4 h-4 text-purple-500 shrink-0" />
-                <span className="hidden md:inline">Human Assistance</span>
-                <span className="md:hidden">Support</span>
-              </button>
+          {/* Differentiated Support Actions: 1. Instant Support (AI) & 2. Report an Issue (Human Support) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openInstantAiSupport}
+              title="Instant Support — Ask AI for immediate answers"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/25 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+              <span className="hidden sm:inline">Instant Support</span>
+              <span className="sm:hidden">AI Help</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  openSupportModal(
-                    "Book 1-on-1 Human Assistance & Consultation Session with our team.",
-                  )
-                }
-                title="Book Human Assistance (Calendly)"
-                className="sm:hidden p-2 rounded-lg bg-bg-card border border-border-main hover:bg-bg-secondary/30 transition-colors text-purple-500 cursor-pointer"
-                aria-label="Book Human Assistance"
-              >
-                <Headphones className="w-5 h-5" />
-              </button>
-            </>
-          )}
+            <button
+              type="button"
+              onClick={() => openReportIssue()}
+              title="Report an Issue — Human Support & Ticket Tracking"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-bg-card hover:bg-bg-secondary/40 text-text-primary border border-border-main hover:border-purple-500/30 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+            >
+              <AlertCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="hidden sm:inline">Report an Issue</span>
+              <span className="sm:hidden">Tickets</span>
+            </button>
+          </div>
 
           {/* Theme Toggle */}
           <ThemeToggle />

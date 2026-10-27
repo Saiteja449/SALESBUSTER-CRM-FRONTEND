@@ -12,9 +12,11 @@ import {
   ChevronRight,
   Send,
   X,
+  LifeBuoy,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
+import { useSupportModal } from "../context/SupportModalContext.jsx";
 import LogoutConfirmModal from "./LogoutConfirmModal.jsx";
 import crmLogo from "../assets/images/Logo.png";
 import { FaWhatsapp } from "react-icons/fa";
@@ -39,6 +41,7 @@ export default function Sidebar({
     hasBIAnalystAddon,
   } = useAuth();
   const { unreadCount } = useNotifications();
+  const { openInstantAiSupport, openMyTickets } = useSupportModal();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const isOrgOwner =
@@ -130,6 +133,21 @@ export default function Sidebar({
         },
       ],
     },
+    {
+      title: "Help & Support",
+      items: [
+        {
+          text: "Instant Support (AI)",
+          icon: <Sparkles className="w-5 h-5 text-indigo-500" />,
+          onClick: () => openInstantAiSupport(),
+        },
+        {
+          text: "Support Tickets",
+          icon: <LifeBuoy className="w-5 h-5 text-emerald-500" />,
+          onClick: () => openMyTickets(),
+        },
+      ],
+    },
   ];
 
   const handleNav = (item) => {
@@ -151,6 +169,7 @@ export default function Sidebar({
   };
 
   const isItemActive = (item) => {
+    if (!item?.path) return false;
     if (location.pathname === item.path) return true;
     if (
       item.path === "/leads" &&
