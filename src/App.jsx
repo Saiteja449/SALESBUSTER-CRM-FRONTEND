@@ -36,8 +36,8 @@ import BIAnalyst from "./pages/BIAnalyst.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import AccountSuspended from "./components/AccountSuspended.jsx";
-import SupportCenterModal from "./components/support/SupportCenterModal.jsx";
 import AddonUpgradePrompt from "./components/AddonUpgradePrompt.jsx";
+import SupportCenter from "./pages/SupportCenter.jsx";
 
 function PublicRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -264,12 +264,12 @@ export default function App() {
                 </BIAnalystRoute>
               }
             />
+            <Route path="/support" element={<SupportCenter />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-        <SupportCenterModal />
       </RootProvider>
     </BrowserRouter>
   );

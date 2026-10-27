@@ -137,14 +137,9 @@ export default function Sidebar({
       title: "Help & Support",
       items: [
         {
-          text: "Instant Support (AI)",
-          icon: <Sparkles className="w-5 h-5 text-indigo-500" />,
-          onClick: () => openInstantAiSupport(),
-        },
-        {
-          text: "Support Tickets",
-          icon: <LifeBuoy className="w-5 h-5 text-emerald-500" />,
-          onClick: () => openMyTickets(),
+          text: "Support & Help",
+          icon: <LifeBuoy className="w-5 h-5 text-purple-500" />,
+          path: "/support",
         },
       ],
     },

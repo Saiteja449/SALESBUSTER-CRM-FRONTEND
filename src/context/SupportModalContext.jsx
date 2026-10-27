@@ -1,46 +1,48 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 const SupportModalContext = createContext(null);
 
 export function SupportModalProvider({ children }) {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("instant_ai"); // 'instant_ai' | 'report_issue' | 'my_tickets' | 'consultation'
   const [meetingContext, setMeetingContext] = useState(null);
   const [handoffData, setHandoffData] = useState(null);
 
   const openSupportModal = useCallback((contextOrTab = null) => {
+    let targetTab = "instant_ai";
     if (contextOrTab === "report_issue" || contextOrTab === "my_tickets" || contextOrTab === "instant_ai") {
-      setActiveTab(contextOrTab);
+      targetTab = contextOrTab;
       setMeetingContext(null);
     } else if (typeof contextOrTab === "string" && contextOrTab.length > 20) {
-      // It's a meeting consultation description
-      setActiveTab("consultation");
+      targetTab = "consultation";
       setMeetingContext(contextOrTab);
     } else {
-      setActiveTab("instant_ai");
       setMeetingContext(null);
     }
-    setIsOpen(true);
-  }, []);
+    setActiveTab(targetTab);
+    navigate(`/support?tab=${targetTab}`);
+  }, [navigate]);
 
   const openInstantAiSupport = useCallback(() => {
     setActiveTab("instant_ai");
     setMeetingContext(null);
-    setIsOpen(true);
-  }, []);
+    navigate("/support?tab=instant_ai");
+  }, [navigate]);
 
   const openReportIssue = useCallback((prefill = null) => {
     if (prefill) {
       setHandoffData(prefill);
     }
     setActiveTab("report_issue");
-    setIsOpen(true);
-  }, []);
+    navigate("/support?tab=report_issue");
+  }, [navigate]);
 
   const openMyTickets = useCallback(() => {
     setActiveTab("my_tickets");
-    setIsOpen(true);
-  }, []);
+    navigate("/support?tab=my_tickets");
+  }, [navigate]);
 
   const closeSupportModal = useCallback(() => {
     setIsOpen(false);
