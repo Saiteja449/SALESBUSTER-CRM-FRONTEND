@@ -329,7 +329,12 @@ function AccessibleAudioPlayer({ src, recordingName }) {
   );
 }
 
-export default function RecordingsSidebar({ lead, isOpen, onClose }) {
+export default function RecordingsSidebar({
+  lead,
+  isOpen,
+  onClose,
+  initialRepFilter = null,
+}) {
   const { setLeads } = useLeads();
   const id = lead?._id || lead?.id;
 
@@ -343,6 +348,11 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
   const [analyzingRecordingIds, setAnalyzingRecordingIds] = useState({});
   const [copiedTranscriptId, setCopiedTranscriptId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRepFilter, setSelectedRepFilter] = useState(initialRepFilter);
+
+  useEffect(() => {
+    setSelectedRepFilter(initialRepFilter);
+  }, [initialRepFilter]);
 
   const closeBtnRef = useRef(null);
 
@@ -405,18 +415,20 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
     };
 
     const handleRecordingUploaded = (data) => {
-      if (data.leadId === id) {
+      if (String(data.leadId) === String(id)) {
+        const recItem = data.recording || data.newRecording;
+        if (!recItem) return;
         setLeads((prev) =>
           prev.map((l) => {
-            if (l.id === id || l._id === id) {
+            if (String(l.id || l._id) === String(id)) {
               const existing = l.recordings || [];
               const exists = existing.some(
                 (r) =>
-                  (r._id || r.id) === (data.recording._id || data.recording.id),
+                  String(r._id || r.id) === String(recItem._id || recItem.id),
               );
               return {
                 ...l,
-                recordings: exists ? existing : [...existing, data.recording],
+                recordings: exists ? existing : [...existing, recItem],
               };
             }
             return l;
@@ -529,12 +541,26 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
     setTimeout(() => setCopiedTranscriptId(null), 2000);
   };
 
-  // Filter recordings by search query
+  // Filter recordings by search query and optional sales rep filter
   const filteredRecordings = recordings.filter((rec, idx) => {
+    if (selectedRepFilter) {
+      const repFilterStr = String(selectedRepFilter).toLowerCase();
+      const matchRepId =
+        rec.salespersonId && String(rec.salespersonId).toLowerCase() === repFilterStr;
+      const matchRepName =
+        rec.salespersonName &&
+        rec.salespersonName.toLowerCase() === repFilterStr;
+      if (!matchRepId && !matchRepName) return false;
+    }
+
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
-    const nameMatch = (rec.name || `Call Recording ${idx + 1}`).toLowerCase().includes(query);
-    const transcriptMatch = (rec.transcription || "").toLowerCase().includes(query);
+    const nameMatch = (rec.name || `Call Recording ${idx + 1}`)
+      .toLowerCase()
+      .includes(query);
+    const transcriptMatch = (rec.transcription || "")
+      .toLowerCase()
+      .includes(query);
     const analysisMatch = (rec.analysis || "").toLowerCase().includes(query);
     return nameMatch || transcriptMatch || analysisMatch;
   });
@@ -640,6 +666,22 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
               </button>
             )}
           </div>
+
+          {selectedRepFilter && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 text-xs font-semibold">
+              <User size={12} />
+              <span>Rep: {selectedRepFilter}</span>
+              <button
+                type="button"
+                onClick={() => setSelectedRepFilter(null)}
+                className="hover:opacity-80 p-0.5 cursor-pointer"
+                title="Clear rep filter"
+                aria-label="Clear rep filter"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
 
           {ENABLE_AI_AUDIO_ANALYSIS && (
             <button
@@ -848,11 +890,17 @@ export default function RecordingsSidebar({ lead, isOpen, onClose }) {
                       <span className="font-bold text-sm text-text-primary block truncate">
                         {rec.name || `Call Recording ${index + 1}`}
                       </span>
-                      <div className="flex items-center gap-2 text-[11px] text-text-secondary mt-0.5">
+                      <div className="flex items-center gap-2 text-[11px] text-text-secondary mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1">
                           <Calendar size={11} />
                           {formatDateTime(rec.uploadedAt)}
                         </span>
+                        {rec.salespersonName && (
+                          <span className="flex items-center gap-1 font-semibold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                            <User size={10} />
+                            {rec.salespersonName}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

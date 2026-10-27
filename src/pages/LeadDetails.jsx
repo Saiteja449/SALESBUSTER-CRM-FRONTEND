@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Phone,
+  PhoneCall,
   Mail,
   User,
   Calendar,
@@ -130,7 +131,53 @@ export default function LeadDetails() {
 
   const [followupType, setFollowupType] = useState("Call");
   const [isRecordingsSidebarOpen, setIsRecordingsSidebarOpen] = useState(false);
+  const [recordingsRepFilter, setRecordingsRepFilter] = useState(null);
   const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
+
+  const repCallSummary = useMemo(() => {
+    const map = new Map();
+
+    if (Array.isArray(currentLead?.repCallCounts)) {
+      currentLead.repCallCounts.forEach((rc) => {
+        const key = String(rc.salespersonId || rc.salespersonName || "unnamed");
+        map.set(key, {
+          salespersonId: rc.salespersonId,
+          salespersonName: rc.salespersonName || "Sales Representative",
+          count: rc.count || 0,
+          lastCalledAt: rc.lastCalledAt,
+          recordingsCount: 0,
+        });
+      });
+    }
+
+    const recs = currentLead?.recordings || [];
+    recs.forEach((rec) => {
+      const key = String(rec.salespersonId || rec.salespersonName || "unnamed");
+      if (map.has(key)) {
+        const existing = map.get(key);
+        existing.recordingsCount += 1;
+      } else if (rec.salespersonName || rec.salespersonId) {
+        map.set(key, {
+          salespersonId: rec.salespersonId,
+          salespersonName: rec.salespersonName || "Sales Representative",
+          count: 1,
+          lastCalledAt: rec.uploadedAt,
+          recordingsCount: 1,
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [currentLead?.repCallCounts, currentLead?.recordings]);
+
+  const totalCallCount = useMemo(() => {
+    return (
+      currentLead?.callCount ||
+      repCallSummary.reduce((sum, r) => sum + r.count, 0) ||
+      currentLead?.recordings?.length ||
+      0
+    );
+  }, [currentLead?.callCount, repCallSummary, currentLead?.recordings]);
 
   const todayStr = useMemo(() => getLocalTodayDateString(), []);
 
@@ -544,7 +591,7 @@ export default function LeadDetails() {
         </div>
 
         {/* Contact Details & Assignment Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-4 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 pt-4 text-xs">
           {/* Phone */}
           <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-bg-main/50 border border-brand-secondary/40">
             <Phone className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
@@ -660,6 +707,19 @@ export default function LeadDetails() {
               </span>
               <span className="font-semibold text-brand-primary truncate block mt-0.5">
                 {formatDate(currentLead.joinedAt || currentLead.createdAt)}
+              </span>
+            </div>
+          </div>
+
+          {/* Total Calls */}
+          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-bg-main/50 border border-brand-secondary/40">
+            <PhoneCall className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-brand-primary/50 uppercase block">
+                Total Calls
+              </span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 truncate block mt-0.5">
+                {totalCallCount} {totalCallCount === 1 ? "call" : "calls"}
               </span>
             </div>
           </div>
@@ -814,6 +874,98 @@ export default function LeadDetails() {
       {/* ── 4. Tab 1: Overview & Intelligence Workspace ──────────────────── */}
       {activeTab === "overview" && (
         <div className="space-y-5">
+          {/* Sales Representative Outreach & Call Tracking Card */}
+          <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-3 border-b border-brand-secondary/40">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <PhoneCall className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-brand-primary text-sm md:text-base flex items-center gap-2">
+                    Sales Representatives Call Tracking
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30">
+                      {totalCallCount} {totalCallCount === 1 ? "call" : "calls"}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-brand-primary/60 mt-0.5">
+                    How many times each sales representative has called this lead (synced via Mobile App)
+                  </p>
+                </div>
+              </div>
+
+              {currentLead.lastCallAt && (
+                <span className="text-xs text-brand-primary/60 flex items-center gap-1 font-medium bg-bg-main px-2.5 py-1 rounded-lg border border-brand-secondary/40">
+                  <Clock className="w-3.5 h-3.5 text-brand-primary/50" />
+                  Last Call: {formatDateTime(currentLead.lastCallAt)}
+                </span>
+              )}
+            </div>
+
+            {repCallSummary.length === 0 ? (
+              <div className="p-6 text-center rounded-xl bg-bg-main/50 border border-dashed border-brand-secondary/60">
+                <Phone className="w-8 h-8 text-brand-primary/30 mx-auto mb-2" />
+                <p className="text-xs font-bold text-brand-primary">No calls logged yet for this lead</p>
+                <p className="text-[11px] text-brand-primary/60 mt-1 max-w-md mx-auto">
+                  When representatives make calls or upload audio recordings through the SalesBuster Mobile App, each call attempt will be tracked and displayed here per sales rep.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {repCallSummary.map((rep, idx) => (
+                  <div
+                    key={rep.salespersonId || rep.salespersonName || idx}
+                    className="p-3.5 rounded-xl bg-bg-main border border-brand-secondary/50 flex flex-col justify-between gap-3 hover:border-purple-500/30 transition-all shadow-2xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                          {rep.salespersonName
+                            ? rep.salespersonName.slice(0, 2).toUpperCase()
+                            : "SR"}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-brand-primary text-xs truncate block">
+                            {rep.salespersonName}
+                          </span>
+                          <span className="text-[11px] text-brand-primary/60 flex items-center gap-1 mt-0.5">
+                            <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
+                            {rep.lastCalledAt ? formatDateTime(rep.lastCalledAt) : "Date unrecorded"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-xs font-black shrink-0">
+                        {rep.count} {rep.count === 1 ? "call" : "calls"}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-brand-secondary/40 flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-brand-primary/70 font-medium flex items-center gap-1">
+                        <Mic className="w-3 h-3 text-purple-500" />
+                        {rep.recordingsCount} {rep.recordingsCount === 1 ? "recording" : "recordings"}
+                      </span>
+
+                      {rep.recordingsCount > 0 && ENABLE_AI_AUDIO_ANALYSIS && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecordingsRepFilter(rep.salespersonId || rep.salespersonName);
+                            setIsRecordingsSidebarOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 transition-colors cursor-pointer"
+                        >
+                          <FileAudio className="w-3 h-3" />
+                          <span>Listen</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Internal Requirements & Notes Section */}
           <div className="bg-brand-light border border-brand-secondary rounded-2xl p-5 shadow-xs">
             <div className="flex justify-between items-center mb-3">
@@ -1568,8 +1720,12 @@ export default function LeadDetails() {
       {/* ── 9. Call Audio Recordings Sidebar ─────────────────────────────── */}
       <RecordingsSidebar
         isOpen={isRecordingsSidebarOpen}
-        onClose={() => setIsRecordingsSidebarOpen(false)}
+        onClose={() => {
+          setIsRecordingsSidebarOpen(false);
+          setRecordingsRepFilter(null);
+        }}
         lead={currentLead}
+        initialRepFilter={recordingsRepFilter}
       />
     </div>
   );
