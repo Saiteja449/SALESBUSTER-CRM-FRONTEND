@@ -77,24 +77,9 @@ export default function WhatsAppConnectModal({
     qrCode: "",
     connectedPhone: "",
     connectedName: "",
-    label: isRepMode ? "My WhatsApp Line" : "Line 1 (Primary)",
+    label: isRepMode ? "My WhatsApp Line" : "Company Line",
     isPrimary: true,
   };
-
-  const secondarySession =
-    !isRepMode && whatsappLineLimit >= 2
-      ? sessions.find(
-          (s) => !s.isPrimary && s.sessionId?.includes("device_2"),
-        ) || {
-          sessionId: "device_2",
-          status: "disconnected",
-          qrCode: "",
-          connectedPhone: "",
-          connectedName: "",
-          label: "Line 2 (Secondary)",
-          isPrimary: false,
-        }
-      : null;
 
   // Background scroll lock and Escape key listener
   useEffect(() => {
@@ -135,7 +120,6 @@ export default function WhatsAppConnectModal({
   // 60-second QR freshness countdown
   const anyHasQr =
     primarySession.status === "qr" ||
-    secondarySession?.status === "qr" ||
     repSession?.status === "qr";
 
   useEffect(() => {
@@ -149,7 +133,7 @@ export default function WhatsAppConnectModal({
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [isOpen, anyHasQr, primarySession.qrCode, secondarySession?.qrCode, repSession.qrCode]);
+  }, [isOpen, anyHasQr, primarySession.qrCode, repSession.qrCode]);
 
   if (!isOpen) return null;
 
@@ -607,8 +591,6 @@ export default function WhatsAppConnectModal({
     );
   }
 
-  const isDualLine = !isRepMode && whatsappLineLimit >= 2;
-
   return (
     <div
       role="dialog"
@@ -622,9 +604,7 @@ export default function WhatsAppConnectModal({
       }}
     >
       <div
-        className={`relative w-full ${
-          isDualLine ? "max-w-3xl" : "max-w-lg"
-        } bg-white dark:bg-[#130b24] rounded-3xl shadow-2xl border border-slate-200 dark:border-purple-800/40 overflow-hidden flex flex-col max-h-[92vh]`}
+        className="relative w-full max-w-lg bg-white dark:bg-[#130b24] rounded-3xl shadow-2xl border border-slate-200 dark:border-purple-800/40 overflow-hidden flex flex-col max-h-[92vh]"
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-200/80 dark:border-purple-800/30 bg-slate-50/70 dark:bg-white/[0.02] shrink-0">
@@ -641,11 +621,7 @@ export default function WhatsAppConnectModal({
                   WhatsApp Connection
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25">
-                  {isRepMode
-                    ? "Personal Line"
-                    : isDualLine
-                      ? "2 Channels"
-                      : "1 Channel"}
+                  {isRepMode ? "Personal Line" : "1 Channel"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-purple-300/80 mt-0.5">
@@ -731,30 +707,16 @@ export default function WhatsAppConnectModal({
             </div>
           </div>
 
-          {/* Device Cards Grid */}
-          <div
-            className={`grid grid-cols-1 ${isDualLine ? "md:grid-cols-2" : ""} gap-4`}
-          >
-            {isRepMode ? (
-              renderDeviceCard(repSession, 1, true, isRepLoading)
-            ) : (
-              <>
-                {renderDeviceCard(
+          {/* Device Card */}
+          <div className="grid grid-cols-1 gap-4">
+            {isRepMode
+              ? renderDeviceCard(repSession, 1, true, isRepLoading)
+              : renderDeviceCard(
                   primarySession,
                   1,
                   true,
                   !!loadingSessions[primarySession.sessionId],
                 )}
-                {isDualLine &&
-                  secondarySession &&
-                  renderDeviceCard(
-                    secondarySession,
-                    2,
-                    false,
-                    !!loadingSessions[secondarySession.sessionId],
-                  )}
-              </>
-            )}
           </div>
         </div>
 

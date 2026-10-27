@@ -29,6 +29,7 @@ import { API_ENDPOINTS } from "../utils/constants.js";
 import { socket } from "../utils/socket.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import CloudSettingsModal from "../components/whatsapp/CloudSettingsModal.jsx";
+import WhatsAppConnectButton from "../components/whatsapp/WhatsAppConnectButton.jsx";
 
 export default function WhatsAppCampaigns() {
   const navigate = useNavigate();
@@ -49,7 +50,7 @@ export default function WhatsAppCampaigns() {
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
-    checkCloudStatus(true);
+    checkCloudStatus(false);
     fetchCampaigns();
 
     if (orgId) {
@@ -111,7 +112,7 @@ export default function WhatsAppCampaigns() {
     };
   }, [orgId]);
 
-  const checkCloudStatus = async (autoPrompt = true) => {
+  const checkCloudStatus = async (autoPrompt = false) => {
     setCheckingCloudStatus(true);
     try {
       const res = await axios.get(API_ENDPOINTS.WHATSAPP_CLOUD.STATUS);
@@ -323,14 +324,21 @@ export default function WhatsAppCampaigns() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
-          >
-            <Radio className="w-3.5 h-3.5" />
-            <span>Setup Cloud API Now</span>
-          </button>
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+            <WhatsAppConnectButton
+              onConnected={async () => {
+                await checkCloudStatus(false);
+                fetchCampaigns();
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+            >
+              Manual Settings
+            </button>
+          </div>
         </div>
       )}
 

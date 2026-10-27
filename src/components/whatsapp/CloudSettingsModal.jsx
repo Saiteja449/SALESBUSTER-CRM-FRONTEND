@@ -17,8 +17,10 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Smartphone,
 } from "lucide-react";
 import { API_ENDPOINTS } from "../../utils/constants.js";
+import WhatsAppConnectButton from "./WhatsAppConnectButton.jsx";
 
 export default function CloudSettingsModal({ isOpen, onClose, onUpdated }) {
   const [loading, setLoading] = useState(false);
@@ -28,6 +30,7 @@ export default function CloudSettingsModal({ isOpen, onClose, onUpdated }) {
   const [success, setSuccess] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [copiedField, setCopiedField] = useState("");
 
@@ -303,20 +306,49 @@ export default function CloudSettingsModal({ isOpen, onClose, onUpdated }) {
               </div>
             </div>
           ) : (
-            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-amber-800 dark:text-amber-300">
-                <p className="font-bold mb-1">WhatsApp Cloud API is not connected</p>
-                <p>
-                  Enter your Meta WABA ID, Phone Number ID, and System User Access
-                  Token from your Meta Developer Portal to start sending campaigns.
-                </p>
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-purple-500/5 to-transparent border border-emerald-500/30 space-y-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      1-Click WhatsApp Onboarding (Coexistence Mode)
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                      Recommended
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    Connect your WhatsApp Business number directly via Meta Facebook Login. Keeps your mobile WhatsApp Business app active while granting access for bulk campaigns. No manual tokens or IDs required!
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between flex-wrap gap-3">
+                <WhatsAppConnectButton
+                  onConnected={async () => {
+                    await fetchStatus(true);
+                    if (onUpdated) onUpdated();
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowManualForm(!showManualForm)}
+                  className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline cursor-pointer"
+                >
+                  {showManualForm ? "Hide Manual Setup" : "Manual Credentials Setup (Advanced / Custom)"}
+                </button>
               </div>
             </div>
           )}
 
-          {/* Quick Guide Accordion */}
-          <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-800/20">
+          {/* Manual Credentials Setup (Only if configured or toggled) */}
+          {(statusData.isConfigured || showManualForm) && (
+            <>
+              {/* Quick Guide Accordion */}
+              <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-800/20">
             <button
               type="button"
               onClick={() => setShowGuide(!showGuide)}
@@ -548,6 +580,8 @@ export default function CloudSettingsModal({ isOpen, onClose, onUpdated }) {
               </div>
             </div>
           </form>
+          </>
+        )}
         </div>
       </div>
 

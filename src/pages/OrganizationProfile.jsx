@@ -2700,12 +2700,8 @@ export default function OrganizationProfile() {
                 WhatsApp Connection
               </h3>
             </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-              (org.whatsappLineLimit || 1) >= 2
-                ? "bg-emerald-500/10 text-emerald-600"
-                : "bg-slate-500/10 text-slate-600"
-            }`}>
-              {(org.whatsappLineLimit || 1) >= 2 ? "DUAL LINE" : "SINGLE LINE"}
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/10 text-emerald-600">
+              SINGLE LINE
             </span>
           </div>
 
@@ -2715,7 +2711,7 @@ export default function OrganizationProfile() {
                 Connection Mode:
               </span>
               <span className="font-bold text-text-primary">
-                {(org.whatsappLineLimit || 1) >= 2 ? "Dual Lines (2 Devices)" : "Single Line (1 Device)"}
+                Single Line (1 Device)
               </span>
             </div>
             <div className="flex justify-between py-1.5">
@@ -2723,7 +2719,7 @@ export default function OrganizationProfile() {
                 Max Devices:
               </span>
               <span className="font-bold text-text-primary">
-                {org.whatsappLineLimit || 1}
+                1
               </span>
             </div>
           </div>
@@ -2731,7 +2727,7 @@ export default function OrganizationProfile() {
           <div className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-secondary/50 border border-border-main">
             <Info className="w-3.5 h-3.5 text-text-secondary shrink-0 mt-0.5" />
             <p className="text-[10px] text-text-secondary leading-relaxed">
-              WhatsApp connection mode is managed by your system administrator. Contact support to upgrade your connection plan.
+              WhatsApp connection mode provides unified WhatsApp Business communication for your sales team.
             </p>
           </div>
         </div>
