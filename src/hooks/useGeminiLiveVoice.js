@@ -38,7 +38,7 @@ export function useGeminiLiveVoice() {
       onPlaybackEnded: () => {
         setIsPlaying(false);
         setOutputVolume(0);
-        setStatus("listening");
+        setStatus((prev) => (prev === "speaking" ? "listening" : prev));
       },
     });
 
@@ -70,6 +70,8 @@ export function useGeminiLiveVoice() {
         // Fired by the gateway right before bi_voice_audio_out, so status
         // transitions to 'speaking' in sync with the first audio chunk.
         setStatus("speaking");
+      } else if (data.state === "listening") {
+        setStatus("listening");
       }
     };
 
@@ -106,6 +108,15 @@ export function useGeminiLiveVoice() {
         currentAssistantTurnRef.current = "";
         setLiveTranscript("");
       }
+
+      // Fallback: Transition smoothly back to 'listening' once playback finishes
+      setTimeout(() => {
+        if (!playerRef.current?.isPlaying && playerRef.current?.activeSources?.size === 0) {
+          setIsPlaying(false);
+          setOutputVolume(0);
+          setStatus((prev) => (prev === "speaking" ? "listening" : prev));
+        }
+      }, 400);
     };
 
     const handleError = (data) => {

@@ -179,6 +179,7 @@ export class LiveAudioPlayer {
     this.activeSources = new Set();
     this.animFrameId = null;
     this.isPlaying = false;
+    this.endTimeout = null;
   }
 
   init() {
@@ -222,6 +223,12 @@ export class LiveAudioPlayer {
   enqueueAudioChunk(base64Chunk) {
     this.init();
     try {
+      // Clear pending playback end debounce when new chunk arrives
+      if (this.endTimeout) {
+        clearTimeout(this.endTimeout);
+        this.endTimeout = null;
+      }
+
       const float32Samples = base64ToFloat32Array(base64Chunk);
       if (float32Samples.length === 0) return;
 
@@ -237,9 +244,9 @@ export class LiveAudioPlayer {
       source.connect(this.analyser);
 
       const currentTime = this.audioContext.currentTime;
-      // If queue fell behind, reset nextPlayTime to avoid delay
+      // Pre-buffer 80ms when starting fresh or recovering from network jitter to prevent voice breaking
       if (this.nextPlayTime < currentTime) {
-        this.nextPlayTime = currentTime + 0.02; // Tiny 20ms buffer
+        this.nextPlayTime = currentTime + 0.08;
       }
 
       source.start(this.nextPlayTime);
@@ -250,10 +257,16 @@ export class LiveAudioPlayer {
       source.onended = () => {
         this.activeSources.delete(source);
         if (this.activeSources.size === 0) {
-          this.isPlaying = false;
-          if (this.onPlaybackEnded) {
-            this.onPlaybackEnded();
-          }
+          // Debounce 250ms to ensure no trailing audio packet is in transit before notifying completion
+          if (this.endTimeout) clearTimeout(this.endTimeout);
+          this.endTimeout = setTimeout(() => {
+            if (this.activeSources.size === 0) {
+              this.isPlaying = false;
+              if (this.onPlaybackEnded) {
+                this.onPlaybackEnded();
+              }
+            }
+          }, 250);
         }
       };
     } catch (err) {
@@ -273,8 +286,13 @@ export class LiveAudioPlayer {
         // Source might have already finished
       }
     }
+    if (this.endTimeout) {
+      clearTimeout(this.endTimeout);
+      this.endTimeout = null;
+    }
     this.activeSources.clear();
     this.isPlaying = false;
+    this.endTimeout = null;
     if (this.audioContext) {
       this.nextPlayTime = this.audioContext.currentTime;
     }

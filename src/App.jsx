@@ -32,6 +32,8 @@ import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
 import BIAnalyst from "./pages/BIAnalyst.jsx";
+import EventDashboard from "./pages/EventDashboard.jsx";
+
 // Target Intelligence feature commented out
 // import TargetIntelligence from "./pages/TargetIntelligence.jsx";
 
@@ -215,6 +217,8 @@ export default function App() {
           />
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/events" element={<EventDashboard />} />
+
             <Route
               path="/leads"
               element={<Navigate to="/leads/new" replace />}

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
+  CalendarDays,
   Users,
   BarChart2,
   Bell,
@@ -74,6 +75,12 @@ export default function Sidebar({
           icon: <Sparkles className="w-5 h-5" />,
           path: "/ai-followups",
         },
+        {
+          text: "Events & Networking",
+          icon: <CalendarDays className="w-5 h-5 text-indigo-500" />,
+          path: "/events",
+        },
+
         /* Target Intelligence feature commented out
         ...(!isSalesPerson && isOrgOwner
           ? [
@@ -180,6 +187,13 @@ export default function Sidebar({
   const isItemActive = (item) => {
     if (!item?.path) return false;
     if (location.pathname === item.path) return true;
+    if (
+      item.path === "/events" &&
+      location.pathname.startsWith("/events")
+    ) {
+      return true;
+    }
+
     if (
       item.path === "/leads" &&
       (location.pathname.startsWith("/leads") ||
