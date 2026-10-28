@@ -24,13 +24,15 @@ const SUGGESTED_QUERIES = [
 
 /**
  * Premium White-Themed Gemini Live Voice Modal with Dynamic Audio Waveform
- * Replaces the orb with responsive vertical sound wave bars (pill caps) matching reference.
+ * Replaces the orb with responsive vertical sound wave bars (pill caps).
+ * Accurately surfaces connecting, listening, processing, tool querying, speaking, and reconnecting states.
  */
 export default function GeminiLiveVoiceModal({
   isOpen,
   onClose,
-  status = "idle", // 'idle' | 'connecting' | 'listening' | 'tool_running' | 'speaking' | 'error'
+  status = "idle", // 'idle' | 'connecting' | 'listening' | 'processing' | 'tool_running' | 'speaking' | 'reconnecting' | 'error'
   activeToolName = null,
+  toolDetails = null,
   inputVolume = 0,
   outputVolume = 0,
   liveTranscript = "",
@@ -53,7 +55,7 @@ export default function GeminiLiveVoiceModal({
     return () => clearInterval(interval);
   }, [isOpen]);
 
-  // Dynamic Vertical Audio Waveform Canvas (Matching Image 2)
+  // Dynamic Vertical Audio Waveform Canvas
   useEffect(() => {
     if (!isOpen) return;
     const canvas = canvasRef.current;
@@ -67,8 +69,7 @@ export default function GeminiLiveVoiceModal({
     const barGap = 5;
     const totalWidth = numBars * (barWidth + barGap) - barGap;
 
-    // Static envelope multiplier recreating the exact 3-peak sound wave from Image 2
-    // Peaks around index 5 (left peak), index 15 (tall center peak), index 25 (right peak)
+    // Static envelope multiplier recreating 3-peak sound wave
     const envelope = [];
     for (let i = 0; i < numBars; i++) {
       const leftPeak = Math.exp(-Math.pow((i - 5) / 2.8, 2)) * 0.72;
@@ -90,14 +91,17 @@ export default function GeminiLiveVoiceModal({
       const isSpeaking = status === "speaking";
       const isListening = status === "listening" && !isMuted;
       const isTool = status === "tool_running";
+      const isProcessing = status === "processing";
       const vol = isSpeaking ? outputVolume : isListening ? inputVolume : 0.04;
 
       // Color scheme for vertical bars
-      let barColor = "#0f172a"; // Crisp dark slate/black (matching Image 2)
+      let barColor = "#0f172a"; // Slate/black for listening
       if (isSpeaking) {
         barColor = "#4338ca"; // Indigo when Gemini speaks
       } else if (isTool) {
         barColor = "#d97706"; // Amber when executing CRM tools
+      } else if (isProcessing) {
+        barColor = "#2563eb"; // Blue when processing question
       }
 
       ctx.fillStyle = barColor;
@@ -110,22 +114,19 @@ export default function GeminiLiveVoiceModal({
           Math.sin(phase * 4 + i * 0.38) * 0.22 +
           Math.cos(phase * 2.2 - i * 0.28) * 0.14;
 
-        // Base height from envelope (max ~130px at center, min ~18px at edges)
         const baseH = envelope[i] * 128;
 
-        // Dynamic height responsive to real microphone and AI audio volume
         let currentH;
         if (vol > 0.08) {
-          currentH = Math.max(
-            8,
-            baseH * (0.45 + vol * 1.8 * (1 + wave * 0.4))
-          );
+          currentH = Math.max(8, baseH * (0.45 + vol * 1.8 * (1 + wave * 0.4)));
+        } else if (isProcessing) {
+          // Dynamic traveling ripple for processing state
+          const ripple = Math.sin(phase * 3 - i * 0.5) * 0.35 + 0.65;
+          currentH = Math.max(8, baseH * ripple);
         } else {
-          // Subtle breathing idle animation
           currentH = Math.max(8, baseH * (0.8 + wave * 0.18));
         }
 
-        // Clamp height within canvas bounds
         const clampedH = Math.min(height - 16, Math.max(8, currentH));
         const y = centerY - clampedH / 2;
 
@@ -148,8 +149,31 @@ export default function GeminiLiveVoiceModal({
   if (!isOpen) return null;
 
   const isSpeaking = status === "speaking";
-  const isListening = status === "listening" && !isMuted;
   const isTool = status === "tool_running";
+  const isProcessing = status === "processing";
+  const isConnecting = status === "connecting";
+  const isReconnecting = status === "reconnecting";
+
+  // State-specific heading and helper copy
+  let statusHeading = "Listening...";
+  let statusSubtext = "Speak naturally, I'm listening to your question.";
+
+  if (isConnecting) {
+    statusHeading = "Connecting...";
+    statusSubtext = "Negotiating secure session with Gemini Live API...";
+  } else if (isReconnecting) {
+    statusHeading = "Reconnecting...";
+    statusSubtext = "Re-establishing real-time connection...";
+  } else if (isProcessing) {
+    statusHeading = "Thinking...";
+    statusSubtext = "Formulating your answer with live CRM context...";
+  } else if (isTool) {
+    statusHeading = "Querying CRM...";
+    statusSubtext = toolDetails?.friendlyLabel || "Querying database tools for live figures.";
+  } else if (isSpeaking) {
+    statusHeading = "Speaking...";
+    statusSubtext = "BI Analyst is delivering your CRM insights in real-time.";
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden">
@@ -213,27 +237,21 @@ export default function GeminiLiveVoiceModal({
 
         {/* =========================================================================
             CENTER 3-COLUMN STUDIO SECTION:
-            Left: Status text | Center: Dynamic Audio Waveform (Image 2) | Right: Feature Cards
+            Left: Status text | Center: Dynamic Audio Waveform | Right: Feature Cards
             ========================================================================= */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center my-6 sm:my-8">
           {/* Left Column: Live Status & Subtitle */}
           <div className="hidden md:flex md:col-span-3 flex-col justify-center">
             <div className="flex items-center gap-2 text-slate-900 font-bold text-base tracking-tight">
               <Activity className="w-5 h-5 text-indigo-600" />
-              <span>
-                {isSpeaking ? "Speaking..." : isTool ? "Querying CRM..." : "Listening..."}
-              </span>
+              <span>{statusHeading}</span>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed mt-2 max-w-[210px] font-medium">
-              {isSpeaking
-                ? "BI Analyst is delivering your CRM insights in real-time."
-                : isTool
-                ? "Querying MongoDB database tools for live figures."
-                : "Speak naturally, I'm listening to your question."}
+              {statusSubtext}
             </p>
           </div>
 
-          {/* Center Column: Dynamic Vertical Audio Waveform (Replacing the Orb) */}
+          {/* Center Column: Dynamic Vertical Audio Waveform */}
           <div className="col-span-1 md:col-span-6 flex flex-col items-center justify-center">
             {/* Audio Waveform Canvas */}
             <div className="w-full flex items-center justify-center py-2">
@@ -245,27 +263,39 @@ export default function GeminiLiveVoiceModal({
               />
             </div>
 
-            {/* Listening Badge Pill */}
+            {/* Accurate Status Badge Pill (Never shows "Listening" while processing or querying) */}
             <div className="mt-3">
-              {status === "connecting" && (
+              {isConnecting && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-purple-50 border border-purple-200 text-purple-700 shadow-xs">
                   <Activity className="w-3.5 h-3.5 animate-spin text-purple-600" />
-                  <span>Connecting Live WebSocket...</span>
+                  <span>Connecting Live Session...</span>
                 </div>
               )}
-              {status === "tool_running" && (
+              {isReconnecting && (
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-700 shadow-xs">
+                  <Activity className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  <span>Reconnecting live voice session...</span>
+                </div>
+              )}
+              {isProcessing && (
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-50 border border-blue-200 text-blue-700 shadow-xs animate-pulse">
+                  <Sparkles className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  <span>Thinking... Processing Question</span>
+                </div>
+              )}
+              {isTool && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-700 shadow-xs animate-pulse">
                   <Database className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                  <span>Querying Live CRM Database...</span>
+                  <span>{toolDetails?.friendlyLabel || "Querying Live CRM Database..."}</span>
                 </div>
               )}
-              {status === "speaking" && (
+              {isSpeaking && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 border border-indigo-200 text-indigo-700 shadow-xs">
                   <Activity className="w-3.5 h-3.5 animate-pulse text-indigo-600" />
                   <span>BI Analyst Speaking ({voiceName})</span>
                 </div>
               )}
-              {(status === "listening" || status === "idle") && (
+              {!isConnecting && !isReconnecting && !isProcessing && !isTool && !isSpeaking && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 shadow-xs">
                   <Activity className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Listening • Speak your question anytime</span>

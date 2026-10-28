@@ -1,8 +1,8 @@
 /**
  * Utility functions for Web Audio API:
- * 1. Live Microphone PCM 16kHz Streaming (User -> Gemini)
- * 2. Real-time PCM 24kHz Queue Playback with Instant Interruption (Gemini -> Speaker)
- * 3. Volume and Frequency Analysis for Animated Voice Orb
+ * 1. Live Microphone PCM 16kHz Streaming (User -> Gemini) using AudioWorklet (with ScriptProcessor fallback)
+ * 2. Real-time PCM 24kHz Queue Playback with Instant Interruption & Latency Measurement (Gemini -> Speaker)
+ * 3. Volume and Frequency Analysis for Responsive Animated Voice Waveform
  */
 
 /**
@@ -51,19 +51,58 @@ export function base64ToFloat32Array(base64String) {
 }
 
 /**
- * Live Microphone Recorder targeting 16,000 Hz for Gemini Multimodal Live API
+ * Inline AudioWorklet processor definition for real-time 16kHz PCM audio chunking.
+ * Offloads audio buffering and slicing from the main browser UI thread to the audio rendering thread.
+ */
+const RECORDER_WORKLET_CODE = `
+class PcmRecorderProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 512; // 32ms at 16kHz
+    this.buffer = new Float32Array(this.bufferSize);
+    this.bufferIndex = 0;
+  }
+
+  process(inputs) {
+    const input = inputs[0];
+    if (!input || !input[0]) return true;
+    const channelData = input[0];
+
+    for (let i = 0; i < channelData.length; i++) {
+      this.buffer[this.bufferIndex++] = channelData[i];
+      if (this.bufferIndex >= this.bufferSize) {
+        this.port.postMessage(this.buffer.slice(0, this.bufferSize));
+        this.bufferIndex = 0;
+      }
+    }
+    return true;
+  }
+}
+
+registerProcessor("pcm-recorder-processor", PcmRecorderProcessor);
+`;
+
+/**
+ * Live Microphone Recorder targeting 16,000 Hz for Gemini Multimodal Live API.
+ * Uses AudioWorklet on modern browsers to eliminate main-thread stutter,
+ * with automatic graceful fallback to ScriptProcessorNode.
  */
 export class LiveAudioRecorder {
-  constructor({ onAudioChunk, onVolumeChange }) {
+  constructor({ onAudioChunk, onVolumeChange, onMetrics } = {}) {
     this.onAudioChunk = onAudioChunk;
     this.onVolumeChange = onVolumeChange;
+    this.onMetrics = onMetrics;
     this.audioContext = null;
     this.mediaStream = null;
-    this.processor = null;
+    this.workletNode = null;
+    this.processor = null; // fallback
     this.analyser = null;
     this.source = null;
     this.isRecording = false;
     this.animFrameId = null;
+    this.processorType = "none";
+    this.lastChunkTime = null;
+    this.chunkCount = 0;
   }
 
   async start() {
@@ -86,29 +125,73 @@ export class LiveAudioRecorder {
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 256;
 
-    // Buffer size of 512 at 16kHz is ~32ms per chunk.
-    // Smaller chunks reach Gemini faster, reducing voice activity detection (VAD)
-    // latency and making responses feel more immediate. Trade-off is slightly
-    // more frequent onaudioprocess callbacks, which is negligible on modern hardware.
-    this.processor = this.audioContext.createScriptProcessor(512, 1, 1);
+    let workletInitialized = false;
 
-    this.processor.onaudioprocess = (e) => {
-      if (!this.isRecording) return;
-      const inputData = e.inputBuffer.getChannelData(0);
-      const pcmBuffer = float32ToInt16PCM(inputData);
-      const base64Chunk = arrayBufferToBase64(pcmBuffer);
+    // Try AudioWorklet first (offloads audio chunking from main thread)
+    if (this.audioContext.audioWorklet && typeof window.Blob === "function") {
+      try {
+        const blob = new Blob([RECORDER_WORKLET_CODE], { type: "application/javascript" });
+        const workletUrl = URL.createObjectURL(blob);
+        await this.audioContext.audioWorklet.addModule(workletUrl);
+        URL.revokeObjectURL(workletUrl);
 
-      if (this.onAudioChunk) {
-        this.onAudioChunk(base64Chunk);
+        this.workletNode = new AudioWorkletNode(this.audioContext, "pcm-recorder-processor");
+        this.workletNode.port.onmessage = (event) => {
+          if (!this.isRecording) return;
+          this.handleRawAudioData(event.data);
+        };
+
+        this.source.connect(this.analyser);
+        this.analyser.connect(this.workletNode);
+        this.workletNode.connect(this.audioContext.destination);
+
+        this.processorType = "AudioWorklet";
+        workletInitialized = true;
+      } catch (err) {
+        console.warn("[LiveAudioRecorder] AudioWorklet initialization failed, falling back to ScriptProcessor:", err);
       }
-    };
+    }
 
-    this.source.connect(this.analyser);
-    this.analyser.connect(this.processor);
-    this.processor.connect(this.audioContext.destination);
+    // Fallback: ScriptProcessorNode (runs on main thread)
+    if (!workletInitialized) {
+      this.processor = this.audioContext.createScriptProcessor(512, 1, 1);
+      this.processor.onaudioprocess = (e) => {
+        if (!this.isRecording) return;
+        const inputData = e.inputBuffer.getChannelData(0);
+        this.handleRawAudioData(inputData);
+      };
+
+      this.source.connect(this.analyser);
+      this.analyser.connect(this.processor);
+      this.processor.connect(this.audioContext.destination);
+      this.processorType = "ScriptProcessor";
+    }
 
     this.isRecording = true;
     this.startVolumePolling();
+
+    if (this.onMetrics) {
+      this.onMetrics({ event: "recorder_started", processorType: this.processorType });
+    }
+  }
+
+  handleRawAudioData(float32Array) {
+    const now = performance.now();
+    const intervalMs = this.lastChunkTime ? Math.round(now - this.lastChunkTime) : 0;
+    this.lastChunkTime = now;
+    this.chunkCount++;
+
+    const pcmBuffer = float32ToInt16PCM(float32Array);
+    const base64Chunk = arrayBufferToBase64(pcmBuffer);
+
+    if (this.onAudioChunk) {
+      this.onAudioChunk(base64Chunk, {
+        chunkIndex: this.chunkCount,
+        intervalMs,
+        byteLength: pcmBuffer.byteLength,
+        processorType: this.processorType,
+      });
+    }
   }
 
   startVolumePolling() {
@@ -138,16 +221,28 @@ export class LiveAudioRecorder {
       this.animFrameId = null;
     }
 
+    if (this.workletNode) {
+      try {
+        this.workletNode.disconnect();
+      } catch (e) {}
+      this.workletNode = null;
+    }
     if (this.processor) {
-      this.processor.disconnect();
+      try {
+        this.processor.disconnect();
+      } catch (e) {}
       this.processor = null;
     }
     if (this.source) {
-      this.source.disconnect();
+      try {
+        this.source.disconnect();
+      } catch (e) {}
       this.source = null;
     }
     if (this.analyser) {
-      this.analyser.disconnect();
+      try {
+        this.analyser.disconnect();
+      } catch (e) {}
       this.analyser = null;
     }
     if (this.mediaStream) {
@@ -162,17 +257,20 @@ export class LiveAudioRecorder {
     if (this.onVolumeChange) {
       this.onVolumeChange(0);
     }
+    this.lastChunkTime = null;
+    this.chunkCount = 0;
   }
 }
 
 /**
  * Continuous PCM 24kHz Audio Stream Player for Gemini Responses
- * Features jitter queue scheduling and instant interruption flush
+ * Features jitter queue scheduling, latency instrumentation, and instant interruption flush
  */
 export class LiveAudioPlayer {
-  constructor({ onVolumeChange, onPlaybackEnded } = {}) {
+  constructor({ onVolumeChange, onPlaybackEnded, onFirstChunkPlayed } = {}) {
     this.onVolumeChange = onVolumeChange;
     this.onPlaybackEnded = onPlaybackEnded;
+    this.onFirstChunkPlayed = onFirstChunkPlayed;
     this.audioContext = null;
     this.analyser = null;
     this.nextPlayTime = 0;
@@ -180,6 +278,7 @@ export class LiveAudioPlayer {
     this.animFrameId = null;
     this.isPlaying = false;
     this.endTimeout = null;
+    this.hasPlayedFirstChunkInTurn = false;
   }
 
   init() {
@@ -218,12 +317,12 @@ export class LiveAudioPlayer {
   }
 
   /**
-   * Enqueues base64 PCM 24kHz chunk into the Web Audio playback pipeline
+   * Enqueues base64 PCM 24kHz chunk into the Web Audio playback pipeline.
+   * Jitter offset tuned to 60ms for low latency without voice clipping.
    */
   enqueueAudioChunk(base64Chunk) {
     this.init();
     try {
-      // Clear pending playback end debounce when new chunk arrives
       if (this.endTimeout) {
         clearTimeout(this.endTimeout);
         this.endTimeout = null;
@@ -244,12 +343,21 @@ export class LiveAudioPlayer {
       source.connect(this.analyser);
 
       const currentTime = this.audioContext.currentTime;
-      // Pre-buffer 80ms when starting fresh or recovering from network jitter to prevent voice breaking
+      // Pre-buffer 60ms when starting fresh or recovering from network jitter to prevent voice breaking
       if (this.nextPlayTime < currentTime) {
-        this.nextPlayTime = currentTime + 0.08;
+        this.nextPlayTime = currentTime + 0.06;
       }
 
       source.start(this.nextPlayTime);
+
+      if (!this.hasPlayedFirstChunkInTurn) {
+        this.hasPlayedFirstChunkInTurn = true;
+        const delayUntilPlayMs = Math.max(0, Math.round((this.nextPlayTime - currentTime) * 1000));
+        if (this.onFirstChunkPlayed) {
+          this.onFirstChunkPlayed({ delayUntilPlayMs });
+        }
+      }
+
       this.nextPlayTime += audioBuffer.duration;
       this.activeSources.add(source);
       this.isPlaying = true;
@@ -257,16 +365,16 @@ export class LiveAudioPlayer {
       source.onended = () => {
         this.activeSources.delete(source);
         if (this.activeSources.size === 0) {
-          // Debounce 250ms to ensure no trailing audio packet is in transit before notifying completion
           if (this.endTimeout) clearTimeout(this.endTimeout);
           this.endTimeout = setTimeout(() => {
             if (this.activeSources.size === 0) {
               this.isPlaying = false;
+              this.hasPlayedFirstChunkInTurn = false;
               if (this.onPlaybackEnded) {
                 this.onPlaybackEnded();
               }
             }
-          }, 250);
+          }, 200);
         }
       };
     } catch (err) {
@@ -282,9 +390,7 @@ export class LiveAudioPlayer {
       try {
         source.stop();
         source.disconnect();
-      } catch (e) {
-        // Source might have already finished
-      }
+      } catch (e) {}
     }
     if (this.endTimeout) {
       clearTimeout(this.endTimeout);
@@ -292,7 +398,7 @@ export class LiveAudioPlayer {
     }
     this.activeSources.clear();
     this.isPlaying = false;
-    this.endTimeout = null;
+    this.hasPlayedFirstChunkInTurn = false;
     if (this.audioContext) {
       this.nextPlayTime = this.audioContext.currentTime;
     }

@@ -194,6 +194,7 @@ export default function BIAnalyst() {
     isPlaying: isLivePlaying,
     status: liveStatus,
     activeToolName: liveActiveToolName,
+    toolDetails: liveToolDetails,
     inputVolume: liveInputVolume,
     outputVolume: liveOutputVolume,
     liveTranscript,
@@ -1181,6 +1182,7 @@ export default function BIAnalyst() {
         onClose={handleCloseLiveVoice}
         status={liveStatus}
         activeToolName={liveActiveToolName}
+        toolDetails={liveToolDetails}
         inputVolume={liveInputVolume}
         outputVolume={liveOutputVolume}
         liveTranscript={liveTranscript}
