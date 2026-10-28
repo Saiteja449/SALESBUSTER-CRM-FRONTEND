@@ -13,6 +13,7 @@ import {
   Send,
   X,
   LifeBuoy,
+  // Target,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
@@ -39,6 +40,7 @@ export default function Sidebar({
     isSalesPerson,
     hasWhatsAppCampaignsAddon,
     hasBIAnalystAddon,
+    // hasTargetIntelligenceAddon,
   } = useAuth();
   const { unreadCount } = useNotifications();
   const { openInstantAiSupport, openMyTickets } = useSupportModal();
@@ -72,6 +74,18 @@ export default function Sidebar({
           icon: <Sparkles className="w-5 h-5" />,
           path: "/ai-followups",
         },
+        /* Target Intelligence feature commented out
+        ...(!isSalesPerson && isOrgOwner
+          ? [
+              {
+                text: "Target Intelligence",
+                icon: <Target className="w-5 h-5 text-emerald-500" />,
+                path: "/target-intelligence",
+                isUpgradeTab: !hasTargetIntelligenceAddon,
+              },
+            ]
+          : []),
+        */
         ...(isOrgOwner
           ? [
               {

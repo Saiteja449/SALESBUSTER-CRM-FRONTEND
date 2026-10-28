@@ -32,6 +32,8 @@ import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
 import BIAnalyst from "./pages/BIAnalyst.jsx";
+// Target Intelligence feature commented out
+// import TargetIntelligence from "./pages/TargetIntelligence.jsx";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
@@ -94,6 +96,28 @@ function BIAnalystRoute({ children }) {
 
   return children ? children : <Outlet />;
 }
+
+/* Target Intelligence feature commented out
+function TargetIntelligenceRoute({ children }) {
+  const { isSalesPerson, isManager, currentUser, hasTargetIntelligenceAddon } = useAuth();
+  const isAuthorized =
+    !isSalesPerson &&
+    (isManager ||
+      currentUser?.role === "Sales Manager" ||
+      currentUser?.role === "Super Admin" ||
+      currentUser?.isOrgOwner);
+
+  if (!isAuthorized) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (!hasTargetIntelligenceAddon) {
+    return <AddonUpgradePrompt addon="targetIntelligence" />;
+  }
+
+  return children ? children : <Outlet />;
+}
+*/
 
 function AppLayout() {
   const { isAuthenticated, isOrganizationBlocked } = useAuth();
@@ -264,6 +288,16 @@ export default function App() {
                 </BIAnalystRoute>
               }
             />
+            {/* Target Intelligence feature commented out
+            <Route
+              path="/target-intelligence"
+              element={
+                <TargetIntelligenceRoute>
+                  <TargetIntelligence />
+                </TargetIntelligenceRoute>
+              }
+            />
+            */}
             <Route path="/support" element={<SupportCenter />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

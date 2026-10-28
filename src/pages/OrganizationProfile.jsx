@@ -36,7 +36,7 @@ import {
   HelpCircle,
   Briefcase,
   Smile,
-  Target,
+  // Target,
   Wrench,
   Check,
   Zap,
@@ -2790,6 +2790,27 @@ export default function OrganizationProfile() {
                 {org.addons?.biAnalyst ? "Active" : "Not Active"}
               </span>
             </div>
+
+            {/* AI Target Intelligence Add-on - Commented out
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-bg-secondary/40 border border-border-main/50">
+              <div className="space-y-0.5">
+                <div className="font-bold text-text-primary flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5 text-emerald-500" />
+                  AI Target Intelligence
+                </div>
+                <div className="text-[11px] text-text-secondary">
+                  Natural language ICP discovery, match scoring & CRM lead import
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                org.addons?.targetIntelligence
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-slate-500/10 text-slate-500"
+              }`}>
+                {org.addons?.targetIntelligence ? "Active" : "Not Active"}
+              </span>
+            </div>
+            */}
           </div>
 
           <div className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-secondary/50 border border-border-main">
