@@ -94,7 +94,7 @@ export function useGeminiLiveVoice() {
       } else if (data.state === "closed") {
         setIsConnected(false);
         setStatus("idle");
-      } else if (data.state === "processing_audio_in" || data.state === "processing") {
+      } else if (data.state === "processing") {
         // User speech was received, Gemini is processing turn
         setStatus("processing");
       } else if (data.state === "tool_running") {
