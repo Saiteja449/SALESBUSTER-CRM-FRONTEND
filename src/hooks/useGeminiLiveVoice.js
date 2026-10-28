@@ -131,8 +131,12 @@ export function useGeminiLiveVoice() {
 
     const handleTranscript = (data) => {
       if (data?.text) {
-        currentAssistantTurnRef.current += data.text;
-        setLiveTranscript(currentAssistantTurnRef.current);
+        if (data.role === "user") {
+          setLiveTranscript(`You: ${data.text}`);
+        } else {
+          currentAssistantTurnRef.current += data.text;
+          setLiveTranscript(currentAssistantTurnRef.current);
+        }
       }
     };
 
@@ -165,12 +169,10 @@ export function useGeminiLiveVoice() {
       timingRef.current.firstAudioPlayedMs = null;
 
       setTimeout(() => {
-        if (!playerRef.current?.isPlaying && playerRef.current?.activeSources?.size === 0) {
-          setIsPlaying(false);
-          setOutputVolume(0);
-          setStatus((prev) => (prev === "speaking" || prev === "processing" ? "listening" : prev));
-        }
-      }, 300);
+        setIsPlaying(false);
+        setOutputVolume(0);
+        setStatus("listening");
+      }, 400);
     };
 
     const handleError = (data) => {
