@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
+  CalendarDays,
   Users,
   BarChart2,
   Bell,
@@ -12,9 +13,12 @@ import {
   ChevronRight,
   Send,
   X,
+  LifeBuoy,
+  Target,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNotifications } from "../context/NotificationContext.jsx";
+import { useSupportModal } from "../context/SupportModalContext.jsx";
 import LogoutConfirmModal from "./LogoutConfirmModal.jsx";
 import crmLogo from "../assets/images/Logo.png";
 import { FaWhatsapp } from "react-icons/fa";
@@ -37,8 +41,10 @@ export default function Sidebar({
     isSalesPerson,
     hasWhatsAppCampaignsAddon,
     hasBIAnalystAddon,
+    hasTargetIntelligenceAddon,
   } = useAuth();
   const { unreadCount } = useNotifications();
+  const { openInstantAiSupport, openMyTickets } = useSupportModal();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const isOrgOwner =
@@ -69,6 +75,22 @@ export default function Sidebar({
           icon: <Sparkles className="w-5 h-5" />,
           path: "/ai-followups",
         },
+        {
+          text: "Events & Networking",
+          icon: <CalendarDays className="w-5 h-5 text-indigo-500" />,
+          path: "/events",
+        },
+
+        ...(!isSalesPerson && isOrgOwner
+          ? [
+              {
+                text: "Target Intelligence",
+                icon: <Target className="w-5 h-5 text-emerald-500" />,
+                path: "/target-intelligence",
+                isUpgradeTab: !hasTargetIntelligenceAddon,
+              },
+            ]
+          : []),
         ...(isOrgOwner
           ? [
               {
@@ -130,6 +152,16 @@ export default function Sidebar({
         },
       ],
     },
+    {
+      title: "Help & Support",
+      items: [
+        {
+          text: "Support & Help",
+          icon: <LifeBuoy className="w-5 h-5 text-purple-500" />,
+          path: "/support",
+        },
+      ],
+    },
   ];
 
   const handleNav = (item) => {
@@ -151,7 +183,15 @@ export default function Sidebar({
   };
 
   const isItemActive = (item) => {
+    if (!item?.path) return false;
     if (location.pathname === item.path) return true;
+    if (
+      item.path === "/events" &&
+      location.pathname.startsWith("/events")
+    ) {
+      return true;
+    }
+
     if (
       item.path === "/leads" &&
       (location.pathname.startsWith("/leads") ||
@@ -184,7 +224,7 @@ export default function Sidebar({
 
   const drawerContent = (
     <div className="flex flex-col h-full bg-brand-light text-brand-primary overflow-y-auto overflow-x-hidden">
-      {/* ── 1. Brand Logo & Collapse Header ────────────────────────────── */}
+      {/* â”€â”€ 1. Brand Logo & Collapse Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div
         className={`p-3.5 flex items-center ${
           isCollapsed ? "flex-col gap-2.5 justify-center" : "justify-between gap-2"
@@ -258,7 +298,7 @@ export default function Sidebar({
       <hr className="border-brand-secondary/60" />
 
 
-      {/* ── 3. Grouped Navigation Links ─────────────────────────────────── */}
+      {/* â”€â”€ 3. Grouped Navigation Links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <nav
         aria-label="Main sidebar navigation"
         className={`flex-1 ${isCollapsed ? "px-2" : "px-3"} space-y-4`}
@@ -387,7 +427,7 @@ export default function Sidebar({
 
       <hr className="border-brand-secondary/60 mt-2" />
 
-      {/* ── 6. Logout Action ────────────────────────────────────────────── */}
+      {/* â”€â”€ 6. Logout Action â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className={`p-2.5 ${isCollapsed ? "flex justify-center relative group" : ""}`}>
         <button
           type="button"

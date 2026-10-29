@@ -81,6 +81,18 @@ export const API_ENDPOINTS = {
     SESSIONS: `${API_BASE_URL}/ai-assistant/sessions`,
     SESSION: (id) => `${API_BASE_URL}/ai-assistant/sessions/${id}`,
   },
+  EVENTS: {
+    BASE: `${API_BASE_URL}/events`,
+    EVENT: (id) => `${API_BASE_URL}/events/${id}`,
+    CONTACTS: (id) => `${API_BASE_URL}/events/${id}/contacts`,
+    CONTACT_STATUS: (id, contactId) => `${API_BASE_URL}/events/${id}/contacts/${contactId}/status`,
+    SUMMARIZE_TEXT: `${API_BASE_URL}/events/summarize-text`,
+  },
+  SUPPORT: {
+    AI_CHAT: `${API_BASE_URL}/support/ai-chat`,
+    TICKETS: `${API_BASE_URL}/support/tickets`,
+    TICKET: (id) => `${API_BASE_URL}/support/tickets/${id}`,
+  },
 };
 
 export const BACKEND_URL = API_BASE_URL.replace(/\/api$/, "");

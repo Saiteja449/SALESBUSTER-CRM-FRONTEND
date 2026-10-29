@@ -132,7 +132,38 @@ export default function LeadDetails() {
   const [followupType, setFollowupType] = useState("Call");
   const [isRecordingsSidebarOpen, setIsRecordingsSidebarOpen] = useState(false);
   const [recordingsRepFilter, setRecordingsRepFilter] = useState(null);
+  const [selectedRecordingId, setSelectedRecordingId] = useState(null);
   const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
+
+  const allLeadRecordings = useMemo(() => {
+    const recs = Array.isArray(currentLead?.recordings) ? [...currentLead.recordings] : [];
+    if (Array.isArray(currentLead?.callHistory)) {
+      currentLead.callHistory.forEach((ch, idx) => {
+        if (ch.recordingUrl || ch.recordingId) {
+          const exists = recs.some(
+            (r) =>
+              (ch.recordingId && String(r._id || r.id) === String(ch.recordingId)) ||
+              (ch.recordingUrl && (r.url === ch.recordingUrl || r.url.includes(ch.recordingUrl)))
+          );
+          if (!exists) {
+            recs.push({
+              _id: ch.recordingId || `ch-rec-${ch.calledAt || idx}`,
+              id: ch.recordingId || `ch-rec-${ch.calledAt || idx}`,
+              callEventId: ch.callEventId,
+              name: ch.recordingName || `Call Recording (${ch.salespersonName || "Rep"})`,
+              url: ch.recordingUrl,
+              salespersonId: ch.salespersonId,
+              salespersonName: ch.salespersonName || "Sales Representative",
+              uploadedAt: ch.calledAt || new Date().toISOString(),
+              duration: ch.duration || 0,
+              analysisStatus: "completed",
+            });
+          }
+        }
+      });
+    }
+    return recs;
+  }, [currentLead?.recordings, currentLead?.callHistory]);
 
   const repCallSummary = useMemo(() => {
     const map = new Map();
@@ -150,7 +181,7 @@ export default function LeadDetails() {
       });
     }
 
-    const recs = currentLead?.recordings || [];
+    const recs = allLeadRecordings;
     recs.forEach((rec) => {
       const key = String(rec.salespersonId || rec.salespersonName || "unnamed");
       if (map.has(key)) {
@@ -168,16 +199,99 @@ export default function LeadDetails() {
     });
 
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [currentLead?.repCallCounts, currentLead?.recordings]);
+  }, [currentLead?.repCallCounts, allLeadRecordings]);
 
   const totalCallCount = useMemo(() => {
     return (
       currentLead?.callCount ||
       repCallSummary.reduce((sum, r) => sum + r.count, 0) ||
-      currentLead?.recordings?.length ||
+      allLeadRecordings.length ||
       0
     );
-  }, [currentLead?.callCount, repCallSummary, currentLead?.recordings]);
+  }, [currentLead?.callCount, repCallSummary, allLeadRecordings]);
+
+  const formatDurationSeconds = (sec) => {
+    if (!sec || sec <= 0) return null;
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    if (m === 0) return `${s}s`;
+    return `${m}m ${s}s`;
+  };
+
+  const callTimeline = useMemo(() => {
+    let history = Array.isArray(currentLead?.callHistory) ? [...currentLead.callHistory] : [];
+
+    // Fallback: if callHistory is empty but repCallCounts exist (e.g. earlier calls synced before callHistory array)
+    if (history.length === 0 && Array.isArray(currentLead?.repCallCounts)) {
+      currentLead.repCallCounts.forEach((rep) => {
+        const count = rep.count || 0;
+        for (let i = 0; i < count; i++) {
+          history.push({
+            salespersonId: rep.salespersonId,
+            salespersonName: rep.salespersonName || "Sales Representative",
+            calledAt: i === 0 ? (rep.lastCalledAt || currentLead.lastCallAt || null) : null,
+            callType: "outgoing",
+            status: "connected",
+            duration: 0,
+          });
+        }
+      });
+    }
+
+    const recordings = allLeadRecordings;
+    const enriched = history.map((item) => {
+      let matchedRec = null;
+      if (item.recordingUrl || item.recordingId) {
+        matchedRec = recordings.find(
+          (r) =>
+            (item.recordingId && String(r._id || r.id) === String(item.recordingId)) ||
+            (item.recordingUrl && (r.url === item.recordingUrl || item.recordingUrl.includes(r.url) || r.url.includes(item.recordingUrl)))
+        );
+      }
+      if (!matchedRec && item.recordingUrl) {
+        matchedRec = {
+          _id: item.recordingId || `rec-${item.calledAt || Math.random()}`,
+          id: item.recordingId,
+          url: item.recordingUrl,
+          name: item.recordingName || "Call Recording",
+          salespersonId: item.salespersonId,
+          salespersonName: item.salespersonName,
+          uploadedAt: item.calledAt,
+          duration: item.duration || 0,
+        };
+      }
+      return {
+        ...item,
+        recording: matchedRec,
+      };
+    });
+
+    // Also include any standalone recordings from allLeadRecordings that weren't in callHistory
+    recordings.forEach((rec) => {
+      const alreadyLinked = enriched.some(
+        (c) =>
+          c.recording &&
+          (String(c.recording._id || c.recording.id) === String(rec._id || rec.id) ||
+            c.recording.url === rec.url)
+      );
+      if (!alreadyLinked) {
+        enriched.push({
+          _id: rec._id || rec.id,
+          callEventId: rec.callEventId,
+          salespersonId: rec.salespersonId,
+          salespersonName: rec.salespersonName || "Sales Representative",
+          calledAt: rec.uploadedAt || rec.createdAt,
+          callType: "outgoing",
+          status: "connected",
+          duration: rec.duration || 0,
+          recording: rec,
+        });
+      }
+    });
+
+    // Sort descending by calledAt (newest call first)
+    return enriched.sort((a, b) => new Date(b.calledAt || 0) - new Date(a.calledAt || 0));
+  }, [currentLead?.callHistory, currentLead?.repCallCounts, currentLead?.lastCallAt, allLeadRecordings]);
 
   const todayStr = useMemo(() => getLocalTodayDateString(), []);
 
@@ -775,15 +889,19 @@ export default function LeadDetails() {
           {ENABLE_AI_AUDIO_ANALYSIS && (
             <button
               type="button"
-              onClick={() => setIsRecordingsSidebarOpen(true)}
+              onClick={() => {
+                setSelectedRecordingId(null);
+                setRecordingsRepFilter(null);
+                setIsRecordingsSidebarOpen(true);
+              }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-violet-600/15 hover:bg-violet-600/25 text-violet-700 dark:text-violet-300 border border-violet-500/30 shadow-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none"
               aria-label="Open AI audio recordings and coaching analysis"
             >
               <Mic className="w-4 h-4 text-violet-600" />
               <span>Recordings & AI Analysis</span>
-              {currentLead.recordings && currentLead.recordings.length > 0 && (
+              {allLeadRecordings.length > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full bg-violet-600 text-white text-[10px] font-bold">
-                  {currentLead.recordings.length}
+                  {allLeadRecordings.length}
                 </span>
               )}
             </button>
@@ -911,57 +1029,181 @@ export default function LeadDetails() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {repCallSummary.map((rep, idx) => (
-                  <div
-                    key={rep.salespersonId || rep.salespersonName || idx}
-                    className="p-3.5 rounded-xl bg-bg-main border border-brand-secondary/50 flex flex-col justify-between gap-3 hover:border-purple-500/30 transition-all shadow-2xs"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                          {rep.salespersonName
-                            ? rep.salespersonName.slice(0, 2).toUpperCase()
-                            : "SR"}
+              <div className="space-y-4">
+                {/* Sales Rep Outreach Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {repCallSummary.map((rep, idx) => (
+                    <div
+                      key={rep.salespersonId || rep.salespersonName || idx}
+                      className="p-3.5 rounded-xl bg-bg-main border border-brand-secondary/50 flex flex-col justify-between gap-3 hover:border-purple-500/30 transition-all shadow-2xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                            {rep.salespersonName
+                              ? rep.salespersonName.slice(0, 2).toUpperCase()
+                              : "SR"}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-brand-primary text-xs truncate block">
+                              {rep.salespersonName}
+                            </span>
+                            <span className="text-[11px] text-brand-primary/60 flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
+                              {rep.lastCalledAt ? formatDateTime(rep.lastCalledAt) : "Date unrecorded"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <span className="font-bold text-brand-primary text-xs truncate block">
-                            {rep.salespersonName}
-                          </span>
-                          <span className="text-[11px] text-brand-primary/60 flex items-center gap-1 mt-0.5">
-                            <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
-                            {rep.lastCalledAt ? formatDateTime(rep.lastCalledAt) : "Date unrecorded"}
-                          </span>
+
+                        <div className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-xs font-black shrink-0">
+                          {rep.count} {rep.count === 1 ? "call" : "calls"}
                         </div>
                       </div>
 
-                      <div className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-xs font-black shrink-0">
-                        {rep.count} {rep.count === 1 ? "call" : "calls"}
+                      <div className="pt-2 border-t border-brand-secondary/40 flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-brand-primary/70 font-medium flex items-center gap-1">
+                          <Mic className="w-3 h-3 text-purple-500" />
+                          {rep.recordingsCount} {rep.recordingsCount === 1 ? "recording" : "recordings"}
+                        </span>
+
+                        {rep.recordingsCount > 0 && ENABLE_AI_AUDIO_ANALYSIS && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const repRecs = allLeadRecordings.filter(
+                                (r) =>
+                                  (r.salespersonId && String(r.salespersonId) === String(rep.salespersonId)) ||
+                                  (r.salespersonName && r.salespersonName === rep.salespersonName)
+                              );
+                              if (repRecs.length === 1) {
+                                setSelectedRecordingId(repRecs[0]._id || repRecs[0].id || repRecs[0].url);
+                              } else {
+                                setSelectedRecordingId(null);
+                              }
+                              setRecordingsRepFilter(rep.salespersonId || rep.salespersonName);
+                              setIsRecordingsSidebarOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 transition-colors cursor-pointer"
+                          >
+                            <FileAudio className="w-3 h-3" />
+                            <span>Listen</span>
+                          </button>
+                        )}
                       </div>
                     </div>
+                  ))}
+                </div>
 
-                    <div className="pt-2 border-t border-brand-secondary/40 flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-brand-primary/70 font-medium flex items-center gap-1">
-                        <Mic className="w-3 h-3 text-purple-500" />
-                        {rep.recordingsCount} {rep.recordingsCount === 1 ? "recording" : "recordings"}
+                {/* ── Chronological Call History (One call after another) ── */}
+                <div className="pt-4 border-t border-brand-secondary/40">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <h4 className="font-bold text-brand-primary text-xs md:text-sm">
+                        Call History (Chronological)
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                        {callTimeline.length} {callTimeline.length === 1 ? "call" : "calls"}
                       </span>
-
-                      {rep.recordingsCount > 0 && ENABLE_AI_AUDIO_ANALYSIS && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRecordingsRepFilter(rep.salespersonId || rep.salespersonName);
-                            setIsRecordingsSidebarOpen(true);
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 transition-colors cursor-pointer"
-                        >
-                          <FileAudio className="w-3 h-3" />
-                          <span>Listen</span>
-                        </button>
-                      )}
                     </div>
+                    <span className="text-[10px] text-brand-primary/50 font-medium">
+                      One after another • Newest first
+                    </span>
                   </div>
-                ))}
+
+                  <div className="space-y-2">
+                    {callTimeline.map((call, cIdx) => {
+                      const callNumber = callTimeline.length - cIdx;
+                      const isConnected = call.status === "connected" || (call.duration > 0);
+                      const isMissed = call.status === "missed" || call.callType === "missed";
+
+                      return (
+                        <div
+                          key={call.id || call._id || `${call.calledAt}-${cIdx}`}
+                          className="p-3 rounded-xl bg-bg-main border border-brand-secondary/50 hover:border-purple-500/30 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-2xs"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Call sequence index badge */}
+                            <div className="w-7 h-7 rounded-lg bg-brand-secondary/40 text-brand-primary font-black text-xs flex items-center justify-center shrink-0">
+                              #{callNumber}
+                            </div>
+
+                            {/* Status Icon */}
+                            <div
+                              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                isConnected
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : isMissed
+                                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                              }`}
+                            >
+                              {isMissed ? (
+                                <PhoneMissed className="w-4 h-4" />
+                              ) : (
+                                <PhoneCall className="w-4 h-4" />
+                              )}
+                            </div>
+
+                            {/* Details */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-brand-primary text-xs truncate">
+                                  {call.salespersonName || "Sales Representative"}
+                                </span>
+
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                                    isConnected
+                                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                                      : isMissed
+                                      ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                                      : "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                                  }`}
+                                >
+                                  {call.callType || "Call"} • {call.status || (isConnected ? "Connected" : "Completed")}
+                                </span>
+
+                                {call.duration > 0 && (
+                                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                    ⏱ {formatDurationSeconds(call.duration)}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[11px] text-brand-primary/60 flex items-center gap-1.5 mt-0.5">
+                                <Clock className="w-3 h-3 text-brand-primary/40 shrink-0" />
+                                <span>{call.calledAt ? formatDateTime(call.calledAt) : "Date unrecorded"}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Recording button if recording available */}
+                          {call.recording && ENABLE_AI_AUDIO_ANALYSIS && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const recId =
+                                  call.recording._id ||
+                                  call.recording.id ||
+                                  call.recording.url ||
+                                  call.recordingId ||
+                                  call.recordingUrl;
+                                setSelectedRecordingId(recId);
+                                setRecordingsRepFilter(null);
+                                setIsRecordingsSidebarOpen(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/25 transition-colors cursor-pointer shrink-0 self-end sm:self-center"
+                            >
+                              <FileAudio className="w-3.5 h-3.5" />
+                              <span>Listen Recording</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1723,9 +1965,15 @@ export default function LeadDetails() {
         onClose={() => {
           setIsRecordingsSidebarOpen(false);
           setRecordingsRepFilter(null);
+          setSelectedRecordingId(null);
         }}
-        lead={currentLead}
+        lead={{
+          ...currentLead,
+          recordings: allLeadRecordings,
+        }}
         initialRepFilter={recordingsRepFilter}
+        selectedRecordingId={selectedRecordingId}
+        onClearSelectedRecording={() => setSelectedRecordingId(null)}
       />
     </div>
   );

@@ -334,6 +334,8 @@ export default function RecordingsSidebar({
   isOpen,
   onClose,
   initialRepFilter = null,
+  selectedRecordingId = null,
+  onClearSelectedRecording = null,
 }) {
   const { setLeads } = useLeads();
   const id = lead?._id || lead?.id;
@@ -349,10 +351,21 @@ export default function RecordingsSidebar({
   const [copiedTranscriptId, setCopiedTranscriptId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRepFilter, setSelectedRepFilter] = useState(initialRepFilter);
+  const [activeRecordingId, setActiveRecordingId] = useState(selectedRecordingId);
 
   useEffect(() => {
     setSelectedRepFilter(initialRepFilter);
   }, [initialRepFilter]);
+
+  useEffect(() => {
+    setActiveRecordingId(selectedRecordingId);
+    if (selectedRecordingId) {
+      setExpandedRecordings((prev) => ({
+        ...prev,
+        [selectedRecordingId]: true,
+      }));
+    }
+  }, [selectedRecordingId]);
 
   const closeBtnRef = useRef(null);
 
@@ -541,9 +554,22 @@ export default function RecordingsSidebar({
     setTimeout(() => setCopiedTranscriptId(null), 2000);
   };
 
-  // Filter recordings by search query and optional sales rep filter
+  // Filter recordings by search query, optional sales rep filter, or focused selected recording
   const filteredRecordings = recordings.filter((rec, idx) => {
-    if (selectedRepFilter) {
+    if (activeRecordingId) {
+      const target = String(activeRecordingId).toLowerCase().trim();
+      const recIdStr = String(rec._id || rec.id || "").toLowerCase().trim();
+      const recUrlStr = String(rec.url || "").toLowerCase().trim();
+      const recCallEventId = String(rec.callEventId || "").toLowerCase().trim();
+      const matches =
+        recIdStr === target ||
+        recUrlStr === target ||
+        (rec.url && (target.includes(recUrlStr) || recUrlStr.includes(target))) ||
+        (recCallEventId && recCallEventId === target);
+      if (!matches) return false;
+    }
+
+    if (selectedRepFilter && !activeRecordingId) {
       const repFilterStr = String(selectedRepFilter).toLowerCase();
       const matchRepId =
         rec.salespersonId && String(rec.salespersonId).toLowerCase() === repFilterStr;
@@ -590,10 +616,10 @@ export default function RecordingsSidebar({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h2 id="recordings-drawer-title" className="text-base font-bold text-text-primary truncate">
-                  Call Recordings & AI Intelligence
+                  {activeRecordingId ? "Call Recording & Analysis" : "Call Recordings & AI Intelligence"}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shrink-0">
-                  {recordings.length} {recordings.length === 1 ? "call" : "calls"}
+                  {activeRecordingId ? "1 recording" : `${recordings.length} ${recordings.length === 1 ? "call" : "calls"}`}
                 </span>
               </div>
               {/* Context chip: Lead Name, phone & representative */}
@@ -667,7 +693,32 @@ export default function RecordingsSidebar({
             )}
           </div>
 
-          {selectedRepFilter && (
+          {activeRecordingId && (
+            <div className="flex items-center justify-between w-full p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/25 text-xs">
+              <div className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 font-bold truncate">
+                <FileAudio size={14} className="shrink-0" />
+                <span className="truncate">
+                  Viewing focused call recording
+                </span>
+              </div>
+              {recordings.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveRecordingId(null);
+                    if (onClearSelectedRecording) onClearSelectedRecording();
+                  }}
+                  className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0 ml-2"
+                  title="Show all recordings for this lead"
+                >
+                  <span>Show All ({recordings.length})</span>
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          )}
+
+          {selectedRepFilter && !activeRecordingId && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 text-xs font-semibold">
               <User size={12} />
               <span>Rep: {selectedRepFilter}</span>
@@ -844,7 +895,7 @@ export default function RecordingsSidebar({
           {/* Recordings list */}
           {filteredRecordings.map((rec, index) => {
             const recId = rec._id || rec.id || index;
-            const isExpanded = !!expandedRecordings[recId];
+            const isExpanded = activeRecordingId ? true : !!expandedRecordings[recId];
             const isTranscriptExpanded = !!expandedTranscripts[recId];
             const isAnalyzing = analyzingRecordingIds[recId];
             const isPending =

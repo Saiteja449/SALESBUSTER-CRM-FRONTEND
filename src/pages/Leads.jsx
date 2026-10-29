@@ -6,7 +6,6 @@ import {
   Edit2,
   Eye,
   X,
-  Mic,
   Info,
   User,
   Phone,
@@ -44,7 +43,6 @@ import { API_ENDPOINTS } from "../utils/constants.js";
 import { useLeads } from "../context/LeadsContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import ImportLeadsModal from "../components/leads/ImportLeadsModal.jsx";
-import RecordingsSidebar from "../components/leads/RecordingsSidebar.jsx";
 import {
   formatDate,
   formatTime,
@@ -137,7 +135,6 @@ export default function Leads() {
   const [fetchError, setFetchError] = useState("");
 
   const [addOpen, setAddOpen] = useState(false);
-  const [activeRecordingsLead, setActiveRecordingsLead] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -1213,22 +1210,6 @@ export default function Leads() {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
-                            onClick={() => setActiveRecordingsLead(lead)}
-                            className="p-1.5 text-brand-primary/70 hover:text-purple-600 hover:bg-brand-secondary/40 rounded-lg transition-colors relative cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
-                            title="Call recordings & AI conversation analysis"
-                            aria-label={`Open AI audio recordings for ${lead.name}`}
-                          >
-                            <Mic className="w-4 h-4" />
-                            {lead.recordings && lead.recordings.length > 0 && (
-                              <span
-                                className="absolute top-1 right-1 w-2 h-2 bg-purple-600 rounded-full ring-2 ring-brand-light"
-                                aria-label="Recordings available"
-                              />
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
                             onClick={() => handleOpenEdit(lead)}
                             className="p-1.5 text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/40 rounded-lg transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
                             title="Edit customer lead details"
@@ -1414,19 +1395,6 @@ export default function Leads() {
                       >
                         <Phone className="w-3.5 h-3.5" />
                       </a>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveRecordingsLead(lead)}
-                        className="p-2 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 relative"
-                        title="AI Recordings"
-                        aria-label={`AI audio analysis for ${lead.name}`}
-                      >
-                        <Mic className="w-3.5 h-3.5" />
-                        {lead.recordings && lead.recordings.length > 0 && (
-                          <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-purple-600 rounded-full" />
-                        )}
-                      </button>
 
                       <button
                         type="button"
@@ -1937,14 +1905,7 @@ export default function Leads() {
         </div>
       )}
 
-      {/* ── 9. Call Audio Recordings Sidebar ─────────────────────────────── */}
-      <RecordingsSidebar
-        isOpen={Boolean(activeRecordingsLead)}
-        onClose={() => setActiveRecordingsLead(null)}
-        lead={activeRecordingsLead}
-      />
-
-      {/* ── 10. Bulk Import Leads Modal ───────────────────────────────────── */}
+      {/* ── Bulk Import Leads Modal ───────────────────────────────────── */}
       <ImportLeadsModal
         isOpen={importOpen}
         onClose={() => setImportOpen(false)}

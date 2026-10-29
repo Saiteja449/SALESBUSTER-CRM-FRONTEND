@@ -32,12 +32,14 @@ import TestAI from "./pages/TestAI.jsx";
 import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
 import BIAnalyst from "./pages/BIAnalyst.jsx";
+import EventDashboard from "./pages/EventDashboard.jsx";
+import TargetIntelligence from "./pages/TargetIntelligence.jsx";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
 import AccountSuspended from "./components/AccountSuspended.jsx";
-import CalendlySupportModal from "./components/CalendlySupportModal.jsx";
 import AddonUpgradePrompt from "./components/AddonUpgradePrompt.jsx";
+import SupportCenter from "./pages/SupportCenter.jsx";
 
 function PublicRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -90,6 +92,26 @@ function BIAnalystRoute({ children }) {
 
   if (!hasBIAnalystAddon) {
     return <AddonUpgradePrompt addon="biAnalyst" />;
+  }
+
+  return children ? children : <Outlet />;
+}
+
+function TargetIntelligenceRoute({ children }) {
+  const { isSalesPerson, isManager, currentUser, hasTargetIntelligenceAddon } = useAuth();
+  const isAuthorized =
+    !isSalesPerson &&
+    (isManager ||
+      currentUser?.role === "Sales Manager" ||
+      currentUser?.role === "Super Admin" ||
+      currentUser?.isOrgOwner);
+
+  if (!isAuthorized) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (!hasTargetIntelligenceAddon) {
+    return <AddonUpgradePrompt addon="targetIntelligence" />;
   }
 
   return children ? children : <Outlet />;
@@ -191,6 +213,8 @@ export default function App() {
           />
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/events" element={<EventDashboard />} />
+
             <Route
               path="/leads"
               element={<Navigate to="/leads/new" replace />}
@@ -264,12 +288,20 @@ export default function App() {
                 </BIAnalystRoute>
               }
             />
+            <Route
+              path="/target-intelligence"
+              element={
+                <TargetIntelligenceRoute>
+                  <TargetIntelligence />
+                </TargetIntelligenceRoute>
+              }
+            />
+            <Route path="/support" element={<SupportCenter />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
-        <CalendlySupportModal />
       </RootProvider>
     </BrowserRouter>
   );
