@@ -15,7 +15,7 @@ import {
   Zap,
   Calendar,
   Layers,
-  // Target,
+  Target,
 } from "lucide-react";
 import { useSupportModal } from "../context/SupportModalContext.jsx";
 

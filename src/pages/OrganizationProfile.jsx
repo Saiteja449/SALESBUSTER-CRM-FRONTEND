@@ -36,7 +36,7 @@ import {
   HelpCircle,
   Briefcase,
   Smile,
-  // Target,
+  Target,
   Wrench,
   Check,
   Zap,
@@ -2791,7 +2791,6 @@ export default function OrganizationProfile() {
               </span>
             </div>
 
-            {/* AI Target Intelligence Add-on - Commented out
             <div className="flex items-center justify-between p-3 rounded-2xl bg-bg-secondary/40 border border-border-main/50">
               <div className="space-y-0.5">
                 <div className="font-bold text-text-primary flex items-center gap-1.5">
@@ -2810,13 +2809,12 @@ export default function OrganizationProfile() {
                 {org.addons?.targetIntelligence ? "Active" : "Not Active"}
               </span>
             </div>
-            */}
           </div>
 
           <div className="flex items-start gap-2 p-2.5 rounded-xl bg-bg-secondary/50 border border-border-main">
             <Info className="w-3.5 h-3.5 text-text-secondary shrink-0 mt-0.5" />
             <p className="text-[10px] text-text-secondary leading-relaxed">
-              Add-ons are managed by your administrator. Contact support to unlock WhatsApp Campaigns or BI Analyst for your organization.
+              Add-ons are managed by your administrator. Contact support to unlock WhatsApp Campaigns, BI Analyst, or AI Target Intelligence for your organization.
             </p>
           </div>
         </div>
