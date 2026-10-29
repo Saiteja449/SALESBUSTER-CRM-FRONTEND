@@ -19,9 +19,6 @@ import {
 export default function ProspectDetailPanel({
   prospect,
   onClose,
-  isSelected,
-  onToggleSelect,
-  onImportSingle,
 }) {
   if (!prospect) return null;
 
@@ -99,7 +96,7 @@ export default function ProspectDetailPanel({
                   City & State
                 </span>
                 <p className="text-xs font-bold text-brand-primary">
-                  {prospect.city}, Telangana
+                  {prospect.location || prospect.city}
                 </p>
               </div>
             </div>
@@ -171,24 +168,26 @@ export default function ProspectDetailPanel({
 
         {/* ── Footer Actions ──────────────────────────────────────────────── */}
         <div className="p-4 border-t border-brand-secondary bg-brand-light flex items-center justify-between gap-3 sticky bottom-0">
-          <button
-            type="button"
-            onClick={() => onToggleSelect(prospect.id)}
-            className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition cursor-pointer ${
-              isSelected
-                ? "bg-emerald-500/10 border-emerald-500 text-emerald-600"
-                : "bg-brand-light border-brand-secondary text-brand-primary hover:bg-brand-secondary/40"
-            }`}
-          >
-            {isSelected ? "Selected for Import" : "Select Prospect"}
-          </button>
+          {prospect.website ? (
+            <a
+              href={prospect.website.startsWith("http") ? prospect.website : `https://${prospect.website}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-pilot-blue hover:underline bg-pilot-blue/10 rounded-xl transition"
+            >
+              <Globe className="w-4 h-4" />
+              <span>Visit Official Website</span>
+            </a>
+          ) : (
+            <div />
+          )}
 
           <button
             type="button"
-            onClick={() => onImportSingle(prospect)}
-            className="px-5 py-2.5 text-xs font-extrabold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition cursor-pointer active:scale-[0.98]"
+            onClick={onClose}
+            className="px-5 py-2.5 text-xs font-extrabold text-brand-primary bg-brand-secondary/60 hover:bg-brand-secondary rounded-xl transition cursor-pointer"
           >
-            Add to SalesBuster CRM
+            Close
           </button>
         </div>
       </div>
