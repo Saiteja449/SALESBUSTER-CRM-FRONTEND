@@ -92,7 +92,6 @@ const ADDON_CONFIGS = {
       },
     ],
   },
-  /* Target Intelligence feature commented out
   targetIntelligence: {
     title: "AI Target Data Intelligence",
     subtitle:
@@ -115,7 +114,7 @@ const ADDON_CONFIGS = {
       {
         icon: <TrendingUp className="w-5 h-5 text-emerald-500" />,
         title: "Relevance Scoring & Explainability",
-        desc: "Review 0–100 normalized match ratings with transparent rationale and verified company signals.",
+        desc: "Review 0â€“100 normalized match ratings with transparent rationale and verified company signals.",
       },
       {
         icon: <ShieldCheck className="w-5 h-5 text-emerald-500" />,
@@ -129,7 +128,6 @@ const ADDON_CONFIGS = {
       },
     ],
   },
-  */
 };
 
 export default function AddonUpgradePrompt({ addon = "whatsappCampaigns" }) {
@@ -140,7 +138,7 @@ export default function AddonUpgradePrompt({ addon = "whatsappCampaigns" }) {
 
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-8 md:py-12 animate-fadeIn">
-      {/* ── Main Upgrade Hero Card ─────────────────────────────────────── */}
+      {/* â”€â”€ Main Upgrade Hero Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div
         className={`relative overflow-hidden rounded-3xl bg-brand-light border border-brand-secondary/80 p-6 sm:p-10 shadow-lg bg-gradient-to-b ${config.gradient}`}
       >
@@ -210,7 +208,7 @@ export default function AddonUpgradePrompt({ addon = "whatsappCampaigns" }) {
         </div>
       </div>
 
-      {/* ── Feature Grid ───────────────────────────────────────────────── */}
+      {/* â”€â”€ Feature Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="mt-8">
         <h2 className="text-sm font-extrabold text-brand-primary uppercase tracking-wider mb-4 px-1">
           Everything included with this add-on
@@ -237,7 +235,7 @@ export default function AddonUpgradePrompt({ addon = "whatsappCampaigns" }) {
         </div>
       </div>
 
-      {/* ── Trust Banner ───────────────────────────────────────────────── */}
+      {/* â”€â”€ Trust Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="mt-8 p-4 rounded-2xl bg-brand-light/60 border border-brand-secondary/60 flex flex-wrap items-center justify-between gap-3 text-xs text-brand-primary/70">
         <div className="flex items-center gap-2 font-medium">
           <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />

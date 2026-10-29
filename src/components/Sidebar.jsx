@@ -81,7 +81,6 @@ export default function Sidebar({
           path: "/events",
         },
 
-        /* Target Intelligence feature commented out
         ...(!isSalesPerson && isOrgOwner
           ? [
               {
@@ -92,7 +91,6 @@ export default function Sidebar({
               },
             ]
           : []),
-        */
         ...(isOrgOwner
           ? [
               {
@@ -226,7 +224,7 @@ export default function Sidebar({
 
   const drawerContent = (
     <div className="flex flex-col h-full bg-brand-light text-brand-primary overflow-y-auto overflow-x-hidden">
-      {/* ── 1. Brand Logo & Collapse Header ────────────────────────────── */}
+      {/* â”€â”€ 1. Brand Logo & Collapse Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div
         className={`p-3.5 flex items-center ${
           isCollapsed ? "flex-col gap-2.5 justify-center" : "justify-between gap-2"
@@ -300,7 +298,7 @@ export default function Sidebar({
       <hr className="border-brand-secondary/60" />
 
 
-      {/* ── 3. Grouped Navigation Links ─────────────────────────────────── */}
+      {/* â”€â”€ 3. Grouped Navigation Links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <nav
         aria-label="Main sidebar navigation"
         className={`flex-1 ${isCollapsed ? "px-2" : "px-3"} space-y-4`}
@@ -429,7 +427,7 @@ export default function Sidebar({
 
       <hr className="border-brand-secondary/60 mt-2" />
 
-      {/* ── 6. Logout Action ────────────────────────────────────────────── */}
+      {/* â”€â”€ 6. Logout Action â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className={`p-2.5 ${isCollapsed ? "flex justify-center relative group" : ""}`}>
         <button
           type="button"

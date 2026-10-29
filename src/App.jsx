@@ -33,9 +33,7 @@ import AIFollowUps from "./pages/AIFollowUps.jsx";
 import OrganizationProfile from "./pages/OrganizationProfile.jsx";
 import BIAnalyst from "./pages/BIAnalyst.jsx";
 import EventDashboard from "./pages/EventDashboard.jsx";
-
-// Target Intelligence feature commented out
-// import TargetIntelligence from "./pages/TargetIntelligence.jsx";
+import TargetIntelligence from "./pages/TargetIntelligence.jsx";
 
 import Sidebar from "./components/Sidebar.jsx";
 import Header from "./components/Header.jsx";
@@ -99,7 +97,6 @@ function BIAnalystRoute({ children }) {
   return children ? children : <Outlet />;
 }
 
-/* Target Intelligence feature commented out
 function TargetIntelligenceRoute({ children }) {
   const { isSalesPerson, isManager, currentUser, hasTargetIntelligenceAddon } = useAuth();
   const isAuthorized =
@@ -119,7 +116,6 @@ function TargetIntelligenceRoute({ children }) {
 
   return children ? children : <Outlet />;
 }
-*/
 
 function AppLayout() {
   const { isAuthenticated, isOrganizationBlocked } = useAuth();
@@ -292,7 +288,6 @@ export default function App() {
                 </BIAnalystRoute>
               }
             />
-            {/* Target Intelligence feature commented out
             <Route
               path="/target-intelligence"
               element={
@@ -301,7 +296,6 @@ export default function App() {
                 </TargetIntelligenceRoute>
               }
             />
-            */}
             <Route path="/support" element={<SupportCenter />} />
             <Route path="/test-ai" element={<TestAI />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />

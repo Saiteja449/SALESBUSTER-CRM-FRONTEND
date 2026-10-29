@@ -497,11 +497,9 @@ export function AuthProvider({ children }) {
     isSuperAdmin || organization?.addons?.biAnalyst
   );
 
-  /* Target Intelligence feature commented out
   const hasTargetIntelligenceAddon = Boolean(
     isSuperAdmin || organization?.addons?.targetIntelligence
   );
-  */
 
   return (
     <AuthContext.Provider
@@ -527,7 +525,7 @@ export function AuthProvider({ children }) {
         isSuperAdmin,
         hasWhatsAppCampaignsAddon,
         hasBIAnalystAddon,
-        // hasTargetIntelligenceAddon,
+        hasTargetIntelligenceAddon,
         login,
         logout,
         fetchUsers,
