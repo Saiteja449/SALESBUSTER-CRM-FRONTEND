@@ -132,7 +132,38 @@ export default function LeadDetails() {
   const [followupType, setFollowupType] = useState("Call");
   const [isRecordingsSidebarOpen, setIsRecordingsSidebarOpen] = useState(false);
   const [recordingsRepFilter, setRecordingsRepFilter] = useState(null);
+  const [selectedRecordingId, setSelectedRecordingId] = useState(null);
   const [isSubmittingUpdate, setIsSubmittingUpdate] = useState(false);
+
+  const allLeadRecordings = useMemo(() => {
+    const recs = Array.isArray(currentLead?.recordings) ? [...currentLead.recordings] : [];
+    if (Array.isArray(currentLead?.callHistory)) {
+      currentLead.callHistory.forEach((ch, idx) => {
+        if (ch.recordingUrl || ch.recordingId) {
+          const exists = recs.some(
+            (r) =>
+              (ch.recordingId && String(r._id || r.id) === String(ch.recordingId)) ||
+              (ch.recordingUrl && (r.url === ch.recordingUrl || r.url.includes(ch.recordingUrl)))
+          );
+          if (!exists) {
+            recs.push({
+              _id: ch.recordingId || `ch-rec-${ch.calledAt || idx}`,
+              id: ch.recordingId || `ch-rec-${ch.calledAt || idx}`,
+              callEventId: ch.callEventId,
+              name: ch.recordingName || `Call Recording (${ch.salespersonName || "Rep"})`,
+              url: ch.recordingUrl,
+              salespersonId: ch.salespersonId,
+              salespersonName: ch.salespersonName || "Sales Representative",
+              uploadedAt: ch.calledAt || new Date().toISOString(),
+              duration: ch.duration || 0,
+              analysisStatus: "completed",
+            });
+          }
+        }
+      });
+    }
+    return recs;
+  }, [currentLead?.recordings, currentLead?.callHistory]);
 
   const repCallSummary = useMemo(() => {
     const map = new Map();
@@ -150,7 +181,7 @@ export default function LeadDetails() {
       });
     }
 
-    const recs = currentLead?.recordings || [];
+    const recs = allLeadRecordings;
     recs.forEach((rec) => {
       const key = String(rec.salespersonId || rec.salespersonName || "unnamed");
       if (map.has(key)) {
@@ -168,16 +199,16 @@ export default function LeadDetails() {
     });
 
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [currentLead?.repCallCounts, currentLead?.recordings]);
+  }, [currentLead?.repCallCounts, allLeadRecordings]);
 
   const totalCallCount = useMemo(() => {
     return (
       currentLead?.callCount ||
       repCallSummary.reduce((sum, r) => sum + r.count, 0) ||
-      currentLead?.recordings?.length ||
+      allLeadRecordings.length ||
       0
     );
-  }, [currentLead?.callCount, repCallSummary, currentLead?.recordings]);
+  }, [currentLead?.callCount, repCallSummary, allLeadRecordings]);
 
   const formatDurationSeconds = (sec) => {
     if (!sec || sec <= 0) return null;
@@ -207,15 +238,27 @@ export default function LeadDetails() {
       });
     }
 
-    const recordings = Array.isArray(currentLead?.recordings) ? currentLead.recordings : [];
+    const recordings = allLeadRecordings;
     const enriched = history.map((item) => {
       let matchedRec = null;
       if (item.recordingUrl || item.recordingId) {
         matchedRec = recordings.find(
           (r) =>
-            (item.recordingId && String(r._id) === String(item.recordingId)) ||
-            (item.recordingUrl && r.url === item.recordingUrl)
+            (item.recordingId && String(r._id || r.id) === String(item.recordingId)) ||
+            (item.recordingUrl && (r.url === item.recordingUrl || item.recordingUrl.includes(r.url) || r.url.includes(item.recordingUrl)))
         );
+      }
+      if (!matchedRec && item.recordingUrl) {
+        matchedRec = {
+          _id: item.recordingId || `rec-${item.calledAt || Math.random()}`,
+          id: item.recordingId,
+          url: item.recordingUrl,
+          name: item.recordingName || "Call Recording",
+          salespersonId: item.salespersonId,
+          salespersonName: item.salespersonName,
+          uploadedAt: item.calledAt,
+          duration: item.duration || 0,
+        };
       }
       return {
         ...item,
@@ -223,9 +266,32 @@ export default function LeadDetails() {
       };
     });
 
+    // Also include any standalone recordings from allLeadRecordings that weren't in callHistory
+    recordings.forEach((rec) => {
+      const alreadyLinked = enriched.some(
+        (c) =>
+          c.recording &&
+          (String(c.recording._id || c.recording.id) === String(rec._id || rec.id) ||
+            c.recording.url === rec.url)
+      );
+      if (!alreadyLinked) {
+        enriched.push({
+          _id: rec._id || rec.id,
+          callEventId: rec.callEventId,
+          salespersonId: rec.salespersonId,
+          salespersonName: rec.salespersonName || "Sales Representative",
+          calledAt: rec.uploadedAt || rec.createdAt,
+          callType: "outgoing",
+          status: "connected",
+          duration: rec.duration || 0,
+          recording: rec,
+        });
+      }
+    });
+
     // Sort descending by calledAt (newest call first)
     return enriched.sort((a, b) => new Date(b.calledAt || 0) - new Date(a.calledAt || 0));
-  }, [currentLead?.callHistory, currentLead?.repCallCounts, currentLead?.lastCallAt, currentLead?.recordings]);
+  }, [currentLead?.callHistory, currentLead?.repCallCounts, currentLead?.lastCallAt, allLeadRecordings]);
 
   const todayStr = useMemo(() => getLocalTodayDateString(), []);
 
@@ -823,15 +889,19 @@ export default function LeadDetails() {
           {ENABLE_AI_AUDIO_ANALYSIS && (
             <button
               type="button"
-              onClick={() => setIsRecordingsSidebarOpen(true)}
+              onClick={() => {
+                setSelectedRecordingId(null);
+                setRecordingsRepFilter(null);
+                setIsRecordingsSidebarOpen(true);
+              }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-violet-600/15 hover:bg-violet-600/25 text-violet-700 dark:text-violet-300 border border-violet-500/30 shadow-2xs transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none"
               aria-label="Open AI audio recordings and coaching analysis"
             >
               <Mic className="w-4 h-4 text-violet-600" />
               <span>Recordings & AI Analysis</span>
-              {currentLead.recordings && currentLead.recordings.length > 0 && (
+              {allLeadRecordings.length > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full bg-violet-600 text-white text-[10px] font-bold">
-                  {currentLead.recordings.length}
+                  {allLeadRecordings.length}
                 </span>
               )}
             </button>
@@ -1000,6 +1070,16 @@ export default function LeadDetails() {
                           <button
                             type="button"
                             onClick={() => {
+                              const repRecs = allLeadRecordings.filter(
+                                (r) =>
+                                  (r.salespersonId && String(r.salespersonId) === String(rep.salespersonId)) ||
+                                  (r.salespersonName && r.salespersonName === rep.salespersonName)
+                              );
+                              if (repRecs.length === 1) {
+                                setSelectedRecordingId(repRecs[0]._id || repRecs[0].id || repRecs[0].url);
+                              } else {
+                                setSelectedRecordingId(null);
+                              }
                               setRecordingsRepFilter(rep.salespersonId || rep.salespersonName);
                               setIsRecordingsSidebarOpen(true);
                             }}
@@ -1103,7 +1183,14 @@ export default function LeadDetails() {
                             <button
                               type="button"
                               onClick={() => {
-                                setRecordingsRepFilter(call.salespersonId || call.salespersonName);
+                                const recId =
+                                  call.recording._id ||
+                                  call.recording.id ||
+                                  call.recording.url ||
+                                  call.recordingId ||
+                                  call.recordingUrl;
+                                setSelectedRecordingId(recId);
+                                setRecordingsRepFilter(null);
                                 setIsRecordingsSidebarOpen(true);
                               }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/25 transition-colors cursor-pointer shrink-0 self-end sm:self-center"
@@ -1878,9 +1965,15 @@ export default function LeadDetails() {
         onClose={() => {
           setIsRecordingsSidebarOpen(false);
           setRecordingsRepFilter(null);
+          setSelectedRecordingId(null);
         }}
-        lead={currentLead}
+        lead={{
+          ...currentLead,
+          recordings: allLeadRecordings,
+        }}
         initialRepFilter={recordingsRepFilter}
+        selectedRecordingId={selectedRecordingId}
+        onClearSelectedRecording={() => setSelectedRecordingId(null)}
       />
     </div>
   );
