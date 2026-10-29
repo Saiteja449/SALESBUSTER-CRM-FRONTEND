@@ -198,7 +198,7 @@ export default function LeadDetails() {
           history.push({
             salespersonId: rep.salespersonId,
             salespersonName: rep.salespersonName || "Sales Representative",
-            calledAt: rep.lastCalledAt || currentLead.lastCallAt || currentLead.updatedAt,
+            calledAt: i === 0 ? (rep.lastCalledAt || currentLead.lastCallAt || null) : null,
             callType: "outgoing",
             status: "connected",
             duration: 0,
