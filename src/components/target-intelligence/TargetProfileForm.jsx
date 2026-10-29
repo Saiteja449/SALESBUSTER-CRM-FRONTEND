@@ -15,19 +15,22 @@ import {
 import { targetIntelligenceService } from "../../services/targetIntelligence.js";
 
 const SAMPLE_PROMPTS = [
-  "Find manufacturing companies in Hyderabad that may need ERP software",
+  "Find Pet companies or pet service providing companies",
   "Mid-sized pharmaceutical fabrication companies in Balanagar & Jeedimetla with 100+ employees",
   "Automotive tier-2 suppliers in Telangana seeking inventory & supply chain automation",
 ];
 
 const INDUSTRIES = [
   "All",
+  "Pet Care & Veterinary",
   "Manufacturing",
   "Pharmaceuticals",
+  "Healthcare & Medical",
   "Automotive & Engineering",
   "Plastics & Packaging",
   "Renewable Energy",
   "IT & Software",
+  "Food & Beverage",
 ];
 
 const CITIES = [
@@ -61,21 +64,16 @@ export default function TargetProfileForm({
   isLoading,
   initialFilters = {},
 }) {
-  const [nlPrompt, setNlPrompt] = useState(
-    "Find manufacturing companies in Hyderabad that may need ERP software"
-  );
+  const [nlPrompt, setNlPrompt] = useState("");
   const [isInterpreting, setIsInterpreting] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Structured filters
-  const [industry, setIndustry] = useState(initialFilters.industry || "Manufacturing");
-  const [city, setCity] = useState(initialFilters.city || "Hyderabad");
-  const [companySize, setCompanySize] = useState("50-200 employees");
-  const [need, setNeed] = useState("Enterprise Resource Planning (ERP)");
-  const [selectedRoles, setSelectedRoles] = useState([
-    "Director of Operations",
-    "Chief Information Officer (CIO)",
-  ]);
+  const [industry, setIndustry] = useState(initialFilters.industry || "All");
+  const [city, setCity] = useState(initialFilters.city || "All");
+  const [companySize, setCompanySize] = useState("Any Size");
+  const [need, setNeed] = useState("");
+  const [selectedRoles, setSelectedRoles] = useState([]);
 
   const handleApplySample = (prompt) => {
     setNlPrompt(prompt);
@@ -118,13 +116,17 @@ export default function TargetProfileForm({
 
   const handleSubmit = (e) => {
     e?.preventDefault();
+    const trimmedPrompt = nlPrompt.trim();
+    if (!trimmedPrompt && (!industry || industry === "All") && (!city || city === "All")) {
+      return;
+    }
     onSearch({
-      prompt: nlPrompt,
-      industry,
-      city,
-      companySize,
-      need,
-      roles: selectedRoles,
+      prompt: trimmedPrompt,
+      industry: showAdvanced ? industry : (industry !== "All" ? industry : undefined),
+      city: showAdvanced ? city : (city !== "All" ? city : undefined),
+      companySize: showAdvanced ? companySize : undefined,
+      need: showAdvanced && need ? need : undefined,
+      roles: showAdvanced && selectedRoles.length > 0 ? selectedRoles : undefined,
     });
   };
 
@@ -185,7 +187,7 @@ export default function TargetProfileForm({
             value={nlPrompt}
             onChange={(e) => setNlPrompt(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type any question or market description (e.g. 'Textile mills in Surat looking for supply chain management') and press Enter..."
+            placeholder="Type any market or company description (e.g. 'Find Pet companies or pet service providing companies') and press Enter..."
             className="w-full px-4 py-3 text-sm rounded-xl bg-brand-light border border-brand-secondary text-brand-primary placeholder:text-brand-primary/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition resize-none"
           />
         </div>

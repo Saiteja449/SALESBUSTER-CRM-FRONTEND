@@ -16,6 +16,7 @@ import {
 
 export default function ProspectResults({
   prospects = [],
+  hasSearched = false,
   selectedIds = [],
   onToggleSelect,
   onSelectAll,
@@ -46,6 +47,22 @@ export default function ProspectResults({
   };
 
   if (prospects.length === 0) {
+    if (!hasSearched) {
+      return (
+        <div className="bg-brand-light rounded-2xl border border-brand-secondary p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-600 dark:text-emerald-400">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-brand-primary">
+            Ready to Discover Target Accounts
+          </h3>
+          <p className="text-xs text-brand-primary/60 max-w-md mx-auto">
+            Enter what company type, industry, or service you are searching for above (e.g. &ldquo;Find Pet companies or pet service providing companies&rdquo;) and click Search Target Prospects.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-brand-light rounded-2xl border border-brand-secondary p-12 text-center space-y-3">
         <div className="w-12 h-12 rounded-2xl bg-brand-secondary/40 flex items-center justify-center mx-auto text-brand-primary/50">
@@ -55,7 +72,7 @@ export default function ProspectResults({
           No matching prospects found
         </h3>
         <p className="text-xs text-brand-primary/60 max-w-md mx-auto">
-          Try expanding your search criteria, switching cities, or broadening
+          Try expanding your search query, switching cities, or broadening
           the business need prompt.
         </p>
       </div>

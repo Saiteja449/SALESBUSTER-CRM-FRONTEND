@@ -52,12 +52,6 @@ export default function TargetIntelligence() {
 
   useEffect(() => {
     loadQuota();
-    // Run initial search with default ICP for instant feedback
-    handleExecuteSearch({
-      city: "Hyderabad",
-      industry: "Manufacturing",
-      need: "Enterprise Resource Planning (ERP)",
-    });
   }, []);
 
   const loadQuota = async () => {
@@ -309,6 +303,7 @@ export default function TargetIntelligence() {
         ) : (
           <ProspectResults
             prospects={prospects}
+            hasSearched={hasSearched}
             selectedIds={selectedIds}
             onToggleSelect={handleToggleSelect}
             onSelectAll={handleSelectAll}
