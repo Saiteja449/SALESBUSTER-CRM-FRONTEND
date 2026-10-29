@@ -111,6 +111,7 @@ export function LeadsProvider({ children }) {
                 ...lead,
                 callCount: data.callCount ?? lead.callCount,
                 repCallCounts: data.repCallCounts ?? lead.repCallCounts,
+                callHistory: data.callHistory ?? lead.callHistory,
                 lastCallAt: data.lastCallAt ?? lead.lastCallAt,
                 recordings: updatedRecs,
               };
