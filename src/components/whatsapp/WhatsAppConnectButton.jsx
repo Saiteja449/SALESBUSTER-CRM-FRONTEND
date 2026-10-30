@@ -16,6 +16,12 @@ export default function WhatsAppConnectButton({
   const [isLoading, setIsLoading] = useState(false);
   const [activeAccount, setActiveAccount] = useState(connectedAccount);
 
+  useEffect(() => {
+    if (connectedAccount) {
+      setActiveAccount(connectedAccount);
+    }
+  }, [connectedAccount]);
+
   const capturedWabaIdRef = useRef(null);
   const capturedPhoneIdRef = useRef(null);
   const capturedCodeRef = useRef(null);
