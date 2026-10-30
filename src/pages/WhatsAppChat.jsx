@@ -74,6 +74,15 @@ export default function WhatsAppChat() {
   const [chatSummary, setChatSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
+  // Template Sending States (24h customer window bypass)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateVars, setTemplateVars] = useState({});
+  const [sendingTemplate, setSendingTemplate] = useState(false);
+  const [templateError, setTemplateError] = useState("");
+
   // Conversations List
   const [conversations, setConversations] = useState([]);
   const [selectedConv, setSelectedConv] = useState(null);
@@ -803,6 +812,82 @@ export default function WhatsAppChat() {
       );
     } finally {
       setSendingMessage(false);
+    }
+  };
+
+    const fetchApprovedTemplates = async () => {
+    setLoadingTemplates(true);
+    setTemplateError("");
+    try {
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token") ||
+        localStorage.getItem("token");
+      const res = await axios.get(`${BACKEND_URL}/api/whatsapp/templates`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.data?.success) {
+        setAvailableTemplates(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch templates:", err);
+      setTemplateError("Could not load templates. Please verify WhatsApp Cloud API connection.");
+    } finally {
+      setLoadingTemplates(false);
+    }
+  };
+
+  const handleOpenTemplateModal = () => {
+    setTemplateModalOpen(true);
+    setSelectedTemplate(null);
+    setTemplateVars({
+      1: selectedConv?.leadId?.name || "",
+    });
+    setTemplateError("");
+    fetchApprovedTemplates();
+  };
+
+  const handleSendTemplate = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedTemplate || !selectedConv?.leadId?._id) return;
+
+    setSendingTemplate(true);
+    setTemplateError("");
+    try {
+      const token =
+        localStorage.getItem("salesbuster_token") ||
+        localStorage.getItem("kranthi_token") ||
+        localStorage.getItem("token");
+
+      const res = await axios.post(
+        `${BACKEND_URL}/api/whatsapp/template/send`,
+        {
+          leadId: selectedConv.leadId._id,
+          templateName: selectedTemplate.name,
+          languageCode: selectedTemplate.language || "en_US",
+          variables: templateVars,
+        },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+
+      if (res.data?.success) {
+        setTemplateModalOpen(false);
+        setSelectedTemplate(null);
+        if (res.data.data) {
+          setMessages((prev) => [...prev, res.data.data]);
+        }
+      }
+    } catch (err) {
+      console.error("Template send failure:", err);
+      setTemplateError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to send template message."
+      );
+    } finally {
+      setSendingTemplate(false);
     }
   };
 
@@ -1734,15 +1819,31 @@ export default function WhatsAppChat() {
               ) : (
                 <div className="border-t border-border-main bg-bg-card shrink-0">
                   {/* 24-hour Meta Customer Service Window Indicator */}
-                  {selectedConv?.leadId?.serviceWindowExpiresAt &&
-                    new Date() > new Date(selectedConv.leadId.serviceWindowExpiresAt) && (
-                      <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex items-center gap-2">
-                        <Clock className="w-4 h-4 shrink-0 text-amber-500" />
-                        <span>
-                          <strong>24-Hour Customer Window Expired:</strong> Under Meta policy, free-form text is disabled until the customer replies or an approved template message is sent.
-                        </span>
+                  {(() => {
+                    const isWindowExpired = Boolean(
+                      selectedConv?.leadId?.serviceWindowExpiresAt &&
+                      new Date() > new Date(selectedConv.leadId.serviceWindowExpiresAt)
+                    );
+                    if (!isWindowExpired) return null;
+                    return (
+                      <div className="px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 shrink-0 text-amber-500" />
+                          <span>
+                            <strong>24-Hour Customer Window Expired:</strong> Free-form text is disabled by Meta policy. Send an approved template message to resume the conversation.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleOpenTemplateModal}
+                          className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-medium rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-colors shrink-0 cursor-pointer"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          Send Template
+                        </button>
                       </div>
-                    )}
+                    );
+                  })()}
 
                   {sendError && (
                     <div
@@ -1787,8 +1888,21 @@ export default function WhatsAppChat() {
                     </div>
                   )}
 
+                  {(() => {
+                    const isWindowExpired = Boolean(
+                      selectedConv?.leadId?.serviceWindowExpiresAt &&
+                      new Date() > new Date(selectedConv.leadId.serviceWindowExpiresAt)
+                    );
+                    return (
                   <form
-                    onSubmit={handleSend}
+                    onSubmit={(e) => {
+                      if (isWindowExpired) {
+                        e.preventDefault();
+                        handleOpenTemplateModal();
+                        return;
+                      }
+                      handleSend(e);
+                    }}
                     className="p-2.5 sm:p-3 flex items-center gap-2"
                   >
                     <label htmlFor="whatsapp-chat-message-input" className="sr-only">
@@ -1829,7 +1943,14 @@ export default function WhatsAppChat() {
                       <input
                         id="whatsapp-chat-message-input"
                         type="text"
-                        placeholder={selectedFile ? "Add a caption for this document..." : "Type a message (Press Enter to send)"}
+                        disabled={isWindowExpired}
+                        placeholder={
+                          isWindowExpired
+                            ? "24-hour service window expired. Click 'Send Template' to initiate contact."
+                            : selectedFile
+                            ? "Add a caption for this document..."
+                            : "Type a message (Press Enter to send)"
+                        }
                         value={inputValue}
                         onChange={(e) => {
                           setInputValue(e.target.value);
@@ -1838,10 +1959,12 @@ export default function WhatsAppChat() {
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) {
                             e.preventDefault();
-                            handleSend(e);
+                            if (!isWindowExpired) handleSend(e);
                           }
                         }}
-                        className="w-full bg-transparent outline-none text-text-primary text-xs sm:text-sm placeholder:text-text-secondary"
+                        className={`w-full bg-transparent outline-none text-xs sm:text-sm placeholder:text-text-secondary ${
+                          isWindowExpired ? "cursor-not-allowed opacity-60 text-text-secondary" : "text-text-primary"
+                        }`}
                       />
                       {inputValue && (
                         <button
@@ -1857,19 +1980,43 @@ export default function WhatsAppChat() {
                     </div>
 
                     <button
-                      type="submit"
-                      disabled={(!inputValue.trim() && !selectedFile) || sendingMessage}
-                      className="p-2.5 bg-[#00a884] hover:bg-[#008f72] disabled:opacity-40 disabled:hover:bg-[#00a884] disabled:cursor-not-allowed rounded-full text-white transition-all shrink-0 shadow-xs focus-visible:ring-2 focus-visible:ring-[#00a884] cursor-pointer"
-                      title={inputValue.trim() || selectedFile ? "Send message" : "Type a message or attach a document"}
-                      aria-label="Send WhatsApp message"
+                      type="button"
+                      onClick={handleOpenTemplateModal}
+                      className="p-2 rounded-lg text-text-secondary hover:text-[#00a884] hover:bg-bg-secondary transition-colors cursor-pointer shrink-0"
+                      title="Send Approved Template"
+                      aria-label="Send Approved Template"
                     >
-                      {sendingMessage ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4" />
-                      )}
+                      <FileText className="w-4 h-4" />
                     </button>
+
+                    {isWindowExpired ? (
+                      <button
+                        type="button"
+                        onClick={handleOpenTemplateModal}
+                        className="px-3 py-2 bg-[#00a884] hover:bg-[#008f72] text-white text-xs font-medium rounded-lg flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+                        title="Send Approved Template"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Send Template</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={(!inputValue.trim() && !selectedFile) || sendingMessage}
+                        className="p-2.5 bg-[#00a884] hover:bg-[#008f72] disabled:opacity-40 disabled:hover:bg-[#00a884] disabled:cursor-not-allowed rounded-full text-white transition-all shrink-0 shadow-xs focus-visible:ring-2 focus-visible:ring-[#00a884] cursor-pointer"
+                        title={inputValue.trim() || selectedFile ? "Send message" : "Type a message or attach a document"}
+                        aria-label="Send WhatsApp message"
+                      >
+                        {sendingMessage ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                   </form>
+                  );
+                })()}
                 </div>
               )}
             </>
@@ -2498,6 +2645,151 @@ export default function WhatsAppChat() {
           </div>
         </div>
       )}
-    </div>
+    
+      {/* WhatsApp Template Message Modal (24h Customer Service Window Bypass) */}
+      {templateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+          <div className="bg-bg-card border border-border-main rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] animate-fadeIn text-text-primary">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border-main shrink-0">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#00a884]" />
+                <h2 className="font-bold text-base text-text-primary">Send Approved WhatsApp Template</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTemplateModalOpen(false)}
+                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors"
+                title="Close modal"
+                aria-label="Close modal"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-4 overflow-y-auto">
+              {templateError && (
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{templateError}</span>
+                </div>
+              )}
+
+              {loadingTemplates ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <RefreshCw className="w-6 h-6 text-[#00a884] animate-spin" />
+                  <p className="text-text-secondary text-xs">Loading approved templates from Meta...</p>
+                </div>
+              ) : availableTemplates.length === 0 ? (
+                <div className="text-center py-8 text-text-secondary text-xs">
+                  <p>No approved templates found for this WhatsApp Business Account.</p>
+                  <p className="mt-1 text-[11px]">Create and submit templates in Meta WhatsApp Manager to send messages outside the 24-hour window.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1">
+                      Select Approved Template
+                    </label>
+                    <select
+                      value={selectedTemplate?.name || ""}
+                      onChange={(e) => {
+                        const tpl = availableTemplates.find((t) => t.name === e.target.value);
+                        setSelectedTemplate(tpl || null);
+                      }}
+                      className="w-full bg-bg-secondary border border-border-main rounded-xl px-3 py-2 text-xs text-text-primary outline-none focus:border-[#00a884]"
+                    >
+                      <option value="">-- Choose a template --</option>
+                      {availableTemplates.map((tpl) => (
+                        <option key={tpl.name} value={tpl.name}>
+                          {tpl.name} ({tpl.language || "en_US"}) - {tpl.category || "UTILITY"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedTemplate && (
+                    <div className="p-3 bg-bg-secondary/60 border border-border-main rounded-xl space-y-3">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[#00a884] tracking-wider">Template Preview</span>
+                        <p className="mt-1 text-xs text-text-primary whitespace-pre-wrap leading-relaxed">
+                          {selectedTemplate.components?.find((c) => c.type === "BODY")?.text || selectedTemplate.name}
+                        </p>
+                      </div>
+
+                      {/* Dynamic Variable Mapping */}
+                      {(() => {
+                        const bodyText = selectedTemplate.components?.find((c) => c.type === "BODY")?.text || "";
+                        const matches = bodyText.match(/\{\{(\d+)\}\}/g) || [];
+                        const uniqueIndices = [...new Set(matches.map((m) => m.replace(/\D/g, "")))];
+
+                        if (uniqueIndices.length === 0) return null;
+
+                        return (
+                          <div className="pt-2 border-t border-border-main space-y-2">
+                            <span className="text-[10px] font-semibold text-text-secondary uppercase">
+                              Template Variables
+                            </span>
+                            {uniqueIndices.map((idx) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <span className="text-xs font-mono text-text-secondary w-12">
+                                  {`{{${idx}}}`}:
+                                </span>
+                                <input
+                                  type="text"
+                                  value={templateVars[idx] || ""}
+                                  placeholder={idx === "1" ? selectedConv?.leadId?.name || "Customer name" : `Variable ${idx}`}
+                                  onChange={(e) =>
+                                    setTemplateVars((prev) => ({
+                                      ...prev,
+                                      [idx]: e.target.value,
+                                    }))
+                                  }
+                                  className="flex-1 bg-bg-main border border-border-main rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:border-[#00a884]"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-border-main flex items-center justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setTemplateModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!selectedTemplate || sendingTemplate}
+                onClick={handleSendTemplate}
+                className="px-4 py-2 rounded-xl text-xs font-medium bg-[#00a884] hover:bg-[#008f72] text-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+              >
+                {sendingTemplate ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Sending...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Template</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+</div>
   );
 }

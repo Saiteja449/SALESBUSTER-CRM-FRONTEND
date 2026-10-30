@@ -25,6 +25,7 @@ export default function WhatsAppConnectButton({
   const capturedWabaIdRef = useRef(null);
   const capturedPhoneIdRef = useRef(null);
   const capturedCodeRef = useRef(null);
+  const signupCompleteRef = useRef(false);
   const hasOnboardedRef = useRef(false);
 
   const metaAppId = import.meta.env.VITE_META_APP_ID || "";
@@ -114,18 +115,20 @@ export default function WhatsAppConnectButton({
     [onConnected]
   );
 
-  const triggerOnboard = useCallback(
-    async (code, wabaId, phoneNumberId) => {
-      const finalCode = code || capturedCodeRef.current;
-      const finalWabaId = wabaId || capturedWabaIdRef.current;
-      const finalPhoneId = phoneNumberId || capturedPhoneIdRef.current;
+  // Coordinate authorization code and confirmed signup completion event reliably without arbitrary timeout races
+  const checkAndTriggerOnboard = useCallback(() => {
+    if (hasOnboardedRef.current) return;
+    const code = capturedCodeRef.current;
+    const isCompleted = signupCompleteRef.current;
 
-      if (!finalCode || hasOnboardedRef.current) return;
+    // Both authorization code and confirmed completion event are strictly required
+    if (code && isCompleted) {
       hasOnboardedRef.current = true;
-      await completeOnboarding(finalCode, finalWabaId, finalPhoneId);
-    },
-    [completeOnboarding]
-  );
+      const wabaId = capturedWabaIdRef.current;
+      const phoneId = capturedPhoneIdRef.current;
+      completeOnboarding(code, wabaId, phoneId);
+    }
+  }, [completeOnboarding]);
 
   // 3. Window Message Listener (Embedded Signup Event Callback)
   useEffect(() => {
@@ -140,17 +143,21 @@ export default function WhatsAppConnectButton({
 
         if (data?.type === "WA_EMBEDDED_SIGNUP") {
           console.log("[MetaSDK] WA_EMBEDDED_SIGNUP event:", data);
-          const { waba_id, phone_number_id } = data.data || {};
-          if (waba_id) capturedWabaIdRef.current = waba_id;
-          if (phone_number_id) capturedPhoneIdRef.current = phone_number_id;
 
-          const isFinish =
-            !data.event ||
-            String(data.event).toUpperCase().includes("FINISH") ||
-            String(data.event).toUpperCase().includes("COMPLETE");
+          if (data.event === "CANCEL") {
+            console.log("[MetaSDK] Embedded signup cancelled by user.");
+            setIsLoading(false);
+            return;
+          }
 
-          if (isFinish && capturedCodeRef.current) {
-            await triggerOnboard(capturedCodeRef.current, waba_id, phone_number_id);
+          // Require a valid completion event (FINISH or COMPLETE) with signup data
+          if (data.event === "FINISH" || data.event === "COMPLETE" || data.data?.phone_number_id) {
+            signupCompleteRef.current = true;
+            const { waba_id, phone_number_id } = data.data || {};
+            if (waba_id) capturedWabaIdRef.current = waba_id;
+            if (phone_number_id) capturedPhoneIdRef.current = phone_number_id;
+
+            checkAndTriggerOnboard();
           }
         }
       } catch (err) {
@@ -159,8 +166,10 @@ export default function WhatsAppConnectButton({
     };
 
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [triggerOnboard]);
+    return () => {
+      window.removeEventListener("message", handleMessage);
+    };
+  }, [checkAndTriggerOnboard]);
 
   // 4. Launch Embedded Signup v4 Dialog (Coexistence mode)
   const launchEmbeddedSignup = useCallback(() => {
@@ -195,11 +204,8 @@ export default function WhatsAppConnectButton({
         (response) => {
           console.log("[MetaSDK] FB.login response:", response);
           if (response?.authResponse?.code) {
-            const code = response.authResponse.code;
-            capturedCodeRef.current = code;
-            setTimeout(() => {
-              triggerOnboard(code, capturedWabaIdRef.current, capturedPhoneIdRef.current);
-            }, 350);
+            capturedCodeRef.current = response.authResponse.code;
+            checkAndTriggerOnboard();
           }
         },
         {
@@ -216,7 +222,7 @@ export default function WhatsAppConnectButton({
       console.error("[MetaSDK Login Error]", fbErr);
       alert("Could not open Meta Login popup. Please ensure popups are allowed in your browser.");
     }
-  }, [metaAppId, metaConfigId, triggerOnboard]);
+  }, [metaAppId, metaConfigId, checkAndTriggerOnboard]);
 
   // 5. Disconnect handler
   const handleDisconnect = async () => {
