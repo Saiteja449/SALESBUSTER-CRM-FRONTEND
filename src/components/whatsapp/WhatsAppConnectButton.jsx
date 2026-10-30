@@ -90,7 +90,7 @@ export default function WhatsAppConnectButton({
         if (res.data?.success) {
           setIsPreScreenOpen(false);
           setActiveAccount(res.data.account);
-          setIsSyncModalOpen(true);
+          if (res.data?.account?.isOnBizApp) { setIsSyncModalOpen(true); }
           if (onConnected) onConnected(res.data.account);
         }
       } catch (err) {
@@ -202,8 +202,6 @@ export default function WhatsAppConnectButton({
           override_default_response_type: true,
           auth_type: "rerequest",
           extras: {
-            featureType: "whatsapp_business_app_onboarding",
-            sessionInfoVersion: "3",
             setup: {},
           },
         }
@@ -282,7 +280,7 @@ export default function WhatsAppConnectButton({
   return (
     <>
       <button
-        onClick={() => setIsPreScreenOpen(true)}
+        onClick={launchEmbeddedSignup}
         disabled={isLoading}
         className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 text-white font-medium text-xs rounded-xl transition shadow-md shadow-emerald-950/20 cursor-pointer"
       >
