@@ -146,6 +146,7 @@ export default function EventDashboard() {
         const matchName = c.name?.toLowerCase().includes(q);
         const matchPhone = c.phone?.toLowerCase().includes(q);
         const matchCompany = c.companyName?.toLowerCase().includes(q);
+        const matchDesignation = c.designation?.toLowerCase().includes(q);
         const matchSummary = c.summary?.toLowerCase().includes(q);
         const matchRep = c.capturedByName?.toLowerCase().includes(q);
         return matchName || matchPhone || matchCompany || matchSummary || matchRep;
@@ -634,6 +635,14 @@ export default function EventDashboard() {
                                 <div className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5">
                                   <Building2 className="w-3 h-3 text-text-secondary/70 shrink-0" />
                                   <span>{contact.companyName}</span>
+                                  {contact.designation && (
+                                    <span className="text-text-secondary/70"> • {contact.designation}</span>
+                                  )}
+                                </div>
+                              )}
+                              {!contact.companyName && contact.designation && (
+                                <div className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5">
+                                  <span>{contact.designation}</span>
                                 </div>
                               )}
                             </div>
@@ -784,6 +793,14 @@ export default function EventDashboard() {
                             <div className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5 truncate">
                               <Building2 className="w-3 h-3 text-text-secondary/70 shrink-0" />
                               <span>{contact.companyName}</span>
+                              {contact.designation && (
+                                <span className="text-text-secondary/70"> • {contact.designation}</span>
+                              )}
+                            </div>
+                          )}
+                          {!contact.companyName && contact.designation && (
+                            <div className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5 truncate">
+                              <span>{contact.designation}</span>
                             </div>
                           )}
                         </div>
@@ -889,6 +906,7 @@ export default function EventDashboard() {
                   </h3>
                   <p className="text-xs text-text-secondary">
                     {activeAttendee.companyName || "No Company Specified"}
+                    {activeAttendee.designation ? ` • ${activeAttendee.designation}` : ""}
                   </p>
                 </div>
               </div>

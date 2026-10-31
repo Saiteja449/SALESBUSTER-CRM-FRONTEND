@@ -224,7 +224,7 @@ export default function TargetProfileForm({
       {/* ── 1. Top Row: LinkedIn Scope Selector Tabs ─────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-secondary/60 pb-3.5">
         <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-brand-secondary/30 border border-brand-secondary/40">
-          <button
+          {/* <button
             type="button"
             onClick={() => handleCategorySelect("all")}
             className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
@@ -260,7 +260,7 @@ export default function TargetProfileForm({
           >
             <Users className="w-3.5 h-3.5" />
             <span>People (Decision Makers)</span>
-          </button>
+          </button> */}
         </div>
 
         <div className="flex items-center gap-2">
