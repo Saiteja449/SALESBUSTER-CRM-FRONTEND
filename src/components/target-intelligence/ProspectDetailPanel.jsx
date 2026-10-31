@@ -190,7 +190,11 @@ export default function ProspectDetailPanel({
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] font-bold text-brand-primary/50 uppercase">
-                      Direct / Corporate Phone
+                      {isPerson
+                        ? prospect.phoneType === "direct"
+                          ? "His Direct Mobile / Line"
+                          : `Office Phone (${prospect.companyName || "Company Fallback"})`
+                        : "Company Corporate Phone"}
                     </div>
                     {phone ? (
                       <a
@@ -229,7 +233,11 @@ export default function ProspectDetailPanel({
                   </div>
                   <div className="min-w-0">
                     <div className="text-[10px] font-bold text-brand-primary/50 uppercase">
-                      Official Executive / Corporate Email
+                      {isPerson
+                        ? prospect.emailType === "direct"
+                          ? "His Direct Executive Email"
+                          : `Company Desk Email (${prospect.companyName || "Fallback"})`
+                        : "Official Corporate Email"}
                     </div>
                     {email ? (
                       <a

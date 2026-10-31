@@ -349,7 +349,7 @@ export default function ProspectResults({
                       <div className="flex flex-wrap items-center gap-2.5 text-xs">
                         {/* Phone */}
                         {phone ? (
-                          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
                             <Phone className="w-3.5 h-3.5 text-emerald-500" />
                             <a
                               href={`tel:${phone.replace(/\s+/g, "")}`}
@@ -357,10 +357,21 @@ export default function ProspectResults({
                             >
                               {phone}
                             </a>
+                            {isPerson && (
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                  prospect.phoneType === "direct"
+                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                    : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                                }`}
+                              >
+                                {prospect.phoneType === "direct" ? "Direct Line" : "Company Office"}
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleCopy(phone, `phone-${prospect.prospectKey}`)}
-                              className="ml-1 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
+                              className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
                               title="Copy phone"
                             >
                               {copiedKey === `phone-${prospect.prospectKey}` ? (
@@ -374,15 +385,26 @@ export default function ProspectResults({
 
                         {/* Email */}
                         {email ? (
-                          <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
                             <Mail className="w-3.5 h-3.5 text-sky-500" />
                             <a href={`mailto:${email}`} className="hover:underline">
                               {email}
                             </a>
+                            {isPerson && (
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                                  prospect.emailType === "direct"
+                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                    : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                                }`}
+                              >
+                                {prospect.emailType === "direct" ? "Direct Email" : "Company Desk"}
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleCopy(email, `email-${prospect.prospectKey}`)}
-                              className="ml-1 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
+                              className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
                               title="Copy email"
                             >
                               {copiedKey === `email-${prospect.prospectKey}` ? (
@@ -395,7 +417,7 @@ export default function ProspectResults({
                         ) : null}
 
                         {/* Company LinkedIn: ONLY RENDER IF AVAILABLE */}
-                        {companyLinkedInUrl ? (
+                        {!isPerson && companyLinkedInUrl ? (
                           <a
                             href={companyLinkedInUrl.startsWith("http") ? companyLinkedInUrl : `https://${companyLinkedInUrl}`}
                             target="_blank"
@@ -410,7 +432,7 @@ export default function ProspectResults({
                         ) : null}
 
                         {/* Person LinkedIn: ONLY RENDER IF AVAILABLE */}
-                        {personLinkedInUrl ? (
+                        {isPerson && personLinkedInUrl ? (
                           <a
                             href={personLinkedInUrl.startsWith("http") ? personLinkedInUrl : `https://${personLinkedInUrl}`}
                             target="_blank"
@@ -419,7 +441,7 @@ export default function ProspectResults({
                             title="Open Personal Executive LinkedIn Profile"
                           >
                             <LinkedinIcon className="w-3.5 h-3.5" />
-                            <span>LinkedIn Profile</span>
+                            <span>His LinkedIn Profile</span>
                             <ExternalLink className="w-2.5 h-2.5 opacity-70" />
                           </a>
                         ) : null}
