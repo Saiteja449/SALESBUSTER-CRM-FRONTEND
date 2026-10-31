@@ -15,6 +15,8 @@ import {
   Check,
   RotateCcw,
   Copy,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 
 function LinkedinIcon(props) {
@@ -59,10 +61,41 @@ function YoutubeIcon(props) {
   );
 }
 
+function getVerificationBadge(status) {
+  switch (status) {
+    case "verified":
+      return {
+        label: "Verified",
+        bg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+      };
+    case "sourced":
+      return {
+        label: "Directory Sourced",
+        bg: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+      };
+    case "unverified":
+      return {
+        label: "Unverified",
+        bg: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+      };
+    case "unavailable":
+      return {
+        label: "Unavailable",
+        bg: "bg-brand-secondary/40 text-brand-primary/60 border-brand-secondary",
+      };
+    default:
+      return {
+        label: "Not Found",
+        bg: "bg-brand-secondary/30 text-brand-primary/50 border-brand-secondary/50",
+      };
+  }
+}
+
 export default function ProspectResults({
   prospects = [],
   hasSearched = false,
   searchType = "all", // 'all' | 'companies' | 'people'
+  diagnostics = null,
   onInspectProspect,
   onToggleResolve,
   isResolvingKey = null,
@@ -127,6 +160,54 @@ export default function ProspectResults({
       );
     }
 
+    if (diagnostics?.emptyReason === "PROVIDER_TIMEOUT") {
+      return (
+        <div className="bg-amber-500/10 rounded-3xl border border-amber-500/30 p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-black text-amber-900 dark:text-amber-200">
+            Directory Provider Timed Out
+          </h3>
+          <p className="text-xs text-amber-800/80 dark:text-amber-300/80 max-w-md mx-auto">
+            The external business directory request took longer than expected. Please try refreshing or broadening your query terms.
+          </p>
+        </div>
+      );
+    }
+
+    if (diagnostics?.emptyReason === "PROVIDER_RATE_LIMITED") {
+      return (
+        <div className="bg-amber-500/10 rounded-3xl border border-amber-500/30 p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-black text-amber-900 dark:text-amber-200">
+            Public Directory Rate Limit
+          </h3>
+          <p className="text-xs text-amber-800/80 dark:text-amber-300/80 max-w-md mx-auto">
+            The directory provider rate limit was reached. Please wait a few moments before trying again.
+          </p>
+        </div>
+      );
+    }
+
+    if (diagnostics?.emptyReason === "PROVIDER_ERROR") {
+      return (
+        <div className="bg-red-500/10 rounded-3xl border border-red-500/30 p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-red-500/20 border border-red-500/30 flex items-center justify-center mx-auto text-red-600 dark:text-red-400">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-black text-red-900 dark:text-red-200">
+            Directory Connection Notice
+          </h3>
+          <p className="text-xs text-red-800/80 dark:text-red-300/80 max-w-md mx-auto">
+            {diagnostics.providerErrors?.[0] || "Could not connect to external business directory service. Please try again shortly."}
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-brand-light rounded-3xl border border-brand-secondary p-12 text-center space-y-3">
         <div className="w-12 h-12 rounded-2xl bg-brand-secondary/40 flex items-center justify-center mx-auto text-brand-primary/50">
@@ -177,10 +258,30 @@ export default function ProspectResults({
           const isResolved = Boolean(prospect.isResolved);
           const isResolving = isResolvingKey === prospect.prospectKey;
 
-          // Contact details resolution
-          const email = prospect.decisionMaker?.email || prospect.email || "";
-          const phone = prospect.decisionMaker?.phone || prospect.phone || "";
-          const website = prospect.website || "";
+          // Distinct resolution of company coordinates vs personal direct coordinates
+          const compPhone = prospect.companyContact?.phone?.value || (!isPerson ? prospect.phone : "");
+          const compPhoneSource = prospect.companyContact?.phone?.sourceName || prospect.source || "Directory";
+          const compPhoneStatus = prospect.companyContact?.phone?.verificationStatus || (compPhone ? "sourced" : "not_found");
+          const compPhoneBadge = getVerificationBadge(compPhoneStatus);
+
+          const compEmail = prospect.companyContact?.email?.value || (!isPerson ? prospect.email : "");
+          const compEmailSource = prospect.companyContact?.email?.sourceName || prospect.source || "Directory";
+          const compEmailStatus = prospect.companyContact?.email?.verificationStatus || (compEmail ? "sourced" : "not_found");
+          const compEmailBadge = getVerificationBadge(compEmailStatus);
+
+          const personPhone = prospect.personContact?.phone?.value || (isPerson ? prospect.phone : "");
+          const personPhoneSource = prospect.personContact?.phone?.sourceName || (personPhone ? "Corporate Registry" : null);
+          const personPhoneStatus = prospect.personContact?.phone?.verificationStatus || (personPhone ? "verified" : "unavailable");
+          const personPhoneBadge = getVerificationBadge(personPhoneStatus);
+
+          const personEmail = prospect.personContact?.email?.value || (isPerson ? prospect.email : "");
+          const personEmailSource = prospect.personContact?.email?.sourceName || (personEmail ? "Corporate Registry" : null);
+          const personEmailStatus = prospect.personContact?.email?.verificationStatus || (personEmail ? "verified" : "unavailable");
+          const personEmailBadge = getVerificationBadge(personEmailStatus);
+
+          const personName = prospect.personContact?.name || prospect.decisionMaker?.name || prospect.personName || "";
+          const personTitle = prospect.personContact?.title || prospect.decisionMaker?.title || prospect.title || "";
+          const website = prospect.companyContact?.website || prospect.website || "";
 
           // Strict LinkedIn validation:
           // For company: ONLY show if real verified company page exists (contains /company/ or /school/).
@@ -335,182 +436,231 @@ export default function ProspectResults({
                     )}
 
                     {/* ── ACCURATE VERIFIED CONTACT CHANNELS (HIGHEST PRIORITY) ── */}
-                    <div className="p-3 rounded-2xl bg-brand-secondary/25 border border-brand-secondary/50 space-y-2 mt-2">
+                    <div className="p-3.5 rounded-2xl bg-brand-secondary/25 border border-brand-secondary/50 space-y-3 mt-2">
                       <div className="text-[10px] font-black uppercase tracking-wider text-brand-primary/50 flex items-center justify-between">
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1.5">
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                          Verified Direct Contact Details
+                          <span>Sourced Contact Channels</span>
                         </span>
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                          Live Active Records
+                        <span className="text-[10px] text-brand-primary/60 font-semibold">
+                          Provider: {prospect.source || "OpenStreetMap"}
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2.5 text-xs">
-                        {/* Phone */}
-                        {phone ? (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
-                            <Phone className="w-3.5 h-3.5 text-emerald-500" />
+                      {/* 1. Company Coordinates */}
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] font-bold text-brand-primary/60 uppercase tracking-wider">
+                          Company Coordinates
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {/* Company Phone */}
+                          {compPhone ? (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
+                              <Phone className="w-3.5 h-3.5 text-emerald-500" />
+                              <a href={`tel:${compPhone.replace(/\s+/g, "")}`} className="hover:underline">
+                                {compPhone}
+                              </a>
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-secondary/40 text-brand-primary/70">
+                                {compPhoneSource}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${compPhoneBadge.bg}`}>
+                                {compPhoneBadge.label}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(compPhone, `cphone-${prospect.prospectKey}`)}
+                                className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
+                                title="Copy company phone"
+                              >
+                                {copiedKey === `cphone-${prospect.prospectKey}` ? (
+                                  <Check className="w-3 h-3 text-emerald-500" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light/60 border border-brand-secondary/40 text-brand-primary/40 text-[11px] italic">
+                              <Phone className="w-3.5 h-3.5 text-brand-primary/30" />
+                              <span>Company Phone: Not found</span>
+                            </div>
+                          )}
+
+                          {/* Company Email */}
+                          {compEmail ? (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
+                              <Mail className="w-3.5 h-3.5 text-sky-500" />
+                              <a href={`mailto:${compEmail}`} className="hover:underline font-mono text-[11px]">
+                                {compEmail}
+                              </a>
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-secondary/40 text-brand-primary/70">
+                                {compEmailSource}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${compEmailBadge.bg}`}>
+                                {compEmailBadge.label}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(compEmail, `cemail-${prospect.prospectKey}`)}
+                                className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
+                                title="Copy company email"
+                              >
+                                {copiedKey === `cemail-${prospect.prospectKey}` ? (
+                                  <Check className="w-3 h-3 text-emerald-500" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light/60 border border-brand-secondary/40 text-brand-primary/40 text-[11px] italic">
+                              <Mail className="w-3.5 h-3.5 text-brand-primary/30" />
+                              <span>Company Email: Not found</span>
+                            </div>
+                          )}
+
+                          {/* Company LinkedIn */}
+                          {!isPerson && companyLinkedInUrl ? (
                             <a
-                              href={`tel:${phone.replace(/\s+/g, "")}`}
-                              className="hover:underline"
+                              href={companyLinkedInUrl.startsWith("http") ? companyLinkedInUrl : `https://${companyLinkedInUrl}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0077B5]/15 border border-[#0077B5]/35 text-[#0077B5] dark:text-[#3897d3] font-bold hover:bg-[#0077B5]/25 transition text-[11px]"
                             >
-                              {phone}
+                              <LinkedinIcon className="w-3 h-3" />
+                              <span>LinkedIn</span>
+                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
                             </a>
-                            {isPerson && (
-                              <span
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                                  prospect.phoneType === "direct"
-                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                                    : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                                }`}
-                              >
-                                {prospect.phoneType === "direct" ? "Direct Line" : "Company Office"}
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(phone, `phone-${prospect.prospectKey}`)}
-                              className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
-                              title="Copy phone"
-                            >
-                              {copiedKey === `phone-${prospect.prospectKey}` ? (
-                                <Check className="w-3 h-3 text-emerald-500" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
+                          ) : null}
+
+                          {/* Company Social Channels */}
+                          {!isPerson && (
+                            <div className="flex items-center gap-1.5 pl-1">
+                              {twitterUrl && (
+                                <a href={twitterUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-black dark:hover:text-white transition" title="Twitter / X">
+                                  <TwitterIcon className="w-3 h-3" />
+                                </a>
                               )}
-                            </button>
-                          </div>
-                        ) : null}
-
-                        {/* Email */}
-                        {email ? (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
-                            <Mail className="w-3.5 h-3.5 text-sky-500" />
-                            <a href={`mailto:${email}`} className="hover:underline">
-                              {email}
-                            </a>
-                            {isPerson && (
-                              <span
-                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                                  prospect.emailType === "direct"
-                                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                                    : "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                                }`}
-                              >
-                                {prospect.emailType === "direct" ? "Direct Email" : "Company Desk"}
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(email, `email-${prospect.prospectKey}`)}
-                              className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
-                              title="Copy email"
-                            >
-                              {copiedKey === `email-${prospect.prospectKey}` ? (
-                                <Check className="w-3 h-3 text-emerald-500" />
-                              ) : (
-                                <Copy className="w-3 h-3" />
+                              {facebookUrl && (
+                                <a href={facebookUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#1877F2] transition" title="Facebook">
+                                  <FacebookIcon className="w-3 h-3" />
+                                </a>
                               )}
-                            </button>
-                          </div>
-                        ) : null}
-
-                        {/* Company LinkedIn: ONLY RENDER IF AVAILABLE */}
-                        {!isPerson && companyLinkedInUrl ? (
-                          <a
-                            href={companyLinkedInUrl.startsWith("http") ? companyLinkedInUrl : `https://${companyLinkedInUrl}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#0077B5]/15 border border-[#0077B5]/35 text-[#0077B5] dark:text-[#3897d3] font-black hover:bg-[#0077B5]/25 transition"
-                            title="Open Official Company LinkedIn Page"
-                          >
-                            <LinkedinIcon className="w-3.5 h-3.5" />
-                            <span>Company LinkedIn</span>
-                            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                          </a>
-                        ) : null}
-
-                        {/* Person LinkedIn: ONLY RENDER IF AVAILABLE */}
-                        {isPerson && personLinkedInUrl ? (
-                          <a
-                            href={personLinkedInUrl.startsWith("http") ? personLinkedInUrl : `https://${personLinkedInUrl}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#0077B5]/15 border border-[#0077B5]/35 text-[#0077B5] dark:text-[#3897d3] font-black hover:bg-[#0077B5]/25 transition"
-                            title="Open Personal Executive LinkedIn Profile"
-                          >
-                            <LinkedinIcon className="w-3.5 h-3.5" />
-                            <span>His LinkedIn Profile</span>
-                            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
-                          </a>
-                        ) : null}
-
-                        {/* Company Social Media Links (Twitter, Facebook, Instagram, YouTube) */}
-                        {!isPerson && (
-                          <div className="flex items-center gap-1.5 pl-1">
-                            {twitterUrl && (
-                              <a
-                                href={twitterUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-black dark:hover:text-white transition"
-                                title="Twitter / X"
-                              >
-                                <TwitterIcon className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                            {facebookUrl && (
-                              <a
-                                href={facebookUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#1877F2] transition"
-                                title="Facebook"
-                              >
-                                <FacebookIcon className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                            {instagramUrl && (
-                              <a
-                                href={instagramUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#E4405F] transition"
-                                title="Instagram"
-                              >
-                                <InstagramIcon className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                            {youtubeUrl && (
-                              <a
-                                href={youtubeUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#CD201F] transition"
-                                title="YouTube"
-                              >
-                                <YoutubeIcon className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                          </div>
-                        )}
+                              {instagramUrl && (
+                                <a href={instagramUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#E4405F] transition" title="Instagram">
+                                  <InstagramIcon className="w-3 h-3" />
+                                </a>
+                              )}
+                              {youtubeUrl && (
+                                <a href={youtubeUrl} target="_blank" rel="noopener noreferrer" className="p-1 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#CD201F] transition" title="YouTube">
+                                  <YoutubeIcon className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Key Decision Maker snippet for Companies */}
-                      {!isPerson && prospect.decisionMaker?.name && (
-                        <div className="pt-1 text-xs text-brand-primary/70 flex items-center gap-2">
-                          <span className="font-bold text-brand-primary/50 text-[11px] uppercase">
-                            Primary Executive:
+                      {/* 2. Direct Executive Coordinates (Strictly Separated) */}
+                      <div className="pt-1.5 border-t border-brand-secondary/30 space-y-1.5">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-brand-primary/60 uppercase tracking-wider">
+                          <span>
+                            {isPerson ? "Executive Direct Contact" : personName ? `Primary Executive: ${personName} ${personTitle ? `(${personTitle})` : ""}` : "Direct Decision-Maker"}
                           </span>
-                          <span className="font-black text-brand-primary">
-                            {prospect.decisionMaker.name}
-                          </span>
-                          {prospect.decisionMaker.title && (
-                            <span className="text-brand-primary/60 font-medium">
-                              ({prospect.decisionMaker.title})
+                          {!personPhone && !personEmail && (
+                            <span className="text-[10px] font-medium text-brand-primary/50 normal-case">
+                              Direct coordinates require enrichment provider
                             </span>
                           )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {personPhone ? (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
+                              <Phone className="w-3.5 h-3.5 text-sky-500" />
+                              <a href={`tel:${personPhone.replace(/\s+/g, "")}`} className="hover:underline">
+                                {personPhone}
+                              </a>
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-secondary/40 text-brand-primary/70">
+                                {personPhoneSource}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${personPhoneBadge.bg}`}>
+                                {personPhoneBadge.label}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(personPhone, `pphone-${prospect.prospectKey}`)}
+                                className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
+                                title="Copy direct phone"
+                              >
+                                {copiedKey === `pphone-${prospect.prospectKey}` ? (
+                                  <Check className="w-3 h-3 text-emerald-500" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light/60 border border-brand-secondary/40 text-brand-primary/40 text-[11px] italic">
+                              <Phone className="w-3.5 h-3.5 text-brand-primary/30" />
+                              <span>Direct Phone: Unavailable</span>
+                            </div>
+                          )}
+
+                          {personEmail ? (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light border border-brand-secondary text-brand-primary font-bold">
+                              <Mail className="w-3.5 h-3.5 text-sky-500" />
+                              <a href={`mailto:${personEmail}`} className="hover:underline font-mono text-[11px]">
+                                {personEmail}
+                              </a>
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-brand-secondary/40 text-brand-primary/70">
+                                {personEmailSource}
+                              </span>
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${personEmailBadge.bg}`}>
+                                {personEmailBadge.label}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(personEmail, `pemail-${prospect.prospectKey}`)}
+                                className="ml-0.5 text-brand-primary/40 hover:text-brand-primary cursor-pointer"
+                                title="Copy direct email"
+                              >
+                                {copiedKey === `pemail-${prospect.prospectKey}` ? (
+                                  <Check className="w-3 h-3 text-emerald-500" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-brand-light/60 border border-brand-secondary/40 text-brand-primary/40 text-[11px] italic">
+                              <Mail className="w-3.5 h-3.5 text-brand-primary/30" />
+                              <span>Direct Email: Unavailable</span>
+                            </div>
+                          )}
+
+                          {personLinkedInUrl ? (
+                            <a
+                              href={personLinkedInUrl.startsWith("http") ? personLinkedInUrl : `https://${personLinkedInUrl}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0077B5]/15 border border-[#0077B5]/35 text-[#0077B5] dark:text-[#3897d3] font-bold hover:bg-[#0077B5]/25 transition text-[11px]"
+                            >
+                              <LinkedinIcon className="w-3 h-3" />
+                              <span>Executive Profile</span>
+                              <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {/* Explanation Note for missing/unavailable coordinates */}
+                      {(prospect.contactAvailability?.personContactReason || prospect.contactAvailability?.companyContactReason) && (
+                        <div className="flex items-center gap-1.5 pt-0.5 text-[10px] text-brand-primary/50">
+                          <Info className="w-3 h-3 shrink-0 text-brand-primary/40" />
+                          <span className="truncate">
+                            {prospect.contactAvailability?.personContactReason || prospect.contactAvailability?.companyContactReason}
+                          </span>
                         </div>
                       )}
                     </div>

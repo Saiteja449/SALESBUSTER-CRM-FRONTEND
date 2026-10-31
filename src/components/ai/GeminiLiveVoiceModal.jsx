@@ -7,11 +7,14 @@ import {
   Bot,
   Database,
   Square,
+  Play,
+  Pause,
   AlertCircle,
   Zap,
   Activity,
   Lightbulb,
   ChevronDown,
+  CheckCircle2,
 } from "lucide-react";
 
 const SUGGESTED_QUERIES = [
@@ -24,13 +27,12 @@ const SUGGESTED_QUERIES = [
 
 /**
  * Premium White-Themed Gemini Live Voice Modal with Dynamic Audio Waveform
- * Replaces the orb with responsive vertical sound wave bars (pill caps).
- * Accurately surfaces connecting, listening, processing, tool querying, speaking, and reconnecting states.
+ * Includes Stop & Start listening controls and Spoken 'Okay Bye' auto-termination.
  */
 export default function GeminiLiveVoiceModal({
   isOpen,
   onClose,
-  status = "idle", // 'idle' | 'connecting' | 'listening' | 'processing' | 'tool_running' | 'speaking' | 'reconnecting' | 'error'
+  status = "idle", // 'idle' | 'connecting' | 'listening' | 'processing' | 'tool_running' | 'speaking' | 'paused' | 'closing' | 'reconnecting' | 'error'
   activeToolName = null,
   toolDetails = null,
   inputVolume = 0,
@@ -41,6 +43,9 @@ export default function GeminiLiveVoiceModal({
   onVoiceChange,
   isMuted = false,
   onToggleMute,
+  isPaused = false,
+  onTogglePause,
+  isClosing = false,
   onInterrupt,
 }) {
   const canvasRef = useRef(null);
@@ -54,6 +59,9 @@ export default function GeminiLiveVoiceModal({
     }, 4500);
     return () => clearInterval(interval);
   }, [isOpen]);
+
+  const isPausedSession = isPaused || status === "paused";
+  const isClosingSession = isClosing || status === "closing";
 
   // Dynamic Vertical Audio Waveform Canvas
   useEffect(() => {
@@ -89,14 +97,18 @@ export default function GeminiLiveVoiceModal({
       ctx.clearRect(0, 0, width, height);
 
       const isSpeaking = status === "speaking";
-      const isListening = status === "listening" && !isMuted;
+      const isListening = status === "listening" && !isMuted && !isPausedSession;
       const isTool = status === "tool_running";
       const isProcessing = status === "processing";
       const vol = isSpeaking ? outputVolume : isListening ? inputVolume : 0.04;
 
       // Color scheme for vertical bars
       let barColor = "#0f172a"; // Slate/black for listening
-      if (isSpeaking) {
+      if (isClosingSession) {
+        barColor = "#059669"; // Emerald when closing on goodbye
+      } else if (isPausedSession) {
+        barColor = "#94a3b8"; // Muted slate gray when stopped/paused
+      } else if (isSpeaking) {
         barColor = "#4338ca"; // Indigo when Gemini speaks
       } else if (isTool) {
         barColor = "#d97706"; // Amber when executing CRM tools
@@ -117,7 +129,10 @@ export default function GeminiLiveVoiceModal({
         const baseH = envelope[i] * 128;
 
         let currentH;
-        if (vol > 0.08) {
+        if (isPausedSession) {
+          // Flatline calm baseline when paused/stopped
+          currentH = 10;
+        } else if (vol > 0.08) {
           currentH = Math.max(8, baseH * (0.45 + vol * 1.8 * (1 + wave * 0.4)));
         } else if (isProcessing) {
           // Dynamic traveling ripple for processing state
@@ -144,7 +159,7 @@ export default function GeminiLiveVoiceModal({
 
     render();
     return () => cancelAnimationFrame(animId);
-  }, [isOpen, status, inputVolume, outputVolume, isMuted]);
+  }, [isOpen, status, inputVolume, outputVolume, isMuted, isPausedSession, isClosingSession]);
 
   if (!isOpen) return null;
 
@@ -158,7 +173,13 @@ export default function GeminiLiveVoiceModal({
   let statusHeading = "Listening...";
   let statusSubtext = "Speak naturally, I'm listening to your question.";
 
-  if (isConnecting) {
+  if (isClosingSession) {
+    statusHeading = "Farewell...";
+    statusSubtext = "Closing voice session. Returning to chat...";
+  } else if (isPausedSession) {
+    statusHeading = "Stopped / Paused";
+    statusSubtext = "Voice listening stopped. Tap Start to resume conversation.";
+  } else if (isConnecting) {
     statusHeading = "Connecting...";
     statusSubtext = "Negotiating secure session with Gemini Live API...";
   } else if (isReconnecting) {
@@ -174,6 +195,16 @@ export default function GeminiLiveVoiceModal({
     statusHeading = "Speaking...";
     statusSubtext = "BI Analyst is delivering your CRM insights in real-time.";
   }
+
+  // Handle Stop/Start button click
+  const handleMainActionClick = () => {
+    if (isSpeaking && onInterrupt) {
+      onInterrupt();
+    }
+    if (onTogglePause) {
+      onTogglePause();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-hidden">
@@ -209,7 +240,7 @@ export default function GeminiLiveVoiceModal({
               </div>
               <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 font-medium">
                 <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                <span>Low Latency • Live CRM Grounded</span>
+                <span>Low Latency • Say "Okay bye" to close</span>
               </p>
             </div>
           </div>
@@ -263,42 +294,54 @@ export default function GeminiLiveVoiceModal({
               />
             </div>
 
-            {/* Accurate Status Badge Pill (Never shows "Listening" while processing or querying) */}
+            {/* Accurate Status Badge Pill */}
             <div className="mt-3">
-              {isConnecting && (
+              {isClosingSession && (
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 shadow-xs animate-pulse">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Farewell detected • Closing voice session...</span>
+                </div>
+              )}
+              {!isClosingSession && isPausedSession && (
+                <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-700 shadow-xs">
+                  <Pause className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Stopped • Tap Start to resume listening</span>
+                </div>
+              )}
+              {!isClosingSession && !isPausedSession && isConnecting && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-purple-50 border border-purple-200 text-purple-700 shadow-xs">
                   <Activity className="w-3.5 h-3.5 animate-spin text-purple-600" />
                   <span>Connecting Live Session...</span>
                 </div>
               )}
-              {isReconnecting && (
+              {!isClosingSession && !isPausedSession && isReconnecting && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-700 shadow-xs">
                   <Activity className="w-3.5 h-3.5 animate-spin text-amber-600" />
                   <span>Reconnecting live voice session...</span>
                 </div>
               )}
-              {isProcessing && (
+              {!isClosingSession && !isPausedSession && isProcessing && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-blue-50 border border-blue-200 text-blue-700 shadow-xs animate-pulse">
                   <Sparkles className="w-3.5 h-3.5 animate-spin text-blue-600" />
                   <span>Thinking... Processing Question</span>
                 </div>
               )}
-              {isTool && (
+              {!isClosingSession && !isPausedSession && isTool && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-700 shadow-xs animate-pulse">
                   <Database className="w-3.5 h-3.5 animate-spin text-amber-600" />
                   <span>{toolDetails?.friendlyLabel || "Querying Live CRM Database..."}</span>
                 </div>
               )}
-              {isSpeaking && (
+              {!isClosingSession && !isPausedSession && isSpeaking && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 border border-indigo-200 text-indigo-700 shadow-xs">
                   <Activity className="w-3.5 h-3.5 animate-pulse text-indigo-600" />
                   <span>BI Analyst Speaking ({voiceName})</span>
                 </div>
               )}
-              {!isConnecting && !isReconnecting && !isProcessing && !isTool && !isSpeaking && (
+              {!isClosingSession && !isPausedSession && !isConnecting && !isReconnecting && !isProcessing && !isTool && !isSpeaking && (
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 border border-emerald-200 text-emerald-700 shadow-xs">
                   <Activity className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Listening • Speak your question anytime</span>
+                  <span>Listening • Speak anytime or say "Okay bye"</span>
                 </div>
               )}
             </div>
@@ -312,30 +355,30 @@ export default function GeminiLiveVoiceModal({
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-xs font-bold text-slate-800">Live AI</div>
-                <div className="text-[10px] text-slate-500 font-medium">Real-time response</div>
+                <div className="text-xs font-bold text-slate-800">Voice Control</div>
+                <div className="text-[10px] text-slate-500 font-medium">Say "Okay bye" to stop</div>
               </div>
             </div>
 
-            {/* Feature 2: CRM Grounded */}
+            {/* Feature 2: Stop & Start */}
             <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
               <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                <Pause className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-800">Stop &amp; Start</div>
+                <div className="text-[10px] text-slate-500 font-medium">Pause &amp; resume anytime</div>
+              </div>
+            </div>
+
+            {/* Feature 3: CRM Grounded */}
+            <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
                 <Database className="w-4 h-4" />
               </div>
               <div>
                 <div className="text-xs font-bold text-slate-800">CRM Grounded</div>
-                <div className="text-[10px] text-slate-500 font-medium">Accurate & relevant</div>
-              </div>
-            </div>
-
-            {/* Feature 3: Low Latency */}
-            <div className="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                <Zap className="w-4 h-4 fill-amber-500" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-slate-800">Low Latency</div>
-                <div className="text-[10px] text-slate-500 font-medium">Fast answers</div>
+                <div className="text-[10px] text-slate-500 font-medium">Live pipeline figures</div>
               </div>
             </div>
           </div>
@@ -370,45 +413,66 @@ export default function GeminiLiveVoiceModal({
         <div className="w-full h-[1px] bg-slate-200/80 my-2" />
 
         {/* =========================================================================
-            BOTTOM 3 CIRCULAR CONTROLS: Mic | Large Stop/Interrupt | Red End Call
+            BOTTOM 3 CIRCULAR CONTROLS: Mic | Central Stop/Start | Red End Call
             ========================================================================= */}
-        <div className="w-full flex items-center justify-center gap-5 pt-3">
+        <div className="w-full flex items-center justify-center gap-6 pt-3">
           {/* 1. Mic Button (Left) */}
-          <button
-            type="button"
-            onClick={onToggleMute}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer shadow-sm active:scale-95 ${
-              isMuted
-                ? "bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100"
-                : "bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700"
-            }`}
-            title={isMuted ? "Unmute Microphone" : "Mute Microphone"}
-            aria-label="Toggle Mute"
-          >
-            {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
+          <div className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              onClick={onToggleMute}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 cursor-pointer shadow-sm active:scale-95 ${
+                isMuted
+                  ? "bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100"
+                  : "bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700"
+              }`}
+              title={isMuted ? "Unmute Microphone" : "Mute Microphone"}
+              aria-label="Toggle Mute"
+            >
+              {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+            <span className="text-[10px] font-semibold text-slate-500">
+              {isMuted ? "Unmute" : "Mute"}
+            </span>
+          </div>
 
-          {/* 2. Active Central Stop / Interrupt Button (Primary Blue Glow) */}
-          <button
-            type="button"
-            onClick={onInterrupt}
-            className="relative w-14 h-14 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 flex items-center justify-center text-white ring-4 ring-indigo-500/25 ring-offset-4 ring-offset-white transition-all duration-150 cursor-pointer shadow-lg shadow-indigo-500/30 active:scale-95"
-            title="Interrupt AI Speech"
-            aria-label="Interrupt AI"
-          >
-            <Square className="w-5 h-5 fill-white text-white" />
-          </button>
+          {/* 2. Central Stop & Start Action Button */}
+          <div className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              onClick={handleMainActionClick}
+              className={`relative w-14 h-14 rounded-full flex items-center justify-center text-white ring-4 ring-offset-4 ring-offset-white transition-all duration-150 cursor-pointer shadow-lg active:scale-95 ${
+                isPausedSession
+                  ? "bg-gradient-to-tr from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 ring-emerald-500/25 shadow-emerald-500/30 animate-pulse"
+                  : "bg-gradient-to-tr from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 ring-rose-500/25 shadow-rose-500/30"
+              }`}
+              title={isPausedSession ? "Start listening (Resume)" : "Stop listening (Pause)"}
+              aria-label={isPausedSession ? "Start listening" : "Stop listening"}
+            >
+              {isPausedSession ? (
+                <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+              ) : (
+                <Square className="w-5 h-5 fill-white text-white" />
+              )}
+            </button>
+            <span className="text-[10px] font-bold text-slate-700">
+              {isPausedSession ? "Start" : "Stop"}
+            </span>
+          </div>
 
           {/* 3. Red End Call Button (Right Coral Red) */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-700 flex items-center justify-center text-white transition-all duration-150 cursor-pointer shadow-lg shadow-rose-600/30 active:scale-95"
-            title="End Live Voice Chat"
-            aria-label="End Call"
-          >
-            <PhoneOff className="w-5 h-5" />
-          </button>
+          <div className="flex flex-col items-center gap-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-12 h-12 rounded-full bg-rose-600 hover:bg-rose-700 flex items-center justify-center text-white transition-all duration-150 cursor-pointer shadow-lg shadow-rose-600/30 active:scale-95"
+              title="End Live Voice Chat"
+              aria-label="End Call"
+            >
+              <PhoneOff className="w-5 h-5" />
+            </button>
+            <span className="text-[10px] font-semibold text-slate-500">End</span>
+          </div>
         </div>
       </div>
     </div>

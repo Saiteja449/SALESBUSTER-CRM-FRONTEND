@@ -221,6 +221,7 @@ export default function TargetIntelligence() {
             hasSearched={hasSearched}
             searchType={searchType}
             resolutionFilter={resolutionFilter}
+            diagnostics={searchSummary?.diagnostics}
             onInspectProspect={(p) => setInspectingProspect(p)}
             onToggleResolve={handleToggleResolve}
             isResolvingKey={isResolvingKey}

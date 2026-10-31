@@ -26,6 +26,9 @@ export default function AddToCrmDialog({
   if (!isOpen) return null;
 
   const duplicateCount = selectedProspects.filter((p) => p.isDuplicate).length;
+  const missingPhoneCount = selectedProspects.filter(
+    (p) => !(p.personContact?.phone?.value || p.companyContact?.phone?.value || p.directPhone || p.phone || p.companyPhone)
+  ).length;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -70,11 +73,16 @@ export default function AddToCrmDialog({
           {/* Summary Banner */}
           <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between text-xs">
             <span className="font-bold text-emerald-700 dark:text-emerald-300">
-              {selectedProspects.length} Prospect{selectedProspects.length === 1 ? "" : "s"} ready to import
+              {selectedProspects.length} Prospect{selectedProspects.length === 1 ? "" : "s"} ready to review
             </span>
             {duplicateCount > 0 && (
               <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
                 {duplicateCount} CRM match detected
+              </span>
+            )}
+            {missingPhoneCount > 0 && (
+              <span className="text-[11px] font-bold text-neutral-600 dark:text-neutral-400 bg-neutral-500/10 px-2 py-0.5 rounded-md" title="SalesBuster CRM requires a phone coordinate for lead creation">
+                {missingPhoneCount} missing phone
               </span>
             )}
           </div>

@@ -187,11 +187,17 @@ export default function BIAnalyst() {
     }, inputValue);
   };
 
+  const handleAutoCloseVoice = () => {
+    setIsLiveVoiceModalOpen(false);
+  };
+
   // Gemini Multimodal Live API Voice Hook
   const {
     isConnected: isLiveConnected,
     isRecording: isLiveRecording,
     isPlaying: isLivePlaying,
+    isPaused: isLivePaused,
+    isClosing: isLiveClosing,
     status: liveStatus,
     activeToolName: liveActiveToolName,
     toolDetails: liveToolDetails,
@@ -205,9 +211,12 @@ export default function BIAnalyst() {
     setVoiceName,
     startLiveVoice,
     stopLiveVoice,
+    pauseLiveVoice,
+    resumeLiveVoice,
+    togglePause: toggleLivePause,
     toggleMute: toggleLiveMute,
     interrupt: interruptLive,
-  } = useGeminiLiveVoice();
+  } = useGeminiLiveVoice({ onAutoClose: handleAutoCloseVoice });
 
   // Sync finished spoken turns into chat message history
   useEffect(() => {
@@ -1191,6 +1200,9 @@ export default function BIAnalyst() {
         onVoiceChange={setVoiceName}
         isMuted={isLiveMuted}
         onToggleMute={toggleLiveMute}
+        isPaused={isLivePaused}
+        onTogglePause={toggleLivePause}
+        isClosing={isLiveClosing}
         onInterrupt={interruptLive}
       />
     </div>

@@ -2,16 +2,23 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { socket } from "../utils/socket.js";
 import { LiveAudioRecorder, LiveAudioPlayer } from "../utils/audioStreamer.js";
 
+const EXIT_PHRASES_REGEX =
+  /\b(okay\s*bye|ok\s*bye|good\s*bye|bye\s*bye|\bbye\b|exit\s+(?:voice|session)|close\s+(?:voice|session)|stop\s+(?:voice|session))\b/i;
+
 /**
  * Custom React Hook for Gemini Multimodal Live API Real-Time Voice Chat
  * Coordinates bidirectional audio streaming over Socket.IO and live state management
- * with explicit session readiness handshake, AudioWorklet capture, and correlated timing.
+ * with explicit session readiness handshake, AudioWorklet capture, correlated timing,
+ * Stop/Start controls, and automatic 'okay bye' termination.
  */
-export function useGeminiLiveVoice() {
+export function useGeminiLiveVoice({ onAutoClose } = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  // Accurate UI states: 'idle' | 'connecting' | 'listening' | 'processing' | 'tool_running' | 'speaking' | 'reconnecting' | 'error'
+  const [isPaused, setIsPaused] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Accurate UI states: 'idle' | 'connecting' | 'listening' | 'processing' | 'tool_running' | 'speaking' | 'paused' | 'closing' | 'reconnecting' | 'error'
   const [status, setStatus] = useState("idle");
   const [activeToolName, setActiveToolName] = useState(null);
   const [toolDetails, setToolDetails] = useState(null);
@@ -28,6 +35,14 @@ export function useGeminiLiveVoice() {
   const currentAssistantTurnRef = useRef("");
   const sessionReadyPromiseRef = useRef(null);
   const startupTimeoutRef = useRef(null);
+  const closeTimeoutRef = useRef(null);
+  const isPausedRef = useRef(false);
+  const isClosingRef = useRef(false);
+  const onAutoCloseRef = useRef(onAutoClose);
+
+  useEffect(() => {
+    onAutoCloseRef.current = onAutoClose;
+  }, [onAutoClose]);
 
   // Timing Instrumentation (Local session metrics)
   const timingRef = useRef({
@@ -37,6 +52,56 @@ export function useGeminiLiveVoice() {
     firstAudioReceivedMs: null,
     firstAudioPlayedMs: null,
   });
+
+  // Stop session helper with cleanup
+  const stopLiveVoice = useCallback(() => {
+    if (startupTimeoutRef.current) {
+      clearTimeout(startupTimeoutRef.current);
+      startupTimeoutRef.current = null;
+    }
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    if (sessionReadyPromiseRef.current) {
+      sessionReadyPromiseRef.current.reject(new Error("Voice session stopped by user"));
+      sessionReadyPromiseRef.current = null;
+    }
+
+    if (recorderRef.current) {
+      recorderRef.current.stop();
+      recorderRef.current = null;
+    }
+    if (playerRef.current) {
+      playerRef.current.flush();
+    }
+    socket.emit("bi_voice_stop");
+    setIsRecording(false);
+    setIsConnected(false);
+    setIsPlaying(false);
+    setIsPaused(false);
+    isPausedRef.current = false;
+    setIsClosing(false);
+    isClosingRef.current = false;
+    setStatus("idle");
+    setInputVolume(0);
+    setOutputVolume(0);
+    setActiveToolName(null);
+    setToolDetails(null);
+  }, []);
+
+  // Internal routine to cleanly execute auto-close callback
+  const triggerAutoClose = useCallback(() => {
+    console.log("[Live Voice Hook] Triggering graceful auto-close after farewell");
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    stopLiveVoice();
+    if (onAutoCloseRef.current) {
+      onAutoCloseRef.current();
+    }
+  }, [stopLiveVoice]);
 
   // Initialize player once
   useEffect(() => {
@@ -54,14 +119,18 @@ export function useGeminiLiveVoice() {
       onPlaybackEnded: () => {
         setIsPlaying(false);
         setOutputVolume(0);
-        setStatus((prev) => (prev === "speaking" ? "listening" : prev));
+        if (isClosingRef.current) {
+          triggerAutoClose();
+        } else if (!isPausedRef.current) {
+          setStatus((prev) => (prev === "speaking" ? "listening" : prev));
+        }
       },
     });
 
     return () => {
       playerRef.current?.stop();
     };
-  }, []);
+  }, [triggerAutoClose]);
 
   // Socket event subscriptions
   useEffect(() => {
@@ -94,31 +163,47 @@ export function useGeminiLiveVoice() {
       } else if (data.state === "closed") {
         setIsConnected(false);
         setStatus("idle");
+        if (isClosingRef.current) {
+          triggerAutoClose();
+        }
+      } else if (data.state === "paused") {
+        setIsPaused(true);
+        isPausedRef.current = true;
+        setStatus("paused");
       } else if (data.state === "processing") {
-        // User speech was received, Gemini is processing turn
-        setStatus("processing");
+        if (!isPausedRef.current && !isClosingRef.current) {
+          setStatus("processing");
+        }
       } else if (data.state === "tool_running") {
-        setStatus("tool_running");
-        setActiveToolName(data.toolName);
-        setToolDetails({
-          toolName: data.toolName,
-          friendlyLabel: data.friendlyLabel,
-          count: data.count || 1,
-          concurrent: Boolean(data.concurrent),
-        });
+        if (!isPausedRef.current && !isClosingRef.current) {
+          setStatus("tool_running");
+          setActiveToolName(data.toolName);
+          setToolDetails({
+            toolName: data.toolName,
+            friendlyLabel: data.friendlyLabel,
+            count: data.count || 1,
+            concurrent: Boolean(data.concurrent),
+          });
+        }
       } else if (data.state === "tool_complete") {
         setActiveToolName(null);
         setToolDetails(null);
-        // Do NOT transition back to listening if model will speak next
-        setStatus("processing");
+        if (!isPausedRef.current && !isClosingRef.current) {
+          setStatus("processing");
+        }
       } else if (data.state === "speaking") {
-        setStatus("speaking");
+        if (!isPausedRef.current) {
+          setStatus("speaking");
+        }
       } else if (data.state === "listening") {
-        setStatus("listening");
+        if (!isPausedRef.current && !isClosingRef.current) {
+          setStatus("listening");
+        }
       }
     };
 
     const handleAudioOut = (data) => {
+      if (isPausedRef.current) return;
       if (!timingRef.current.firstAudioReceivedMs) {
         timingRef.current.firstAudioReceivedMs = Date.now();
         console.log("[Voice Telemetry] First audio chunk received from backend");
@@ -133,6 +218,19 @@ export function useGeminiLiveVoice() {
       if (data?.text) {
         if (data.role === "user") {
           setLiveTranscript(`You: ${data.text}`);
+
+          // Client-side detection of user farewell / exit intent
+          if (EXIT_PHRASES_REGEX.test(data.text) && !isClosingRef.current) {
+            console.log(`[Live Voice Hook] Goodbye detected in user transcript: "${data.text}"`);
+            setIsClosing(true);
+            isClosingRef.current = true;
+            setStatus("closing");
+
+            if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+            closeTimeoutRef.current = setTimeout(() => {
+              triggerAutoClose();
+            }, 3200);
+          }
         } else {
           currentAssistantTurnRef.current += data.text;
           setLiveTranscript(currentAssistantTurnRef.current);
@@ -147,7 +245,9 @@ export function useGeminiLiveVoice() {
       }
       setIsPlaying(false);
       setOutputVolume(0);
-      setStatus("listening");
+      if (!isPausedRef.current && !isClosingRef.current) {
+        setStatus("listening");
+      }
       timingRef.current.firstAudioReceivedMs = null;
       timingRef.current.firstAudioPlayedMs = null;
     };
@@ -168,11 +268,34 @@ export function useGeminiLiveVoice() {
       timingRef.current.firstAudioReceivedMs = null;
       timingRef.current.firstAudioPlayedMs = null;
 
+      if (isClosingRef.current) {
+        console.log("[Live Voice Hook] Assistant finished farewell turn -> closing modal shortly");
+        setTimeout(() => {
+          triggerAutoClose();
+        }, 500);
+        return;
+      }
+
       setTimeout(() => {
         setIsPlaying(false);
         setOutputVolume(0);
-        setStatus("listening");
+        if (!isPausedRef.current) {
+          setStatus("listening");
+        }
       }, 400);
+    };
+
+    const handleCloseRequested = (data) => {
+      console.log("[Live Voice Hook] bi_voice_close_requested received:", data);
+      setIsClosing(true);
+      isClosingRef.current = true;
+      setStatus("closing");
+
+      // Give the assistant up to 3.5s to finish speaking its parting farewell
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = setTimeout(() => {
+        triggerAutoClose();
+      }, 3500);
     };
 
     const handleError = (data) => {
@@ -211,6 +334,7 @@ export function useGeminiLiveVoice() {
     socket.on("bi_voice_transcript", handleTranscript);
     socket.on("bi_voice_interrupted", handleInterrupted);
     socket.on("bi_voice_turn_complete", handleTurnComplete);
+    socket.on("bi_voice_close_requested", handleCloseRequested);
     socket.on("bi_voice_error", handleError);
     socket.on("disconnect", handleDisconnect);
     socket.on("connect", handleConnect);
@@ -222,11 +346,12 @@ export function useGeminiLiveVoice() {
       socket.off("bi_voice_transcript", handleTranscript);
       socket.off("bi_voice_interrupted", handleInterrupted);
       socket.off("bi_voice_turn_complete", handleTurnComplete);
+      socket.off("bi_voice_close_requested", handleCloseRequested);
       socket.off("bi_voice_error", handleError);
       socket.off("disconnect", handleDisconnect);
       socket.off("connect", handleConnect);
     };
-  }, [status]);
+  }, [status, triggerAutoClose]);
 
   /**
    * Start Live Voice Session with explicit session readiness handshake.
@@ -238,6 +363,10 @@ export function useGeminiLiveVoice() {
       setStatus("connecting");
       setLiveTranscript("");
       currentAssistantTurnRef.current = "";
+      setIsPaused(false);
+      isPausedRef.current = false;
+      setIsClosing(false);
+      isClosingRef.current = false;
       timingRef.current.sessionStartMs = Date.now();
 
       try {
@@ -274,7 +403,7 @@ export function useGeminiLiveVoice() {
         // Initialize Audio Recorder (Uses AudioWorklet if supported, otherwise ScriptProcessor)
         recorderRef.current = new LiveAudioRecorder({
           onAudioChunk: (base64Chunk) => {
-            if (!isMuted && socket.connected) {
+            if (!isMuted && !isPausedRef.current && socket.connected) {
               if (!timingRef.current.turnStartMs) {
                 timingRef.current.turnStartMs = Date.now();
               }
@@ -282,7 +411,11 @@ export function useGeminiLiveVoice() {
             }
           },
           onVolumeChange: (vol) => {
-            setInputVolume(vol);
+            if (!isPausedRef.current) {
+              setInputVolume(vol);
+            } else {
+              setInputVolume(0);
+            }
           },
         });
 
@@ -301,39 +434,48 @@ export function useGeminiLiveVoice() {
         stopLiveVoice();
       }
     },
-    [voiceName, isMuted]
+    [voiceName, isMuted, stopLiveVoice]
   );
 
   /**
-   * Stop Live Voice Session
+   * Pause Live Voice listening & audio playback
    */
-  const stopLiveVoice = useCallback(() => {
-    if (startupTimeoutRef.current) {
-      clearTimeout(startupTimeoutRef.current);
-      startupTimeoutRef.current = null;
-    }
-    if (sessionReadyPromiseRef.current) {
-      sessionReadyPromiseRef.current.reject(new Error("Voice session stopped by user"));
-      sessionReadyPromiseRef.current = null;
-    }
-
-    if (recorderRef.current) {
-      recorderRef.current.stop();
-      recorderRef.current = null;
-    }
+  const pauseLiveVoice = useCallback(() => {
+    setIsPaused(true);
+    isPausedRef.current = true;
     if (playerRef.current) {
       playerRef.current.flush();
     }
-    socket.emit("bi_voice_stop");
-    setIsRecording(false);
-    setIsConnected(false);
     setIsPlaying(false);
-    setStatus("idle");
-    setInputVolume(0);
     setOutputVolume(0);
-    setActiveToolName(null);
-    setToolDetails(null);
+    setInputVolume(0);
+    setStatus("paused");
+    socket.emit("bi_voice_pause");
   }, []);
+
+  /**
+   * Resume Live Voice listening
+   */
+  const resumeLiveVoice = useCallback(async () => {
+    if (!isConnected) {
+      return startLiveVoice();
+    }
+    setIsPaused(false);
+    isPausedRef.current = false;
+    setStatus("listening");
+    socket.emit("bi_voice_resume");
+  }, [isConnected, startLiveVoice]);
+
+  /**
+   * Toggle between Pause and Resume
+   */
+  const togglePause = useCallback(() => {
+    if (isPaused) {
+      resumeLiveVoice();
+    } else {
+      pauseLiveVoice();
+    }
+  }, [isPaused, resumeLiveVoice, pauseLiveVoice]);
 
   /**
    * Toggle Mute Microphone
@@ -351,13 +493,17 @@ export function useGeminiLiveVoice() {
     }
     setIsPlaying(false);
     setOutputVolume(0);
-    setStatus("listening");
+    if (!isPausedRef.current) {
+      setStatus("listening");
+    }
   }, []);
 
   return {
     isConnected,
     isRecording,
     isPlaying,
+    isPaused,
+    isClosing,
     status,
     activeToolName,
     toolDetails,
@@ -371,6 +517,9 @@ export function useGeminiLiveVoice() {
     setVoiceName,
     startLiveVoice,
     stopLiveVoice,
+    pauseLiveVoice,
+    resumeLiveVoice,
+    togglePause,
     toggleMute,
     interrupt,
   };
