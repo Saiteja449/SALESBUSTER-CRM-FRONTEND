@@ -14,7 +14,6 @@ import {
   Phone,
   Check,
   RotateCcw,
-  UserCheck,
   Copy,
 } from "lucide-react";
 
@@ -26,9 +25,44 @@ function LinkedinIcon(props) {
   );
 }
 
+function TwitterIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function FacebookIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H7v-3h3V9.5C10 6.57 11.76 5 14.39 5c1.26 0 2.39.09 2.71.13v3.14h-1.86c-1.42 0-1.7.68-1.7 1.67V12h3.48l-.45 3h-3.03v6.8c4.56-.93 8-4.96 8-9.8z" />
+    </svg>
+  );
+}
+
+function InstagramIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
+function YoutubeIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
 export default function ProspectResults({
   prospects = [],
   hasSearched = false,
+  searchType = "all", // 'all' | 'companies' | 'people'
   onInspectProspect,
   onToggleResolve,
   isResolvingKey = null,
@@ -62,8 +96,13 @@ export default function ProspectResults({
     };
   };
 
-  // Filter prospects based on active resolution filter
+  // Filter prospects based on category scope (searchType) AND resolution filter
   const filteredProspects = prospects.filter((p) => {
+    // 1. Category Scope Filter
+    if (searchType === "companies" && p.entityType === "person") return false;
+    if (searchType === "people" && p.entityType !== "person") return false;
+
+    // 2. Resolution Status Filter
     if (resolutionFilter === "resolved") return Boolean(p.isResolved);
     if (resolutionFilter === "unresolved") return !p.isResolved;
     return true;
@@ -82,7 +121,7 @@ export default function ProspectResults({
             Ready to Search Live B2B Target Data
           </h3>
           <p className="text-xs text-brand-primary/60 max-w-md mx-auto">
-            Select Companies or People, choose a city or company size, and enter your target market query above.
+            Choose Companies or People, select location or company size, and enter your target market query.
           </p>
         </div>
       );
@@ -110,6 +149,11 @@ export default function ProspectResults({
         <div className="flex items-center gap-2">
           <span className="font-extrabold text-brand-primary">
             Showing {filteredProspects.length} of {prospects.length} Targets
+            {searchType === "companies"
+              ? " (Companies Only)"
+              : searchType === "people"
+              ? " (People Only)"
+              : ""}
           </span>
           {resolvedCount > 0 && (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
@@ -136,8 +180,40 @@ export default function ProspectResults({
           // Contact details resolution
           const email = prospect.decisionMaker?.email || prospect.email || "";
           const phone = prospect.decisionMaker?.phone || prospect.phone || "";
-          const linkedin = prospect.decisionMaker?.linkedin || prospect.linkedin || "";
           const website = prospect.website || "";
+
+          // Strict LinkedIn validation:
+          // For company: ONLY show if real verified company page exists (contains /company/ or /school/).
+          // If NOT available, DO NOT SHOW IT AT ALL!
+          const hasCompanyLinkedIn =
+            !isPerson &&
+            Boolean(
+              prospect.linkedin &&
+                typeof prospect.linkedin === "string" &&
+                prospect.linkedin.trim().length > 10 &&
+                /linkedin\.com\/(company|school)\/[a-zA-Z0-9_\-.]+/i.test(prospect.linkedin.trim())
+            );
+          const companyLinkedInUrl = hasCompanyLinkedIn ? prospect.linkedin.trim() : null;
+
+          // For person: ONLY show if verified personal LinkedIn profile exists (/in/).
+          const hasPersonLinkedIn =
+            isPerson &&
+            Boolean(
+              (prospect.decisionMaker?.linkedin || prospect.linkedin) &&
+                /linkedin\.com\/in\/[a-zA-Z0-9_\-.]+/i.test(
+                  (prospect.decisionMaker?.linkedin || prospect.linkedin).trim()
+                )
+            );
+          const personLinkedInUrl = hasPersonLinkedIn
+            ? (prospect.decisionMaker?.linkedin || prospect.linkedin).trim()
+            : null;
+
+          // Social media channels
+          const socialLinks = prospect.socialLinks || {};
+          const twitterUrl = socialLinks.twitter || null;
+          const facebookUrl = socialLinks.facebook || null;
+          const instagramUrl = socialLinks.instagram || null;
+          const youtubeUrl = socialLinks.youtube || null;
 
           return (
             <div
@@ -294,11 +370,7 @@ export default function ProspectResults({
                               )}
                             </button>
                           </div>
-                        ) : (
-                          <span className="text-xs text-brand-primary/40 italic">
-                            Corporate phone in directory lookup
-                          </span>
-                        )}
+                        ) : null}
 
                         {/* Email */}
                         {email ? (
@@ -322,19 +394,85 @@ export default function ProspectResults({
                           </div>
                         ) : null}
 
-                        {/* LinkedIn Profile */}
-                        {linkedin ? (
+                        {/* Company LinkedIn: ONLY RENDER IF AVAILABLE */}
+                        {companyLinkedInUrl ? (
                           <a
-                            href={linkedin.startsWith("http") ? linkedin : `https://${linkedin}`}
+                            href={companyLinkedInUrl.startsWith("http") ? companyLinkedInUrl : `https://${companyLinkedInUrl}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#0077B5]/15 border border-[#0077B5]/30 text-[#0077B5] dark:text-[#3897d3] font-bold hover:bg-[#0077B5]/25 transition"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#0077B5]/15 border border-[#0077B5]/35 text-[#0077B5] dark:text-[#3897d3] font-black hover:bg-[#0077B5]/25 transition"
+                            title="Open Official Company LinkedIn Page"
                           >
                             <LinkedinIcon className="w-3.5 h-3.5" />
-                            <span>View LinkedIn Profile</span>
+                            <span>Company LinkedIn</span>
                             <ExternalLink className="w-2.5 h-2.5 opacity-70" />
                           </a>
                         ) : null}
+
+                        {/* Person LinkedIn: ONLY RENDER IF AVAILABLE */}
+                        {personLinkedInUrl ? (
+                          <a
+                            href={personLinkedInUrl.startsWith("http") ? personLinkedInUrl : `https://${personLinkedInUrl}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#0077B5]/15 border border-[#0077B5]/35 text-[#0077B5] dark:text-[#3897d3] font-black hover:bg-[#0077B5]/25 transition"
+                            title="Open Personal Executive LinkedIn Profile"
+                          >
+                            <LinkedinIcon className="w-3.5 h-3.5" />
+                            <span>LinkedIn Profile</span>
+                            <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                          </a>
+                        ) : null}
+
+                        {/* Company Social Media Links (Twitter, Facebook, Instagram, YouTube) */}
+                        {!isPerson && (
+                          <div className="flex items-center gap-1.5 pl-1">
+                            {twitterUrl && (
+                              <a
+                                href={twitterUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-black dark:hover:text-white transition"
+                                title="Twitter / X"
+                              >
+                                <TwitterIcon className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                            {facebookUrl && (
+                              <a
+                                href={facebookUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#1877F2] transition"
+                                title="Facebook"
+                              >
+                                <FacebookIcon className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                            {instagramUrl && (
+                              <a
+                                href={instagramUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#E4405F] transition"
+                                title="Instagram"
+                              >
+                                <InstagramIcon className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                            {youtubeUrl && (
+                              <a
+                                href={youtubeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1.5 rounded-lg bg-brand-light border border-brand-secondary text-brand-primary/70 hover:text-[#CD201F] transition"
+                                title="YouTube"
+                              >
+                                <YoutubeIcon className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Key Decision Maker snippet for Companies */}

@@ -25,6 +25,40 @@ function LinkedinIcon(props) {
   );
 }
 
+function TwitterIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function FacebookIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H7v-3h3V9.5C10 6.57 11.76 5 14.39 5c1.26 0 2.39.09 2.71.13v3.14h-1.86c-1.42 0-1.7.68-1.7 1.67V12h3.48l-.45 3h-3.03v6.8c4.56-.93 8-4.96 8-9.8z" />
+    </svg>
+  );
+}
+
+function InstagramIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  );
+}
+
+function YoutubeIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
+
 export default function ProspectDetailPanel({
   prospect,
   onClose,
@@ -47,8 +81,40 @@ export default function ProspectDetailPanel({
 
   const email = prospect.decisionMaker?.email || prospect.email || "";
   const phone = prospect.decisionMaker?.phone || prospect.phone || "";
-  const linkedin = prospect.decisionMaker?.linkedin || prospect.linkedin || "";
   const website = prospect.website || "";
+
+  // Strict LinkedIn handling:
+  // For company: ONLY show if real verified company page exists.
+  // If NOT available, DO NOT SHOW IT AT ALL!
+  const hasCompanyLinkedIn =
+    !isPerson &&
+    Boolean(
+      prospect.linkedin &&
+        typeof prospect.linkedin === "string" &&
+        prospect.linkedin.trim().length > 10 &&
+        /linkedin\.com\/(company|school)\/[a-zA-Z0-9_\-.]+/i.test(prospect.linkedin.trim())
+    );
+  const companyLinkedInUrl = hasCompanyLinkedIn ? prospect.linkedin.trim() : null;
+
+  // For person: ONLY show if verified personal LinkedIn profile exists (/in/).
+  const hasPersonLinkedIn =
+    isPerson &&
+    Boolean(
+      (prospect.decisionMaker?.linkedin || prospect.linkedin) &&
+        /linkedin\.com\/in\/[a-zA-Z0-9_\-.]+/i.test(
+          (prospect.decisionMaker?.linkedin || prospect.linkedin).trim()
+        )
+    );
+  const personLinkedInUrl = hasPersonLinkedIn
+    ? (prospect.decisionMaker?.linkedin || prospect.linkedin).trim()
+    : null;
+
+  // Social media links
+  const socialLinks = prospect.socialLinks || {};
+  const twitterUrl = socialLinks.twitter || null;
+  const facebookUrl = socialLinks.facebook || null;
+  const instagramUrl = socialLinks.instagram || null;
+  const youtubeUrl = socialLinks.youtube || null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn">
@@ -194,8 +260,8 @@ export default function ProspectDetailPanel({
                 )}
               </div>
 
-              {/* LinkedIn */}
-              {linkedin && (
+              {/* Company LinkedIn: ONLY SHOWN IF AVAILABLE */}
+              {companyLinkedInUrl && (
                 <div className="p-2.5 rounded-xl bg-brand-light border border-brand-secondary flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-lg bg-[#0077B5]/10 flex items-center justify-center text-[#0077B5] shrink-0">
@@ -203,16 +269,16 @@ export default function ProspectDetailPanel({
                     </div>
                     <div>
                       <div className="text-[10px] font-bold text-brand-primary/50 uppercase">
-                        LinkedIn Profile
+                        Company LinkedIn
                       </div>
                       <span className="font-bold text-[#0077B5] text-[11px]">
-                        Verified LinkedIn Page
+                        Official Company Page
                       </span>
                     </div>
                   </div>
 
                   <a
-                    href={linkedin.startsWith("http") ? linkedin : `https://${linkedin}`}
+                    href={companyLinkedInUrl.startsWith("http") ? companyLinkedInUrl : `https://${companyLinkedInUrl}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0077B5] text-white text-xs font-bold hover:bg-[#005582] transition"
@@ -220,6 +286,90 @@ export default function ProspectDetailPanel({
                     <span>Open</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
+                </div>
+              )}
+
+              {/* Person LinkedIn: ONLY SHOWN IF AVAILABLE */}
+              {personLinkedInUrl && (
+                <div className="p-2.5 rounded-xl bg-brand-light border border-brand-secondary flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-[#0077B5]/10 flex items-center justify-center text-[#0077B5] shrink-0">
+                      <LinkedinIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-bold text-brand-primary/50 uppercase">
+                        Executive LinkedIn Profile
+                      </div>
+                      <span className="font-bold text-[#0077B5] text-[11px]">
+                        Personal Profile
+                      </span>
+                    </div>
+                  </div>
+
+                  <a
+                    href={personLinkedInUrl.startsWith("http") ? personLinkedInUrl : `https://${personLinkedInUrl}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#0077B5] text-white text-xs font-bold hover:bg-[#005582] transition"
+                  >
+                    <span>Open</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+
+              {/* Company Social Media Links */}
+              {!isPerson && (twitterUrl || facebookUrl || instagramUrl || youtubeUrl) && (
+                <div className="p-2.5 rounded-xl bg-brand-light border border-brand-secondary space-y-1.5">
+                  <div className="text-[10px] font-bold text-brand-primary/50 uppercase">
+                    Official Social Media Channels
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {twitterUrl && (
+                      <a
+                        href={twitterUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand-secondary/30 text-brand-primary font-bold hover:bg-brand-secondary transition text-xs"
+                      >
+                        <TwitterIcon className="w-3.5 h-3.5" />
+                        <span>Twitter / X</span>
+                      </a>
+                    )}
+                    {facebookUrl && (
+                      <a
+                        href={facebookUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 text-[#1877F2] font-bold hover:bg-blue-500/20 transition text-xs"
+                      >
+                        <FacebookIcon className="w-3.5 h-3.5" />
+                        <span>Facebook</span>
+                      </a>
+                    )}
+                    {instagramUrl && (
+                      <a
+                        href={instagramUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-pink-500/10 text-[#E4405F] font-bold hover:bg-pink-500/20 transition text-xs"
+                      >
+                        <InstagramIcon className="w-3.5 h-3.5" />
+                        <span>Instagram</span>
+                      </a>
+                    )}
+                    {youtubeUrl && (
+                      <a
+                        href={youtubeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 text-[#CD201F] font-bold hover:bg-red-500/20 transition text-xs"
+                      >
+                        <YoutubeIcon className="w-3.5 h-3.5" />
+                        <span>YouTube</span>
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

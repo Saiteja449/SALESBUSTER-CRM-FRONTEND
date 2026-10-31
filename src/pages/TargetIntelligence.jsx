@@ -21,6 +21,7 @@ export default function TargetIntelligence() {
   });
 
   // Search State
+  const [searchType, setSearchType] = useState("all"); // 'all' | 'companies' | 'people'
   const [isSearching, setIsSearching] = useState(false);
   const [prospects, setProspects] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -44,6 +45,9 @@ export default function TargetIntelligence() {
 
   const handleExecuteSearch = async (filters) => {
     setIsSearching(true);
+    if (filters.searchType) {
+      setSearchType(filters.searchType);
+    }
     try {
       const result = await targetIntelligenceService.executeSearch(filters);
       setProspects(result.prospects || []);
@@ -169,6 +173,8 @@ export default function TargetIntelligence() {
       <TargetProfileForm
         onSearch={handleExecuteSearch}
         isLoading={isSearching}
+        searchType={searchType}
+        onSearchTypeChange={(st) => setSearchType(st)}
         resolutionFilter={resolutionFilter}
         onResolutionFilterChange={(f) => setResolutionFilter(f)}
       />
@@ -213,6 +219,7 @@ export default function TargetIntelligence() {
           <ProspectResults
             prospects={prospects}
             hasSearched={hasSearched}
+            searchType={searchType}
             resolutionFilter={resolutionFilter}
             onInspectProspect={(p) => setInspectingProspect(p)}
             onToggleResolve={handleToggleResolve}

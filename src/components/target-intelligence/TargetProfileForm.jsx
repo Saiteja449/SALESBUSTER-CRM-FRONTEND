@@ -11,7 +11,6 @@ import {
   Check,
   ChevronDown,
   X,
-  SlidersHorizontal,
   CheckCircle2,
 } from "lucide-react";
 import { targetIntelligenceService } from "../../services/targetIntelligence.js";
@@ -71,11 +70,13 @@ export default function TargetProfileForm({
   onSearch,
   isLoading,
   initialFilters = {},
+  searchType: propSearchType = "all",
+  onSearchTypeChange,
   resolutionFilter = "all",
   onResolutionFilterChange,
 }) {
   const [nlPrompt, setNlPrompt] = useState("");
-  const [searchType, setSearchType] = useState(initialFilters.searchType || "all"); // 'all' | 'companies' | 'people'
+  const [searchType, setSearchType] = useState(propSearchType || "all"); // 'all' | 'companies' | 'people'
   const [isInterpreting, setIsInterpreting] = useState(false);
 
   // Structured filters
@@ -87,8 +88,15 @@ export default function TargetProfileForm({
   const [selectedRoles, setSelectedRoles] = useState([]);
 
   // Popover open state for quick LinkedIn filter pills
-  const [activePopover, setActivePopover] = useState(null); // 'city' | 'size' | 'industry' | 'role' | 'status' | 'all'
+  const [activePopover, setActivePopover] = useState(null); // 'category' | 'city' | 'size' | 'industry' | 'role' | 'status'
   const popoverRef = useRef(null);
+
+  // Sync external searchType changes
+  useEffect(() => {
+    if (propSearchType && propSearchType !== searchType) {
+      setSearchType(propSearchType);
+    }
+  }, [propSearchType]);
 
   // Close popover when clicking outside
   useEffect(() => {
@@ -103,6 +111,14 @@ export default function TargetProfileForm({
 
   const handleApplySample = (prompt) => {
     setNlPrompt(prompt);
+  };
+
+  const handleCategorySelect = (type) => {
+    setSearchType(type);
+    setActivePopover(null);
+    if (onSearchTypeChange) {
+      onSearchTypeChange(type);
+    }
   };
 
   const handleInterpretPrompt = async () => {
@@ -187,11 +203,13 @@ export default function TargetProfileForm({
     setNeed("");
     setSelectedRoles([]);
     setActivePopover(null);
+    if (onSearchTypeChange) onSearchTypeChange("all");
     if (onResolutionFilterChange) onResolutionFilterChange("all");
   };
 
   // Compute active filters count for badge
   const activeFiltersCount =
+    (searchType !== "all" ? 1 : 0) +
     (city !== "All" ? 1 : 0) +
     (companySize !== "Any Size" ? 1 : 0) +
     (industry !== "All" ? 1 : 0) +
@@ -203,12 +221,12 @@ export default function TargetProfileForm({
       ref={popoverRef}
       className="bg-brand-light rounded-3xl border border-brand-secondary p-5 sm:p-6 shadow-xs space-y-4 relative"
     >
-      {/* ── 1. Top Row: LinkedIn Scope Selector (All | Companies | People) ── */}
+      {/* ── 1. Top Row: LinkedIn Scope Selector Tabs ─────────────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-secondary/60 pb-3.5">
         <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-brand-secondary/30 border border-brand-secondary/40">
           <button
             type="button"
-            onClick={() => setSearchType("all")}
+            onClick={() => handleCategorySelect("all")}
             className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
               searchType === "all"
                 ? "bg-emerald-600 text-white shadow-xs"
@@ -220,7 +238,7 @@ export default function TargetProfileForm({
 
           <button
             type="button"
-            onClick={() => setSearchType("companies")}
+            onClick={() => handleCategorySelect("companies")}
             className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
               searchType === "companies"
                 ? "bg-emerald-600 text-white shadow-xs"
@@ -233,7 +251,7 @@ export default function TargetProfileForm({
 
           <button
             type="button"
-            onClick={() => setSearchType("people")}
+            onClick={() => handleCategorySelect("people")}
             className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
               searchType === "people"
                 ? "bg-emerald-600 text-white shadow-xs"
@@ -318,6 +336,68 @@ export default function TargetProfileForm({
 
       {/* ── 3. LinkedIn-Style Quick Filter Pills Row ──────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap pt-1">
+        {/* NEW: Category Dropdown Filter Pill (Companies | People | All) */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === "category" ? null : "category")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition cursor-pointer ${
+              searchType !== "all"
+                ? "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 shadow-2xs"
+                : "bg-brand-light border-brand-secondary text-brand-primary/80 hover:bg-brand-secondary/40"
+            }`}
+          >
+            {searchType === "companies" ? (
+              <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+            ) : searchType === "people" ? (
+              <Users className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <Filter className="w-3.5 h-3.5 text-emerald-500" />
+            )}
+            <span>
+              {searchType === "companies"
+                ? "Category: Companies"
+                : searchType === "people"
+                ? "Category: People"
+                : "Category: All"}
+            </span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {activePopover === "category" && (
+            <div className="absolute left-0 mt-2 w-64 p-3 bg-brand-light rounded-2xl border border-brand-secondary shadow-xl z-30 space-y-1.5 animate-fadeIn">
+              <div className="text-xs font-black text-brand-primary uppercase tracking-wider mb-1">
+                Select Entity Category
+              </div>
+              {[
+                { id: "all", label: "All Results", icon: Filter },
+                { id: "companies", label: "Companies", icon: Building2 },
+                { id: "people", label: "People (Decision Makers)", icon: Users },
+              ].map((opt) => {
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => handleCategorySelect(opt.id)}
+                    className={`w-full px-3 py-2 text-xs rounded-lg text-left transition cursor-pointer flex items-center justify-between ${
+                      searchType === opt.id
+                        ? "bg-emerald-600 text-white font-bold"
+                        : "text-brand-primary/80 hover:bg-brand-secondary/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{opt.label}</span>
+                    </div>
+                    {searchType === opt.id && <Check className="w-3.5 h-3.5" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* City / Location Pill */}
         <div className="relative">
           <button
@@ -565,6 +645,19 @@ export default function TargetProfileForm({
           <span className="text-[11px] font-bold text-brand-primary/50 uppercase tracking-wider mr-1">
             Active Filters:
           </span>
+
+          {searchType !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              <span>Category: {searchType === "companies" ? "Companies" : "People"}</span>
+              <button
+                type="button"
+                onClick={() => handleCategorySelect("all")}
+                className="hover:text-emerald-900 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
 
           {city !== "All" && (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
