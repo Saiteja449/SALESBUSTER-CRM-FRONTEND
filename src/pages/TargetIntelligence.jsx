@@ -2,9 +2,8 @@ import React, { useState, useEffect } from "react";
 import {
   Target,
   Sparkles,
-  Search,
   ShieldCheck,
-  Building2,
+  CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { targetIntelligenceService } from "../services/targetIntelligence.js";
@@ -26,6 +25,10 @@ export default function TargetIntelligence() {
   const [prospects, setProspects] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchSummary, setSearchSummary] = useState(null);
+
+  // Resolution Filter & State
+  const [resolutionFilter, setResolutionFilter] = useState("all"); // 'all' | 'unresolved' | 'resolved'
+  const [isResolvingKey, setIsResolvingKey] = useState(null);
 
   // Active Detail Inspection
   const [inspectingProspect, setInspectingProspect] = useState(null);
@@ -50,10 +53,71 @@ export default function TargetIntelligence() {
       console.error("Search failed:", err);
     } finally {
       setIsSearching(false);
-      // Refresh quota usage
       loadQuota();
     }
   };
+
+  const handleToggleResolve = async (prospect, shouldResolve) => {
+    if (!prospect) return;
+    const key = prospect.prospectKey || prospect.id;
+    setIsResolvingKey(key);
+
+    try {
+      if (shouldResolve) {
+        const res = await targetIntelligenceService.resolveProspect(prospect);
+        setProspects((prev) =>
+          prev.map((p) =>
+            (p.prospectKey || p.id) === key
+              ? {
+                  ...p,
+                  isResolved: true,
+                  resolvedAt: res.resolvedAt || new Date().toISOString(),
+                  resolvedByName: res.resolvedByName || "You",
+                }
+              : p
+          )
+        );
+
+        if (inspectingProspect && (inspectingProspect.prospectKey || inspectingProspect.id) === key) {
+          setInspectingProspect((prev) => ({
+            ...prev,
+            isResolved: true,
+            resolvedAt: res.resolvedAt || new Date().toISOString(),
+            resolvedByName: res.resolvedByName || "You",
+          }));
+        }
+      } else {
+        await targetIntelligenceService.unresolveProspect(prospect.prospectKey, prospect.companyName);
+        setProspects((prev) =>
+          prev.map((p) =>
+            (p.prospectKey || p.id) === key
+              ? {
+                  ...p,
+                  isResolved: false,
+                  resolvedAt: null,
+                  resolvedByName: null,
+                }
+              : p
+          )
+        );
+
+        if (inspectingProspect && (inspectingProspect.prospectKey || inspectingProspect.id) === key) {
+          setInspectingProspect((prev) => ({
+            ...prev,
+            isResolved: false,
+            resolvedAt: null,
+            resolvedByName: null,
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to toggle resolution status:", err);
+    } finally {
+      setIsResolvingKey(null);
+    }
+  };
+
+  const resolvedTotal = prospects.filter((p) => p.isResolved).length;
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-fadeIn">
@@ -79,7 +143,7 @@ export default function TargetIntelligence() {
                 AI Target Data Intelligence
               </h1>
               <p className="text-xs text-brand-primary/65">
-                Discover and research verified B2B companies, market players, and decision makers in real time
+                LinkedIn-style verified B2B account & decision-maker intelligence with live contact data
               </p>
             </div>
           </div>
@@ -102,43 +166,57 @@ export default function TargetIntelligence() {
       </div>
 
       {/* ── 2. ICP Query & Structured Form Builder ──────────────────────── */}
-      <TargetProfileForm onSearch={handleExecuteSearch} isLoading={isSearching} />
+      <TargetProfileForm
+        onSearch={handleExecuteSearch}
+        isLoading={isSearching}
+        resolutionFilter={resolutionFilter}
+        onResolutionFilterChange={(f) => setResolutionFilter(f)}
+      />
 
       {/* ── 3. Results Section ──────────────────────────────────────────── */}
       <div className="space-y-3 pt-2">
         <div className="flex flex-wrap items-center justify-between gap-3 px-1">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-extrabold text-brand-primary uppercase tracking-wider">
-              Discovered Target Accounts
+              Discovered Target Accounts & Decision Makers
             </h2>
             {prospects.length > 0 && (
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                 {prospects.length}
               </span>
             )}
+            {resolvedTotal > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-purple-600" />
+                <span>{resolvedTotal} Resolved</span>
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 text-xs text-brand-primary/60">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Real-time online corporate and business records</span>
+            <span>Pure live online corporate records • Zero simulated fallbacks</span>
           </div>
         </div>
 
         {isSearching ? (
-          <div className="p-16 rounded-2xl bg-brand-light border border-brand-secondary text-center space-y-3">
+          <div className="p-16 rounded-3xl bg-brand-light border border-brand-secondary text-center space-y-3 shadow-2xs">
             <div className="w-10 h-10 border-3 border-emerald-500/30 border-t-emerald-600 rounded-full animate-spin mx-auto" />
-            <div className="text-sm font-bold text-brand-primary">
-              Searching real-time online business directories & scoring relevance...
+            <div className="text-sm font-black text-brand-primary">
+              Searching live B2B corporate directories & verified executive profiles...
             </div>
             <p className="text-xs text-brand-primary/50">
-              Retrieving live operating companies, websites, and verified leadership contacts
+              Retrieving live operating entities, verified phone coordinates, and decision-maker contact details
             </p>
           </div>
         ) : (
           <ProspectResults
             prospects={prospects}
             hasSearched={hasSearched}
+            resolutionFilter={resolutionFilter}
             onInspectProspect={(p) => setInspectingProspect(p)}
+            onToggleResolve={handleToggleResolve}
+            isResolvingKey={isResolvingKey}
           />
         )}
       </div>
@@ -148,6 +226,8 @@ export default function TargetIntelligence() {
         <ProspectDetailPanel
           prospect={inspectingProspect}
           onClose={() => setInspectingProspect(null)}
+          onToggleResolve={handleToggleResolve}
+          isResolving={isResolvingKey === (inspectingProspect.prospectKey || inspectingProspect.id)}
         />
       )}
     </div>

@@ -4,12 +4,12 @@ import { API_BASE_URL } from "../utils/constants.js";
 /**
  * AI Target Intelligence Service
  *
- * Backend is the single authority for prospect discovery, quota management,
- * duplicate verification, and lead imports into CRM.
+ * Backend is the authoritative source for real-time live prospect discovery,
+ * accurate verified contact extraction, and persistent resolution status tracking.
  */
 export const targetIntelligenceService = {
   /**
-   * Fetch current organization search and import quota limits and usage
+   * Fetch current organization search quota limits and usage
    */
   async getUsageQuota() {
     try {
@@ -50,13 +50,15 @@ export const targetIntelligenceService = {
 
   /**
    * Execute an ICP prospect discovery search through the backend intelligence engine.
-   * Prospects include verified source, verification date, and consent metadata.
+   * Supports LinkedIn-style entity scopes ('all' | 'companies' | 'people'),
+   * location, company size, industry, and role filters.
    */
   async executeSearch(filters) {
     const response = await axios.post(
       `${API_BASE_URL}/target-intelligence/search`,
       {
         prompt: filters.prompt,
+        searchType: filters.searchType || "all",
         city: filters.city,
         industry: filters.industry,
         need: filters.need,
@@ -75,15 +77,65 @@ export const targetIntelligenceService = {
   },
 
   /**
-   * Authoritative batch import of selected prospects into CRM leads.
-   *
-   * Backend enforces:
-   * - Tenant permissions & organization membership
-   * - Real-time duplicate detection against MongoDB Lead collection
-   * - Strict duplicate action policies (skip, update, create)
-   * - Contact phone validity (no fabricated or incomplete numbers)
-   * - Pipeline status normalization to CRM lead enum
-   * - WebSocket emission for live multi-user sync
+   * Mark a prospect as Resolved for this organization
+   */
+  async resolveProspect(prospect, notes = "") {
+    const response = await axios.post(
+      `${API_BASE_URL}/target-intelligence/resolve`,
+      {
+        prospect,
+        entityType: prospect.entityType || "company",
+        notes,
+      }
+    );
+
+    if (response.data?.success) {
+      return response.data.data;
+    }
+
+    throw new Error(
+      response.data?.message || "Failed to mark prospect as resolved"
+    );
+  },
+
+  /**
+   * Unresolve a prospect
+   */
+  async unresolveProspect(prospectKey, companyName) {
+    const response = await axios.post(
+      `${API_BASE_URL}/target-intelligence/unresolve`,
+      {
+        prospectKey,
+        companyName,
+      }
+    );
+
+    if (response.data?.success) {
+      return response.data.data;
+    }
+
+    throw new Error(
+      response.data?.message || "Failed to remove resolved status"
+    );
+  },
+
+  /**
+   * Fetch all resolved prospects for the current organization
+   */
+  async getResolvedProspects() {
+    const response = await axios.get(
+      `${API_BASE_URL}/target-intelligence/resolved-list`
+    );
+
+    if (response.data?.success && response.data?.data) {
+      return response.data.data;
+    }
+
+    return [];
+  },
+
+  /**
+   * Authoritative batch import of selected prospects into CRM leads (legacy compatibility)
    */
   async importProspectsToCrm(importPayload) {
     const response = await axios.post(

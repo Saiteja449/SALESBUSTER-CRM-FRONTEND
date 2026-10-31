@@ -1,16 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Sparkles,
   Search,
   Filter,
-  Building,
+  Building2,
   MapPin,
   Users,
   Briefcase,
-  Zap,
   RotateCcw,
   Check,
   ChevronDown,
+  X,
+  SlidersHorizontal,
+  CheckCircle2,
 } from "lucide-react";
 import { targetIntelligenceService } from "../../services/targetIntelligence.js";
 
@@ -41,39 +43,63 @@ const CITIES = [
   "Delhi NCR",
   "Pune",
   "Chennai",
+  "Ahmedabad",
+  "Kolkata",
 ];
 
 const COMPANY_SIZES = [
   "Any Size",
-  "10-50 employees",
+  "1-10 employees",
+  "11-50 employees",
   "50-200 employees",
   "200-500 employees",
-  "500+ employees",
+  "500-1000 employees",
+  "1000+ employees",
 ];
 
 const ROLES = [
-  "Director of Operations",
+  "Founder & CEO",
+  "Managing Director",
   "Chief Information Officer (CIO)",
-  "Head of IT / Systems",
-  "Managing Director / CEO",
+  "Chief Technology Officer (CTO)",
+  "Head of Operations / COO",
   "Procurement Manager",
+  "VP of Sales / Business Head",
 ];
 
 export default function TargetProfileForm({
   onSearch,
   isLoading,
   initialFilters = {},
+  resolutionFilter = "all",
+  onResolutionFilterChange,
 }) {
   const [nlPrompt, setNlPrompt] = useState("");
+  const [searchType, setSearchType] = useState(initialFilters.searchType || "all"); // 'all' | 'companies' | 'people'
   const [isInterpreting, setIsInterpreting] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Structured filters
   const [industry, setIndustry] = useState(initialFilters.industry || "All");
   const [city, setCity] = useState(initialFilters.city || "All");
+  const [customCity, setCustomCity] = useState("");
   const [companySize, setCompanySize] = useState("Any Size");
   const [need, setNeed] = useState("");
   const [selectedRoles, setSelectedRoles] = useState([]);
+
+  // Popover open state for quick LinkedIn filter pills
+  const [activePopover, setActivePopover] = useState(null); // 'city' | 'size' | 'industry' | 'role' | 'status' | 'all'
+  const popoverRef = useRef(null);
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        setActivePopover(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleApplySample = (prompt) => {
     setNlPrompt(prompt);
@@ -93,7 +119,6 @@ export default function TargetProfileForm({
           setSelectedRoles(parsed.decisionMakerRoles);
         }
       }
-      setShowAdvanced(true);
     } catch (err) {
       console.warn("Error interpreting prompt:", err);
     } finally {
@@ -114,242 +139,527 @@ export default function TargetProfileForm({
     );
   };
 
+  const handleCitySelect = (c) => {
+    setCity(c);
+    setCustomCity("");
+    setActivePopover(null);
+  };
+
+  const handleCustomCityApply = () => {
+    if (customCity.trim()) {
+      setCity(customCity.trim());
+      setActivePopover(null);
+    }
+  };
+
+  const handleCompanySizeSelect = (size) => {
+    setCompanySize(size);
+    setActivePopover(null);
+  };
+
+  const handleIndustrySelect = (ind) => {
+    setIndustry(ind);
+    setActivePopover(null);
+  };
+
   const handleSubmit = (e) => {
     e?.preventDefault();
+    setActivePopover(null);
     const trimmedPrompt = nlPrompt.trim();
-    if (!trimmedPrompt && (!industry || industry === "All") && (!city || city === "All")) {
-      return;
-    }
     onSearch({
       prompt: trimmedPrompt,
-      industry: showAdvanced ? industry : (industry !== "All" ? industry : undefined),
-      city: showAdvanced ? city : (city !== "All" ? city : undefined),
-      companySize: showAdvanced ? companySize : undefined,
-      need: showAdvanced && need ? need : undefined,
-      roles: showAdvanced && selectedRoles.length > 0 ? selectedRoles : undefined,
+      searchType,
+      industry: industry !== "All" ? industry : undefined,
+      city: city !== "All" ? city : undefined,
+      companySize: companySize !== "Any Size" ? companySize : undefined,
+      need: need ? need : undefined,
+      roles: selectedRoles.length > 0 ? selectedRoles : undefined,
     });
   };
 
   const handleReset = () => {
     setNlPrompt("");
+    setSearchType("all");
     setIndustry("All");
     setCity("All");
+    setCustomCity("");
     setCompanySize("Any Size");
     setNeed("");
     setSelectedRoles([]);
+    setActivePopover(null);
+    if (onResolutionFilterChange) onResolutionFilterChange("all");
   };
 
+  // Compute active filters count for badge
+  const activeFiltersCount =
+    (city !== "All" ? 1 : 0) +
+    (companySize !== "Any Size" ? 1 : 0) +
+    (industry !== "All" ? 1 : 0) +
+    (selectedRoles.length > 0 ? selectedRoles.length : 0) +
+    (resolutionFilter !== "all" ? 1 : 0);
+
   return (
-    <div className="bg-brand-light rounded-2xl border border-brand-secondary p-5 sm:p-6 shadow-xs space-y-5">
-      {/* ── Top Bar: Title & AI Indicator ────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-base font-extrabold text-brand-primary">
-              AI Ideal Customer Profile (ICP) Search
-            </h2>
-            <p className="text-xs text-brand-primary/60">
-              Search verified B2B directories with natural language or structured criteria
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((prev) => !prev)}
-          className="text-xs font-bold text-pilot-blue hover:text-pilot-blue/80 flex items-center gap-1.5 transition cursor-pointer"
-        >
-          <Filter className="w-3.5 h-3.5" />
-          <span>{showAdvanced ? "Hide Filters" : "Structured Filters"}</span>
-          <ChevronDown
-            className={`w-3.5 h-3.5 transition-transform ${
-              showAdvanced ? "rotate-180" : ""
+    <div
+      ref={popoverRef}
+      className="bg-brand-light rounded-3xl border border-brand-secondary p-5 sm:p-6 shadow-xs space-y-4 relative"
+    >
+      {/* ── 1. Top Row: LinkedIn Scope Selector (All | Companies | People) ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-secondary/60 pb-3.5">
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-brand-secondary/30 border border-brand-secondary/40">
+          <button
+            type="button"
+            onClick={() => setSearchType("all")}
+            className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+              searchType === "all"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/40"
             }`}
-          />
-        </button>
-      </div>
+          >
+            <span>All Results</span>
+          </button>
 
-      {/* ── Natural Language Prompt Box ──────────────────────────────────── */}
-      <div className="space-y-2">
-        <label
-          htmlFor="nlPrompt"
-          className="block text-xs font-bold text-brand-primary uppercase tracking-wider"
-        >
-          Describe Target Market or Business Need
-        </label>
-        <div className="relative">
-          <textarea
-            id="nlPrompt"
-            rows={2}
-            value={nlPrompt}
-            onChange={(e) => setNlPrompt(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type any market or company description (e.g. 'Find Pet companies or pet service providing companies') and press Enter..."
-            className="w-full px-4 py-3 text-sm rounded-xl bg-brand-light border border-brand-secondary text-brand-primary placeholder:text-brand-primary/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition resize-none"
-          />
+          <button
+            type="button"
+            onClick={() => setSearchType("companies")}
+            className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+              searchType === "companies"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/40"
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            <span>Companies</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSearchType("people")}
+            className={`px-4 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+              searchType === "people"
+                ? "bg-emerald-600 text-white shadow-xs"
+                : "text-brand-primary/70 hover:text-brand-primary hover:bg-brand-secondary/40"
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>People (Decision Makers)</span>
+          </button>
         </div>
 
-        {/* Sample Prompt Chips */}
-        <div className="flex items-center gap-1.5 flex-wrap pt-1">
-          <span className="text-[11px] font-bold text-brand-primary/50 uppercase tracking-wider mr-1">
-            Try prompt:
-          </span>
-          {SAMPLE_PROMPTS.map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              onClick={() => handleApplySample(prompt)}
-              className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-brand-secondary/40 hover:bg-brand-secondary text-brand-primary/80 transition truncate max-w-xs cursor-pointer"
-              title={prompt}
-            >
-              &ldquo;{prompt}&rdquo;
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Structured Filters (Collapsible / Expandable) ────────────────── */}
-      {showAdvanced && (
-        <div className="p-4 rounded-xl bg-brand-secondary/20 border border-brand-secondary/40 space-y-4 animate-fadeIn">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {/* Industry */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-brand-primary/70 flex items-center gap-1">
-                <Building className="w-3 h-3 text-emerald-500" />
-                Industry
-              </label>
-              <select
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg bg-brand-light border border-brand-secondary text-brand-primary focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-              >
-                {INDUSTRIES.map((ind) => (
-                  <option key={ind} value={ind}>
-                    {ind}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Geography / City */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-brand-primary/70 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-emerald-500" />
-                City / Region
-              </label>
-              <select
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg bg-brand-light border border-brand-secondary text-brand-primary focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-              >
-                {CITIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Company Size */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-brand-primary/70 flex items-center gap-1">
-                <Users className="w-3 h-3 text-emerald-500" />
-                Company Size
-              </label>
-              <select
-                value={companySize}
-                onChange={(e) => setCompanySize(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-lg bg-brand-light border border-brand-secondary text-brand-primary focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-              >
-                {COMPANY_SIZES.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Business Need */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-brand-primary/70 flex items-center gap-1">
-                <Zap className="w-3 h-3 text-emerald-500" />
-                Inferred Need
-              </label>
-              <input
-                type="text"
-                value={need}
-                onChange={(e) => setNeed(e.target.value)}
-                placeholder="e.g. ERP software"
-                className="w-full px-3 py-2 text-xs rounded-lg bg-brand-light border border-brand-secondary text-brand-primary focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-
-          {/* Decision Maker Roles */}
-          <div className="space-y-1.5 pt-1">
-            <label className="text-[11px] font-bold text-brand-primary/70 flex items-center gap-1">
-              <Briefcase className="w-3 h-3 text-emerald-500" />
-              Target Decision-Maker Roles
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {ROLES.map((role) => {
-                const isSelected = selectedRoles.includes(role);
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => handleRoleToggle(role)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border transition cursor-pointer ${
-                      isSelected
-                        ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-bold"
-                        : "bg-brand-light border-brand-secondary text-brand-primary/70 hover:bg-brand-secondary/40"
-                    }`}
-                  >
-                    {isSelected && <Check className="w-3 h-3 text-emerald-500" />}
-                    <span>{role}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Form Actions ─────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-        <button
-          type="button"
-          onClick={handleReset}
-          className="text-xs font-bold text-brand-primary/60 hover:text-brand-primary flex items-center gap-1.5 transition cursor-pointer"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset Filters</span>
-        </button>
-
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleInterpretPrompt}
             disabled={isInterpreting || !nlPrompt.trim()}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-brand-secondary bg-brand-light hover:bg-brand-secondary/40 text-brand-primary transition cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-brand-secondary bg-brand-light hover:bg-brand-secondary/40 text-brand-primary transition cursor-pointer disabled:opacity-40"
+            title="Auto-extract City, Industry & Roles with AI"
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Interpret with AI</span>
+            <span>{isInterpreting ? "Interpreting..." : "AI Auto-Fill"}</span>
           </button>
+
+          {activeFiltersCount > 0 && (
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center gap-1 text-xs font-bold text-brand-primary/50 hover:text-rose-600 px-2.5 py-1.5 rounded-xl hover:bg-rose-500/10 transition cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset Filters</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── 2. Unified Search Input Bar ──────────────────────────────────── */}
+      <div className="relative">
+        <div className="relative flex items-center">
+          <div className="absolute left-4 text-brand-primary/40 pointer-events-none">
+            <Search className="w-5 h-5" />
+          </div>
+
+          <input
+            type="text"
+            value={nlPrompt}
+            onChange={(e) => setNlPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              searchType === "companies"
+                ? "Search companies by name, sector or business model (e.g. 'Pet care companies in Hyderabad', 'Pharma packaging')..."
+                : searchType === "people"
+                ? "Search decision makers by role, title, or company (e.g. 'Founders of pet startups', 'CIO in Manufacturing')..."
+                : "Search companies, decision makers, industry or location (e.g. 'Pet companies or pet service providing companies')..."
+            }
+            className="w-full pl-12 pr-28 py-3.5 text-sm font-medium rounded-2xl bg-brand-light border border-brand-secondary text-brand-primary placeholder:text-brand-primary/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition shadow-2xs"
+          />
+
+          <div className="absolute right-2 flex items-center gap-1.5">
+            {nlPrompt && (
+              <button
+                type="button"
+                onClick={() => setNlPrompt("")}
+                className="p-1.5 text-brand-primary/40 hover:text-brand-primary rounded-lg transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-black rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm active:scale-95 transition cursor-pointer disabled:opacity-50"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>{isLoading ? "Searching..." : "Search"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 3. LinkedIn-Style Quick Filter Pills Row ──────────────────────── */}
+      <div className="flex items-center gap-2 flex-wrap pt-1">
+        {/* City / Location Pill */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === "city" ? null : "city")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition cursor-pointer ${
+              city !== "All"
+                ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-300"
+                : "bg-brand-light border-brand-secondary text-brand-primary/80 hover:bg-brand-secondary/40"
+            }`}
+          >
+            <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+            <span>{city !== "All" ? `City: ${city}` : "Locations / City"}</span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {activePopover === "city" && (
+            <div className="absolute left-0 mt-2 w-72 p-3 bg-brand-light rounded-2xl border border-brand-secondary shadow-xl z-30 space-y-2.5 animate-fadeIn">
+              <div className="text-xs font-black text-brand-primary uppercase tracking-wider">
+                Select City / Region
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                {CITIES.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => handleCitySelect(c)}
+                    className={`px-2.5 py-1.5 text-xs rounded-lg text-left truncate transition cursor-pointer ${
+                      city === c
+                        ? "bg-emerald-600 text-white font-bold"
+                        : "text-brand-primary/80 hover:bg-brand-secondary/40"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              <div className="pt-2 border-t border-brand-secondary flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={customCity}
+                  onChange={(e) => setCustomCity(e.target.value)}
+                  placeholder="Other city name..."
+                  className="w-full px-2.5 py-1 text-xs rounded-lg bg-brand-secondary/20 border border-brand-secondary text-brand-primary focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  onKeyDown={(e) => e.key === "Enter" && handleCustomCityApply()}
+                />
+                <button
+                  type="button"
+                  onClick={handleCustomCityApply}
+                  className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer"
+                >
+                  Set
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Company Size Pill */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === "size" ? null : "size")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition cursor-pointer ${
+              companySize !== "Any Size"
+                ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-300"
+                : "bg-brand-light border-brand-secondary text-brand-primary/80 hover:bg-brand-secondary/40"
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-emerald-500" />
+            <span>{companySize !== "Any Size" ? `Size: ${companySize}` : "Company Size"}</span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {activePopover === "size" && (
+            <div className="absolute left-0 mt-2 w-64 p-3 bg-brand-light rounded-2xl border border-brand-secondary shadow-xl z-30 space-y-1.5 animate-fadeIn">
+              <div className="text-xs font-black text-brand-primary uppercase tracking-wider mb-1">
+                Company Headcount
+              </div>
+              {COMPANY_SIZES.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => handleCompanySizeSelect(size)}
+                  className={`w-full px-3 py-1.5 text-xs rounded-lg text-left transition cursor-pointer flex items-center justify-between ${
+                    companySize === size
+                      ? "bg-emerald-600 text-white font-bold"
+                      : "text-brand-primary/80 hover:bg-brand-secondary/40"
+                  }`}
+                >
+                  <span>{size}</span>
+                  {companySize === size && <Check className="w-3.5 h-3.5" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Industry Pill */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === "industry" ? null : "industry")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition cursor-pointer ${
+              industry !== "All"
+                ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-300"
+                : "bg-brand-light border-brand-secondary text-brand-primary/80 hover:bg-brand-secondary/40"
+            }`}
+          >
+            <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+            <span>{industry !== "All" ? `Industry: ${industry}` : "Industry"}</span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {activePopover === "industry" && (
+            <div className="absolute left-0 mt-2 w-64 p-3 bg-brand-light rounded-2xl border border-brand-secondary shadow-xl z-30 space-y-1.5 animate-fadeIn">
+              <div className="text-xs font-black text-brand-primary uppercase tracking-wider mb-1">
+                Industry Sector
+              </div>
+              <div className="max-h-52 overflow-y-auto space-y-1">
+                {INDUSTRIES.map((ind) => (
+                  <button
+                    key={ind}
+                    type="button"
+                    onClick={() => handleIndustrySelect(ind)}
+                    className={`w-full px-3 py-1.5 text-xs rounded-lg text-left transition cursor-pointer flex items-center justify-between ${
+                      industry === ind
+                        ? "bg-emerald-600 text-white font-bold"
+                        : "text-brand-primary/80 hover:bg-brand-secondary/40"
+                    }`}
+                  >
+                    <span className="truncate">{ind}</span>
+                    {industry === ind && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Seniority / Role Pill */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === "role" ? null : "role")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition cursor-pointer ${
+              selectedRoles.length > 0
+                ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-700 dark:text-emerald-300"
+                : "bg-brand-light border-brand-secondary text-brand-primary/80 hover:bg-brand-secondary/40"
+            }`}
+          >
+            <Briefcase className="w-3.5 h-3.5 text-emerald-500" />
+            <span>
+              {selectedRoles.length > 0 ? `Roles (${selectedRoles.length})` : "Seniority / Role"}
+            </span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {activePopover === "role" && (
+            <div className="absolute left-0 mt-2 w-72 p-3 bg-brand-light rounded-2xl border border-brand-secondary shadow-xl z-30 space-y-2 animate-fadeIn">
+              <div className="text-xs font-black text-brand-primary uppercase tracking-wider">
+                Decision Maker Titles
+              </div>
+              <div className="space-y-1 max-h-56 overflow-y-auto">
+                {ROLES.map((role) => {
+                  const isSelected = selectedRoles.includes(role);
+                  return (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => handleRoleToggle(role)}
+                      className={`w-full px-3 py-1.5 text-xs rounded-lg text-left transition cursor-pointer flex items-center justify-between ${
+                        isSelected
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/30"
+                          : "text-brand-primary/80 hover:bg-brand-secondary/40"
+                      }`}
+                    >
+                      <span className="truncate">{role}</span>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Resolution Status Filter Pill */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setActivePopover(activePopover === "status" ? null : "status")}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border transition cursor-pointer ${
+              resolutionFilter !== "all"
+                ? "bg-purple-500/10 border-purple-500/50 text-purple-700 dark:text-purple-300"
+                : "bg-brand-light border-brand-secondary text-brand-primary/80 hover:bg-brand-secondary/40"
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-purple-500" />
+            <span>
+              {resolutionFilter === "resolved"
+                ? "Status: Resolved"
+                : resolutionFilter === "unresolved"
+                ? "Status: Unresolved"
+                : "Resolution Status"}
+            </span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {activePopover === "status" && (
+            <div className="absolute left-0 mt-2 w-56 p-3 bg-brand-light rounded-2xl border border-brand-secondary shadow-xl z-30 space-y-1.5 animate-fadeIn">
+              <div className="text-xs font-black text-brand-primary uppercase tracking-wider mb-1">
+                Filter by Resolution
+              </div>
+              {[
+                { id: "all", label: "All Prospects" },
+                { id: "unresolved", label: "Unresolved Only" },
+                { id: "resolved", label: "Resolved Already" },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    if (onResolutionFilterChange) onResolutionFilterChange(opt.id);
+                    setActivePopover(null);
+                  }}
+                  className={`w-full px-3 py-1.5 text-xs rounded-lg text-left transition cursor-pointer flex items-center justify-between ${
+                    resolutionFilter === opt.id
+                      ? "bg-purple-600 text-white font-bold"
+                      : "text-brand-primary/80 hover:bg-brand-secondary/40"
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                  {resolutionFilter === opt.id && <Check className="w-3.5 h-3.5" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 4. Active Filter Badges ──────────────────────────────────────── */}
+      {activeFiltersCount > 0 && (
+        <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-brand-secondary/40">
+          <span className="text-[11px] font-bold text-brand-primary/50 uppercase tracking-wider mr-1">
+            Active Filters:
+          </span>
+
+          {city !== "All" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              <span>City: {city}</span>
+              <button
+                type="button"
+                onClick={() => setCity("All")}
+                className="hover:text-emerald-900 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+
+          {companySize !== "Any Size" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              <span>Size: {companySize}</span>
+              <button
+                type="button"
+                onClick={() => setCompanySize("Any Size")}
+                className="hover:text-emerald-900 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+
+          {industry !== "All" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              <span>Industry: {industry}</span>
+              <button
+                type="button"
+                onClick={() => setIndustry("All")}
+                className="hover:text-emerald-900 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+
+          {selectedRoles.map((r) => (
+            <span
+              key={r}
+              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+            >
+              <span>Role: {r}</span>
+              <button
+                type="button"
+                onClick={() => handleRoleToggle(r)}
+                className="hover:text-emerald-900 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+
+          {resolutionFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+              <span>Status: {resolutionFilter}</span>
+              <button
+                type="button"
+                onClick={() => onResolutionFilterChange && onResolutionFilterChange("all")}
+                className="hover:text-purple-900 cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
 
           <button
             type="button"
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-5 py-2 text-xs font-extrabold rounded-xl text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm active:scale-[0.98] transition cursor-pointer disabled:opacity-50"
+            onClick={handleReset}
+            className="text-[11px] font-bold text-pilot-blue hover:underline cursor-pointer ml-1"
           >
-            <Search className="w-4 h-4" />
-            <span>{isLoading ? "Searching Directories..." : "Search Target Prospects"}</span>
+            Clear all
           </button>
         </div>
+      )}
+
+      {/* ── 5. Quick Sample Prompts ──────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+        <span className="text-[11px] font-bold text-brand-primary/45 uppercase tracking-wider mr-1">
+          Suggestions:
+        </span>
+        {SAMPLE_PROMPTS.map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
+            onClick={() => handleApplySample(prompt)}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-brand-secondary/30 hover:bg-brand-secondary text-brand-primary/75 transition truncate max-w-xs cursor-pointer"
+            title={prompt}
+          >
+            &ldquo;{prompt}&rdquo;
+          </button>
+        ))}
       </div>
     </div>
   );

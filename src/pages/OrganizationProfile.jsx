@@ -2218,7 +2218,7 @@ export default function OrganizationProfile() {
                 </span>
               </div>
               <p className="text-[11px] text-text-secondary mt-0.5">
-                500 daily conversations split across WhatsApp AI, Voice Calls, and BI Analyst.
+                500 daily conversations split across WhatsApp AI, Voice Calls, and BI Analyst text queries.
               </p>
             </div>
           </div>
@@ -2451,7 +2451,7 @@ export default function OrganizationProfile() {
                       BI Analyst
                     </h4>
                     <span className="text-[10px] text-text-secondary">
-                      {isBiActive ? "CRM AI & voice query" : "Add-on required"}
+                      {isBiActive ? "CRM AI & data queries" : "Add-on required"}
                     </span>
                   </div>
                 </div>
@@ -6551,7 +6551,7 @@ export default function OrganizationProfile() {
                               )}
                             </div>
                             <p className="text-[10px] text-text-secondary">
-                              {isBiActive ? "CRM AI queries & Gemini Live voice" : "Unlock in Add-ons to allocate quota"}
+                              {isBiActive ? "CRM AI & data intelligence queries" : "Unlock in Add-ons to allocate quota"}
                             </p>
                           </div>
                         </div>
