@@ -157,13 +157,23 @@ body {
   box-sizing: border-box;
 }
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
+button:focus-visible:not(.outline-none):not([class*="outline-none"]),
+a:focus-visible:not(.outline-none):not([class*="outline-none"]),
+input:focus-visible:not(.outline-none):not([class*="outline-none"]),
+select:focus-visible:not(.outline-none):not([class*="outline-none"]),
+textarea:focus-visible:not(.outline-none):not([class*="outline-none"]) {
   outline: 2px solid var(--color-pilot-blue);
   outline-offset: 2px;
+}
+
+.outline-none,
+.outline-none:focus,
+.outline-none:focus-visible,
+textarea.outline-none:focus-visible,
+input.outline-none:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Custom Scrollbar Styles */
@@ -183,4 +193,17 @@ textarea:focus-visible {
 
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--text-secondary) 80%, transparent);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

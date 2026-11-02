@@ -48,7 +48,7 @@ export default function Sidebar({
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const isOrgOwner =
-    isManager || currentUser?.role === "Sales Manager" || currentUser?.isOrgOwner;
+    isManager || currentUser?.role === "Sales Manager" || currentUser?.role === "Super Admin" || currentUser?.isOrgOwner;
 
   // Grouped navigation structure
   const navigationSections = [
