@@ -1,10 +1,22 @@
-import { Lightbulb } from "lucide-react";
+import { useState, Suspense, lazy } from "react";
+import {
+  Lightbulb,
+  TrendingUp,
+  TrendingDown,
+  BarChart2,
+  Table as TableIcon,
+} from "lucide-react";
+import TableExportActions from "./TableExportActions.jsx";
+import { detectChartableData } from "../../utils/chartDetection.js";
+
+// Lazy-load DynamicChart so recharts is loaded on-demand
+const DynamicChart = lazy(() => import("./DynamicChart.jsx"));
 
 /**
  * Pre-processes and normalizes raw AI output:
- * - Fixes inline run-on bullets (e.g., "1. Title * Step 1 * Step 2") into separate lines
- * - Un-wraps accidental huge bold blocks that wrap entire paragraphs
- * - Normalizes callouts like "*(Note: ...)*" into Markdown quote format "> 💡 **Note:** ..."
+ * - Fixes inline run-on bullets into separate lines
+ * - Un-wraps accidental huge bold blocks
+ * - Normalizes callouts
  */
 function normalizeContent(rawText) {
   if (!rawText) return "";
@@ -12,18 +24,13 @@ function normalizeContent(rawText) {
   let text = String(rawText);
 
   // 1. Unwrap accidental outer bold wrapping entire multi-sentence numbered blocks
-  // e.g., "**1. Step Title * Bullet 1 ... Bullet 2**" -> "1. Step Title * Bullet 1 ..."
   text = text.replace(
     /^\s*\*\*(\d+\.\s+[^\n*]+)\s*\*\s+([^*]+)\*\*\s*$/gm,
     "**$1**\n* $2"
   );
 
   // 2. Break inline asterisks/bullets onto new lines when used horizontally
-  // e.g. "1. Step Title * Sub-point: info * Another: info"
-  // Look for " * CapitalLetter" or " * **Label**" not preceded by a newline
   text = text.replace(/([^\n])\s+[*•]\s+([A-Z]|\*\*)/g, "$1\n- $2");
-
-  // Also handle cases like "button. * Details to Enter:"
   text = text.replace(/([.!?])\s+[*•]\s+/g, "$1\n- ");
 
   // 3. Normalize "(Note: ...)" or "*(Note: ...)*" or "*Note: ...*"
@@ -48,7 +55,6 @@ function normalizeContent(rawText) {
 function renderInlineFormatting(text) {
   if (!text) return "";
 
-  // Tokenize bold, italic, code, links
   const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
   const parts = text.split(regex);
 
@@ -108,23 +114,186 @@ function renderInlineFormatting(text) {
   });
 }
 
-/**
- * Checks if a block of lines is a Markdown table
- */
 function isTableBlock(lines) {
   if (lines.length < 2) return false;
   return lines.every((l) => l.trim().startsWith("|") && l.trim().endsWith("|"));
 }
 
 /**
- * Main structured response renderer
+ * Checks if a string looks numeric (digits, commas, decimals, currency, %, +, -)
  */
+function isNumericCell(cell) {
+  if (!cell) return false;
+  const clean = cell.replace(/\*\*/g, "").trim();
+  return /^[$₹€£]?\s*[-+]?[0-9,]+(\.[0-9]+)?\s*[%xX]?$/.test(clean);
+}
+
+/**
+ * Detects if a block of 2+ lines is a KPI metric list (e.g. "Conversion Rate: 24.5%")
+ */
+function isMetricBlock(lines) {
+  if (lines.length < 2 || lines.length > 8) return false;
+  return lines.every((l) => {
+    const trimmed = l.replace(/^[-*•]\s+/, "").trim();
+    const parts = trimmed.split(":");
+    if (parts.length < 2) return false;
+    const value = parts.slice(1).join(":").trim();
+    return value.length > 0 && value.length < 40 && /\d/.test(value);
+  });
+}
+
+function MetricTile({ label, rawValue, idx }) {
+  const deltaMatch = rawValue.match(/([+-]\d+(\.\d+)?%)/);
+  const delta = deltaMatch ? deltaMatch[1] : null;
+  const isPositive = delta && delta.startsWith("+");
+  const isNegative = delta && delta.startsWith("-");
+
+  const displayVal = delta ? rawValue.replace(delta, "").replace(/[()]/g, "").trim() : rawValue;
+
+  return (
+    <div
+      key={idx}
+      className="p-3 rounded-xl bg-bg-card border border-border-main shadow-2xs flex flex-col justify-between"
+    >
+      <span className="text-[11px] font-medium text-text-secondary line-clamp-1 mb-1">
+        {renderInlineFormatting(label)}
+      </span>
+      <div className="flex items-baseline justify-between gap-1.5 flex-wrap">
+        <span className="text-base sm:text-lg font-bold font-mono tabular-nums text-text-primary tracking-tight">
+          {renderInlineFormatting(displayVal)}
+        </span>
+        {delta && (
+          <span
+            className={`inline-flex items-center gap-0.5 text-[10px] font-semibold font-mono tabular-nums px-1.5 py-0.5 rounded-full ${
+              isPositive
+                ? "text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20"
+                : isNegative
+                ? "text-rose-700 dark:text-rose-300 bg-rose-500/10 border border-rose-500/20"
+                : "text-text-secondary bg-bg-secondary"
+            }`}
+          >
+            {isPositive && <TrendingUp className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
+            {isNegative && <TrendingDown className="w-3 h-3 text-rose-600 dark:text-rose-400" />}
+            <span>{delta}</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TableSection({ lines, sIdx }) {
+  const [showChart, setShowChart] = useState(false);
+
+  const headerCells = lines[0]
+    .slice(1, -1)
+    .split("|")
+    .map((c) => c.trim());
+
+  const startIndex = lines[1].includes("---") ? 2 : 1;
+  const dataRows = lines.slice(startIndex).map((row) =>
+    row
+      .slice(1, -1)
+      .split("|")
+      .map((c) => c.trim())
+  );
+
+  const isColumnNumeric = headerCells.map((_, colIdx) => {
+    let numCount = 0;
+    dataRows.forEach((r) => {
+      if (isNumericCell(r[colIdx])) numCount++;
+    });
+    return dataRows.length > 0 && numCount / dataRows.length >= 0.7;
+  });
+
+  const chartable = detectChartableData(headerCells, dataRows);
+
+  return (
+    <div key={sIdx} className="my-3 space-y-2">
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          {chartable && (
+            <button
+              type="button"
+              onClick={() => setShowChart((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                showChart
+                  ? "bg-purple-600 text-white border-purple-600 shadow-2xs"
+                  : "bg-bg-card hover:bg-bg-secondary text-purple-700 dark:text-purple-300 border-border-main"
+              }`}
+              title={showChart ? "View table only" : "Visualize table as interactive chart"}
+              aria-label={showChart ? "Hide visualization" : "Visualize table data"}
+              aria-pressed={showChart}
+            >
+              {showChart ? <TableIcon className="w-3.5 h-3.5" /> : <BarChart2 className="w-3.5 h-3.5" />}
+              <span>{showChart ? "Show Table" : "Visualize"}</span>
+            </button>
+          )}
+        </div>
+
+        <TableExportActions headers={headerCells} rows={dataRows} tableName={`bi-report-${sIdx + 1}`} />
+      </div>
+
+      {showChart && chartable && (
+        <Suspense
+          fallback={
+            <div className="h-48 rounded-xl border border-border-main bg-bg-card p-4 flex items-center justify-center text-xs text-text-secondary animate-pulse">
+              Loading visualization...
+            </div>
+          }
+        >
+          <DynamicChart chartable={chartable} />
+        </Suspense>
+      )}
+
+      <div className="overflow-x-auto rounded-xl border border-border-main bg-bg-card shadow-xs">
+        <table className="w-full text-xs text-left border-collapse">
+          <thead>
+            <tr className="bg-bg-secondary/70 border-b border-border-main sticky top-0 z-10 backdrop-blur-xs">
+              {headerCells.map((h, hIdx) => (
+                <th
+                  key={hIdx}
+                  scope="col"
+                  className={`px-3.5 py-2.5 font-semibold text-text-primary ${
+                    isColumnNumeric[hIdx] ? "text-right font-mono tabular-nums" : "text-left"
+                  }`}
+                >
+                  {renderInlineFormatting(h)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-main/50">
+            {dataRows.map((row, rIdx) => (
+              <tr
+                key={rIdx}
+                className="hover:bg-bg-secondary/35 transition-colors odd:bg-bg-card even:bg-bg-secondary/15"
+              >
+                {row.map((cell, cIdx) => (
+                  <td
+                    key={cIdx}
+                    className={`px-3.5 py-2 text-text-secondary ${
+                      isColumnNumeric[cIdx]
+                        ? "text-right font-mono tabular-nums text-text-primary font-medium"
+                        : "text-left"
+                    }`}
+                  >
+                    {renderInlineFormatting(cell)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function FormattedAIResponse({ content }) {
   if (!content) return null;
 
   const normalized = normalizeContent(content);
-
-  // Split into primary paragraphs / sections by double newlines
   const rawSections = normalized.split(/\n\n+/);
 
   return (
@@ -137,57 +306,28 @@ export default function FormattedAIResponse({ content }) {
 
         // 1. Markdown Table
         if (isTableBlock(lines)) {
-          const headerCells = lines[0]
-            .slice(1, -1)
-            .split("|")
-            .map((c) => c.trim());
+          return <TableSection key={sIdx} lines={lines} sIdx={sIdx} />;
+        }
 
-          const startIndex = lines[1].includes("---") ? 2 : 1;
-          const dataRows = lines.slice(startIndex).map((row) =>
-            row
-              .slice(1, -1)
-              .split("|")
-              .map((c) => c.trim())
-          );
-
+        // 2. Metric KPI Cards (2+ key: value lines)
+        if (isMetricBlock(lines)) {
           return (
             <div
               key={sIdx}
-              className="overflow-x-auto my-3 rounded-xl border border-border-main bg-bg-card shadow-xs"
+              className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 my-3"
             >
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="bg-bg-secondary/70 border-b border-border-main">
-                    {headerCells.map((h, hIdx) => (
-                      <th
-                        key={hIdx}
-                        className="px-3.5 py-2.5 font-semibold text-text-primary"
-                      >
-                        {renderInlineFormatting(h)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border-main/50">
-                  {dataRows.map((row, rIdx) => (
-                    <tr
-                      key={rIdx}
-                      className="hover:bg-bg-secondary/25 transition-colors"
-                    >
-                      {row.map((cell, cIdx) => (
-                        <td key={cIdx} className="px-3.5 py-2 text-text-secondary">
-                          {renderInlineFormatting(cell)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {lines.map((l, lIdx) => {
+                const cleanLine = l.replace(/^[-*•]\s+/, "");
+                const colonIdx = cleanLine.indexOf(":");
+                const label = cleanLine.slice(0, colonIdx).trim();
+                const rawVal = cleanLine.slice(colonIdx + 1).trim();
+                return <MetricTile key={lIdx} label={label} rawValue={rawVal} idx={lIdx} />;
+              })}
             </div>
           );
         }
 
-        // 2. Code Block (``` ... ```)
+        // 3. Code Block (``` ... ```)
         if (trimmed.startsWith("```")) {
           const cleanCode = trimmed
             .replace(/^```[a-z]*\n?/i, "")
@@ -202,7 +342,7 @@ export default function FormattedAIResponse({ content }) {
           );
         }
 
-        // 3. Callout / Quote Block (> 💡 Note: ... or > ...)
+        // 4. Callout / Quote Block (> 💡 Note: ... or > ...)
         if (trimmed.startsWith(">")) {
           const calloutText = trimmed
             .split("\n")
@@ -231,7 +371,7 @@ export default function FormattedAIResponse({ content }) {
           );
         }
 
-        // 4. Headings (###, ##, #)
+        // 5. Headings (###, ##, #)
         if (trimmed.startsWith("### ")) {
           return (
             <h4
@@ -263,15 +403,13 @@ export default function FormattedAIResponse({ content }) {
           );
         }
 
-        // 5. Line-by-line smart parser for mixed content (e.g. Step header + Bullet sub-items)
-        // Check if section contains numbered steps or bullet points
+        // 6. Mixed list parser
         const hasBullets = lines.some((l) => /^[-*•]\s+/.test(l));
         const hasNumbered = lines.some((l) => /^\d+\.\s+/.test(l));
 
         if (hasBullets || hasNumbered) {
-          // Group contiguous items into sub-blocks
           const elements = [];
-          let currentList = null; // { type: 'ul' | 'ol', items: [] }
+          let currentList = null;
 
           const flushList = () => {
             if (currentList) {
@@ -328,8 +466,6 @@ export default function FormattedAIResponse({ content }) {
               }
             } else if (isNum) {
               const textOnly = line.replace(/^\d+\.\s+/, "");
-              // If the numbered line looks like a major step heading (e.g. "1. Creating a New Lead Manually"),
-              // render it with nice step card emphasis
               flushList();
               elements.push(
                 <div
@@ -361,7 +497,7 @@ export default function FormattedAIResponse({ content }) {
           );
         }
 
-        // 6. Regular clean paragraph
+        // 7. Regular paragraph
         return (
           <p key={sIdx} className="whitespace-pre-line text-text-primary">
             {renderInlineFormatting(trimmed)}

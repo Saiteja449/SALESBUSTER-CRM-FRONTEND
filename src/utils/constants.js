@@ -83,6 +83,7 @@ export const API_ENDPOINTS = {
     CHAT: `${API_BASE_URL}/ai-assistant/chat`,
     SESSIONS: `${API_BASE_URL}/ai-assistant/sessions`,
     SESSION: (id) => `${API_BASE_URL}/ai-assistant/sessions/${id}`,
+    CONFIRM_EMAIL_REPORT: `${API_BASE_URL}/ai-assistant/confirm-email-report`,
   },
   EVENTS: {
     BASE: `${API_BASE_URL}/events`,
