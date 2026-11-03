@@ -3,9 +3,8 @@ import { API_BASE_URL } from "../utils/constants.js";
 
 /**
  * AI Target Intelligence Service
- *
- * Backend is the authoritative source for real-time live prospect discovery,
- * accurate verified contact extraction, and persistent resolution status tracking.
+ * Handles business discovery, contact verification, website enrichment,
+ * resolution tracking, target lists, and Excel exports.
  */
 export const targetIntelligenceService = {
   /**
@@ -13,9 +12,7 @@ export const targetIntelligenceService = {
    */
   async getUsageQuota() {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/target-intelligence/quota`
-      );
+      const response = await axios.get(`${API_BASE_URL}/target-intelligence/quota`);
       if (response.data?.data) {
         return response.data.data;
       }
@@ -23,11 +20,29 @@ export const targetIntelligenceService = {
       console.warn("Could not fetch usage quota from server:", err?.response?.data?.message || err.message);
     }
     return {
+      isConfigured: false,
       searchesUsedThisMonth: 0,
-      searchesLimit: 100,
-      leadsImportedThisMonth: 0,
-      leadsImportLimit: 500,
-      resetDate: "2026-11-01",
+      searchesLimit: null,
+      resetDate: null,
+    };
+  },
+
+  /**
+   * Fetch provider connectivity and active status
+   */
+  async getProviderStatus() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/target-intelligence/providers/status`);
+      if (response.data?.data) {
+        return response.data.data;
+      }
+    } catch (err) {
+      console.warn("Could not fetch provider status:", err?.message);
+    }
+    return {
+      gemini: { configured: false },
+      tavily: { configured: false },
+      openStreetMap: { available: true },
     };
   },
 
@@ -49,113 +64,191 @@ export const targetIntelligenceService = {
   },
 
   /**
-   * Execute an ICP prospect discovery search through the backend intelligence engine.
-   * Supports LinkedIn-style entity scopes ('all' | 'companies' | 'people'),
-   * location, company size, industry, and role filters.
+   * Execute business discovery search across providers
    */
   async executeSearch(filters) {
-    const response = await axios.post(
-      `${API_BASE_URL}/target-intelligence/search`,
-      {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/target-intelligence/search`, {
         prompt: filters.prompt,
-        searchType: filters.searchType || "all",
         city: filters.city,
         industry: filters.industry,
         need: filters.need,
-        companySize: filters.companySize,
         roles: filters.roles,
+        searchType: filters.searchType || "all",
+      });
+
+      if (response.data?.success && response.data?.data) {
+        return response.data.data;
       }
-    );
 
-    if (response.data?.success && response.data?.data) {
-      return response.data.data;
+      throw new Error(response.data?.message || "Search failed to return verified businesses");
+    } catch (err) {
+      const backendData = err.response?.data?.data;
+      const backendMessage = err.response?.data?.message;
+      const customErr = new Error(backendMessage || err.message || "Search failed to return verified businesses");
+      customErr.providerStatuses = backendData?.providerStatuses;
+      customErr.outcome = backendData?.outcome;
+      customErr.backendData = backendData;
+      throw customErr;
     }
-
-    throw new Error(
-      response.data?.message || "Search failed to return verified prospects"
-    );
   },
 
   /**
    * Mark a prospect as Resolved for this organization
    */
   async resolveProspect(prospect, notes = "") {
-    const response = await axios.post(
-      `${API_BASE_URL}/target-intelligence/resolve`,
-      {
-        prospect,
-        entityType: prospect.entityType || "company",
-        notes,
-      }
-    );
+    const response = await axios.post(`${API_BASE_URL}/target-intelligence/resolve`, {
+      prospect,
+      notes,
+    });
 
     if (response.data?.success) {
       return response.data.data;
     }
 
-    throw new Error(
-      response.data?.message || "Failed to mark prospect as resolved"
-    );
+    throw new Error(response.data?.message || "Failed to mark prospect as resolved");
   },
 
   /**
    * Unresolve a prospect
    */
   async unresolveProspect(prospectKey, companyName) {
-    const response = await axios.post(
-      `${API_BASE_URL}/target-intelligence/unresolve`,
-      {
-        prospectKey,
-        companyName,
-      }
-    );
+    const response = await axios.post(`${API_BASE_URL}/target-intelligence/unresolve`, {
+      prospectKey,
+      companyName,
+    });
 
     if (response.data?.success) {
       return response.data.data;
     }
 
-    throw new Error(
-      response.data?.message || "Failed to remove resolved status"
-    );
+    throw new Error(response.data?.message || "Failed to remove resolved status");
   },
 
   /**
-   * Fetch all resolved prospects for the current organization
+   * Bulk mark multiple prospects as resolved
    */
-  async getResolvedProspects() {
-    const response = await axios.get(
-      `${API_BASE_URL}/target-intelligence/resolved-list`
-    );
+  async bulkResolveProspects(prospects, notes = "") {
+    const response = await axios.post(`${API_BASE_URL}/target-intelligence/bulk-resolve`, {
+      prospects,
+      notes,
+    });
 
-    if (response.data?.success && response.data?.data) {
+    if (response.data?.success) {
       return response.data.data;
     }
 
+    throw new Error(response.data?.message || "Failed to bulk resolve prospects");
+  },
+
+  /**
+   * Fetch all resolved prospects for current organization
+   */
+  async getResolvedProspects() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/target-intelligence/resolved-list`);
+      if (response.data?.success && response.data?.data) {
+        return response.data.data;
+      }
+    } catch (err) {
+      console.warn("Could not fetch resolved prospects:", err?.message);
+    }
     return [];
   },
 
   /**
-   * Authoritative batch import of selected prospects into CRM leads (legacy compatibility)
+   * Get search history
    */
-  async importProspectsToCrm(importPayload) {
-    const response = await axios.post(
-      `${API_BASE_URL}/target-intelligence/import-to-crm`,
-      {
-        prospects: importPayload.prospects,
-        assignedUserId: importPayload.assignedUserId || importPayload.assignedTo || undefined,
-        pipelineStage: importPayload.pipelineStage || "New",
-        duplicateAction: importPayload.duplicateAction || "skip",
-        tags: importPayload.tags || ["AI Target Intelligence"],
+  async getSearches() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/target-intelligence/searches`);
+      if (response.data?.success && response.data?.data) {
+        return response.data.data;
       }
-    );
-
-    if (response.data?.success) {
-      return response.data;
+    } catch (err) {
+      console.warn("Could not fetch searches:", err?.message);
     }
+    return [];
+  },
 
-    throw new Error(
-      response.data?.message || "Backend rejected prospect import"
+  /**
+   * Trigger on-demand website enrichment for a company
+   */
+  async enrichCompany(companyId) {
+    const response = await axios.post(
+      `${API_BASE_URL}/target-intelligence/companies/${companyId}/enrich`
     );
+    if (response.data?.success && response.data?.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data?.message || "Enrichment failed");
+  },
+
+  /**
+   * Export discovered prospects to Excel or CSV
+   */
+  async exportProspects(prospects, format = "xlsx") {
+    const response = await axios.post(
+      `${API_BASE_URL}/target-intelligence/export`,
+      { prospects, format },
+      { responseType: "blob" }
+    );
+
+    const blob = new Blob([response.data], {
+      type:
+        format === "csv"
+          ? "text/csv"
+          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `Target_Intelligence_${new Date().toISOString().slice(0, 10)}.${format}`
+    );
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    return true;
+  },
+
+  /**
+   * Target Lists CRUD
+   */
+  async getTargetLists() {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/target-intelligence/lists`);
+      if (response.data?.success && response.data?.data) {
+        return response.data.data;
+      }
+    } catch {}
+    return [];
+  },
+
+  async createTargetList(payload) {
+    const response = await axios.post(`${API_BASE_URL}/target-intelligence/lists`, payload);
+    if (response.data?.success) {
+      return response.data.data;
+    }
+    throw new Error(response.data?.message || "Failed to create target list");
+  },
+
+  async updateTargetList(id, payload) {
+    const response = await axios.patch(
+      `${API_BASE_URL}/target-intelligence/lists/${id}`,
+      payload
+    );
+    if (response.data?.success) {
+      return response.data.data;
+    }
+    throw new Error(response.data?.message || "Failed to update target list");
+  },
+
+  async deleteTargetList(id) {
+    const response = await axios.delete(`${API_BASE_URL}/target-intelligence/lists/${id}`);
+    return response.data?.success;
   },
 };
 
