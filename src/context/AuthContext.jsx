@@ -316,14 +316,35 @@ export function AuthProvider({ children }) {
   // Authentication using credentials
   const login = async (email, password) => {
     try {
-      const response = await axios.post(API_ENDPOINTS.AUTH.LOGIN, {
-        email,
-        password,
-      });
+      const response = await axios.post(
+        API_ENDPOINTS.AUTH.LOGIN,
+        {
+          email,
+          password,
+          clientType: "web",
+        },
+        {
+          headers: {
+            "x-client-platform": "web",
+          },
+        }
+      );
       const data = response.data;
 
       if (data.success === false) {
         return { success: false, message: data.message || "Login failed" };
+      }
+
+      // Guest accounts are mobile-only and forbidden from web CRM access
+      if (
+        data.accountType === "guest" ||
+        data.organization?.accountType === "guest"
+      ) {
+        return {
+          success: false,
+          message:
+            "Guest accounts are mobile-only and do not have web access. Please log in using the SalesBuster mobile app.",
+        };
       }
 
       const roleMap = {

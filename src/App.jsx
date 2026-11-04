@@ -118,7 +118,18 @@ function TargetIntelligenceRoute({ children }) {
 }
 
 function AppLayout() {
-  const { isAuthenticated, isOrganizationBlocked } = useAuth();
+  const { isAuthenticated, isOrganizationBlocked, currentUser, organization, logout } = useAuth();
+  const isGuest = currentUser?.accountType === "guest" || organization?.accountType === "guest";
+
+  useEffect(() => {
+    if (isGuest) {
+      logout();
+    }
+  }, [isGuest, logout]);
+
+  if (isGuest) {
+    return <Navigate to="/login" replace />;
+  }
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
