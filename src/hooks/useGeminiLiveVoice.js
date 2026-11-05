@@ -173,6 +173,30 @@ export function useGeminiLiveVoice(options = {}) {
       }
     };
 
+    // Gemini Live sends user captions on dedicated interim/final events. Keep
+    // interim hypotheses replaceable and only append committed text once.
+    const handleUserInterim = (data) => {
+      if (data?.role === "user" && typeof data.text === "string") {
+        setLiveTranscript(`You: ${data.text}`);
+      }
+    };
+    const handleUserFinal = (data) => {
+      if (data?.role !== "user" || typeof data.text !== "string" || !data.text.trim()) return;
+      const text = data.text.trim();
+      setLiveTranscript(`You: ${text}`);
+      const userTurn = {
+        id: `turn_u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        role: "user",
+        text,
+        ts: new Date().toISOString(),
+      };
+      setTurns((prev) => {
+        const updated = [...prev, userTurn];
+        turnsRef.current = updated;
+        return updated;
+      });
+    };
+
     const handleInterrupted = () => {
       console.log("[Live Voice Hook] Interrupted by user speech");
       if (playerRef.current) {
@@ -255,6 +279,8 @@ export function useGeminiLiveVoice(options = {}) {
     socket.on("bi_voice_status", handleStatus);
     socket.on("bi_voice_audio_out", handleAudioOut);
     socket.on("bi_voice_transcript", handleTranscript);
+    socket.on("bi_voice_transcript_interim", handleUserInterim);
+    socket.on("bi_voice_transcript_final", handleUserFinal);
     socket.on("bi_voice_interrupted", handleInterrupted);
     socket.on("bi_voice_turn_complete", handleTurnComplete);
     socket.on("bi_voice_error", handleError);
@@ -297,6 +323,8 @@ export function useGeminiLiveVoice(options = {}) {
       socket.off("bi_voice_status", handleStatus);
       socket.off("bi_voice_audio_out", handleAudioOut);
       socket.off("bi_voice_transcript", handleTranscript);
+      socket.off("bi_voice_transcript_interim", handleUserInterim);
+      socket.off("bi_voice_transcript_final", handleUserFinal);
       socket.off("bi_voice_interrupted", handleInterrupted);
       socket.off("bi_voice_turn_complete", handleTurnComplete);
       socket.off("bi_voice_error", handleError);
