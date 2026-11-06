@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
+import { extractTextContent } from "../components/ai/FormattedAIResponse.jsx";
 
 // Helper to generate a unique ID inside event handlers
 function generateMessageId(prefix = "msg") {
@@ -56,6 +57,7 @@ export function useBIChat({ activeSessionId, onSessionCreated }) {
       if (res.data?.success && res.data?.data) {
         const msgs = (res.data.data.messages || []).map((m) => ({
           ...m,
+          content: extractTextContent(m.content),
           emailDraft: m.emailDraft || null,
         }));
         setMessages(msgs);
@@ -145,10 +147,11 @@ export function useBIChat({ activeSessionId, onSessionCreated }) {
           }
 
           const assistantMsgId = generateMessageId("ast");
+          const cleanReply = extractTextContent(reply);
           const assistantMessage = {
             id: assistantMsgId,
             role: "assistant",
-            content: reply || "No data found for that query.",
+            content: cleanReply || "No data found for that query.",
             options: returnedOptions || [],
             toolsUsed: toolsUsed || [],
             emailDraft: emailDraft || null,
