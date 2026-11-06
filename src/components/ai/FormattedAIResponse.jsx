@@ -13,6 +13,47 @@ import { detectChartableData } from "../../utils/chartDetection.js";
 const DynamicChart = lazy(() => import("./DynamicChart.jsx"));
 
 /**
+ * Safely extracts plain text from LLM response content:
+ * Handles strings, arrays of text blocks ([{ type: "text", text: "..." }]),
+ * objects, and stringified JSON arrays.
+ */
+export function extractTextContent(rawText) {
+  if (!rawText) return "";
+  if (Array.isArray(rawText)) {
+    return rawText
+      .map((part) => (typeof part === "string" ? part : part?.text || ""))
+      .join("");
+  }
+  if (typeof rawText === "object" && rawText !== null && typeof rawText.text === "string") {
+    return rawText.text;
+  }
+  if (typeof rawText === "string") {
+    const trimmed = rawText.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (
+          Array.isArray(parsed) &&
+          parsed.some(
+            (p) => p && typeof p === "object" && (p.text !== undefined || p.type === "text")
+          )
+        ) {
+          return parsed
+            .map((p) => {
+              if (typeof p === "string") return p;
+              if (p && typeof p.text === "string") return p.text;
+              return "";
+            })
+            .join("");
+        }
+      } catch (_) {}
+    }
+    return rawText;
+  }
+  return String(rawText);
+}
+
+/**
  * Pre-processes and normalizes raw AI output:
  * - Fixes inline run-on bullets into separate lines
  * - Un-wraps accidental huge bold blocks
@@ -21,7 +62,7 @@ const DynamicChart = lazy(() => import("./DynamicChart.jsx"));
 function normalizeContent(rawText) {
   if (!rawText) return "";
 
-  let text = String(rawText);
+  let text = extractTextContent(rawText);
 
   // 1. Unwrap accidental outer bold wrapping entire multi-sentence numbered blocks
   text = text.replace(
