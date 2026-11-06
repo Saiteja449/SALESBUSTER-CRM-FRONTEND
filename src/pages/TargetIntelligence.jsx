@@ -40,6 +40,7 @@ export default function TargetIntelligence() {
 
   // Resolution Filter & State
   const [resolutionFilter, setResolutionFilter] = useState("all"); // 'all' | 'unresolved' | 'resolved'
+  const [resolvedHistory, setResolvedHistory] = useState([]);
   const [isResolvingKey, setIsResolvingKey] = useState(null);
 
   // Active Detail Inspection
@@ -50,6 +51,7 @@ export default function TargetIntelligence() {
   useEffect(() => {
     loadQuota();
     loadSearches();
+    loadResolvedHistory();
   }, []);
 
   const showToast = (msg) => {
@@ -67,6 +69,15 @@ export default function TargetIntelligence() {
     if (Array.isArray(data)) setSearchHistory(data);
   };
 
+  const loadResolvedHistory = async () => {
+    try {
+      const data = await targetIntelligenceService.getResolvedProspects();
+      if (Array.isArray(data)) setResolvedHistory(data);
+    } catch (err) {
+      console.warn("Could not load resolved history:", err?.message);
+    }
+  };
+
   const handleExecuteSearch = async (filters) => {
     setIsSearching(true);
     setSearchError(null);
@@ -78,6 +89,12 @@ export default function TargetIntelligence() {
       setSearchOutcome(result.outcome || "success");
       setHasSearched(true);
       loadSearches();
+      loadResolvedHistory();
+      if (result.excludedResolvedCount > 0) {
+        showToast(
+          `Found ${result.prospects?.length || 0} fresh companies (${result.excludedResolvedCount} previously resolved companies excluded)`
+        );
+      }
     } catch (err) {
       console.error("Search failed:", err);
       setSearchError(err.message || "Search failed to return results");
@@ -147,6 +164,7 @@ export default function TargetIntelligence() {
         }
         showToast(`Resolution cleared for "${prospect.companyName}"`);
       }
+      loadResolvedHistory();
     } catch (err) {
       console.error("Failed to toggle resolution status:", err);
       showToast("Could not update resolution status");
@@ -172,6 +190,7 @@ export default function TargetIntelligence() {
             : p
         )
       );
+      loadResolvedHistory();
       showToast(`Marked ${selectedList.length} companies as resolved`);
     } catch (err) {
       console.error("Bulk resolve failed:", err);
@@ -359,6 +378,7 @@ export default function TargetIntelligence() {
       {/* ── 4. Apollo-Style Results Table ──────────────────────────────── */}
       <ApolloResultsTable
         prospects={prospects}
+        resolvedHistory={resolvedHistory}
         hasSearched={hasSearched}
         isLoading={isSearching}
         searchSummary={searchSummary}
