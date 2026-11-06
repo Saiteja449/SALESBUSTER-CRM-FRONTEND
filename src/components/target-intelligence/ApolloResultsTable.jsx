@@ -26,6 +26,7 @@ import {
 
 export default function ApolloResultsTable({
   prospects = [],
+  resolvedHistory = [],
   hasSearched = false,
   isLoading = false,
   searchSummary = null,
@@ -56,8 +57,27 @@ export default function ApolloResultsTable({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  // Determine source data: when viewing "resolved", display full persistent resolvedHistory if available
+  const displaySource =
+    resolutionFilter === "resolved" && Array.isArray(resolvedHistory) && resolvedHistory.length > 0
+      ? resolvedHistory.map((r) => ({
+          ...r,
+          id: r._id || r.id || r.prospectKey,
+          isResolved: true,
+          contact: {
+            businessPhone: r.phone || r.contact?.businessPhone,
+            phoneType: r.contact?.phoneType || "mobile",
+            phoneVerificationStatus: "Verified",
+            businessEmail: r.email || r.contact?.businessEmail,
+            emailType: r.contact?.emailType || "corporate",
+            emailVerificationStatus: "Verified",
+          },
+          socialLinks: r.socialLinks || (r.linkedin ? { linkedin: r.linkedin } : {}),
+        }))
+      : prospects;
+
   // Filter prospects
-  const filtered = prospects.filter((p) => {
+  const filtered = displaySource.filter((p) => {
     // 1. Resolution filter tab
     if (resolutionFilter === "resolved" && !p.isResolved) return false;
     if (resolutionFilter === "unresolved" && p.isResolved) return false;
@@ -138,8 +158,11 @@ export default function ApolloResultsTable({
     if (onExport) onExport(selectedProspects, format);
   };
 
-  const resolvedTotal = prospects.filter((p) => p.isResolved).length;
-  const unresolvedTotal = prospects.length - resolvedTotal;
+  const resolvedTotal =
+    Array.isArray(resolvedHistory) && resolvedHistory.length > 0
+      ? resolvedHistory.length
+      : prospects.filter((p) => p.isResolved).length;
+  const unresolvedTotal = prospects.filter((p) => !p.isResolved).length;
 
   // 1. Loading State
   if (isLoading) {
@@ -254,6 +277,28 @@ export default function ApolloResultsTable({
           <span>
             <strong>Partial Provider Failure:</strong> One or more search providers timed out or returned an error. Displaying verified results from responding live providers.
           </span>
+        </div>
+      )}
+
+      {/* ── Excluded Resolved Leads Notice Banner ────────────────────────────── */}
+      {searchSummary?.excludedResolvedCount > 0 && (
+        <div className="px-5 py-2.5 bg-purple-500/10 border-b border-purple-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-purple-700 dark:text-purple-300">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-purple-500 shrink-0" />
+            <span>
+              <strong>{searchSummary.excludedResolvedCount} previously resolved companies</strong> were automatically excluded from this search so your team only sees fresh targets.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (onResolutionFilterChange) onResolutionFilterChange("resolved");
+              setCurrentPage(1);
+            }}
+            className="text-xs font-bold underline hover:text-purple-900 dark:hover:text-purple-100 shrink-0 cursor-pointer text-left"
+          >
+            View Resolved History ({resolvedTotal}) →
+          </button>
         </div>
       )}
 
@@ -494,14 +539,18 @@ export default function ApolloResultsTable({
                           </button>
                         </div>
                         <div className="text-[9px] text-brand-primary/50">
-                          Format valid • Verification: unknown
+                          {p.contact?.phoneVerificationStatus === "Verified" ? (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Verified via RapidAPI</span>
+                          ) : (
+                            "Format valid • Verification: unknown"
+                          )}
                         </div>
                       </div>
                     ) : (
                       <span className="text-brand-primary/40 italic">Not listed</span>
                     )}
                      {email ? (
-                      <div className="space-y-0.5 max-w-[180px]">
+                      <div className="space-y-0.5 max-w-[180px] mt-1">
                         <div className="flex items-center gap-1.5">
                           <Mail className="w-3 h-3 text-emerald-500 shrink-0" />
                           <span className="truncate text-brand-primary font-medium" title={email}>
@@ -521,11 +570,76 @@ export default function ApolloResultsTable({
                           </button>
                         </div>
                         <div className="text-[9px] text-brand-primary/50">
-                          Format valid • Verification: unknown
+                          {p.contact?.emailVerificationStatus === "Verified" ? (
+                            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Verified via RapidAPI</span>
+                          ) : (
+                            "Format valid • Verification: unknown"
+                          )}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-brand-primary/40 italic">Not listed</span>
+                      <span className="text-brand-primary/40 italic block mt-1">Not listed</span>
+                    )}
+
+                    {/* Social Handles extracted from RapidAPI */}
+                    {p.socialLinks && Object.values(p.socialLinks).some(Boolean) && (
+                      <div className="flex flex-wrap items-center gap-1 pt-1.5 mt-1 border-t border-brand-secondary/40">
+                        {p.socialLinks.linkedin && (
+                          <a
+                            href={p.socialLinks.linkedin}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 hover:bg-blue-500/25"
+                            title="LinkedIn Profile"
+                          >
+                            LinkedIn
+                          </a>
+                        )}
+                        {p.socialLinks.twitter && (
+                          <a
+                            href={p.socialLinks.twitter}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-500/15 text-slate-700 dark:text-slate-300 hover:bg-slate-500/25"
+                            title="Twitter / X"
+                          >
+                            𝕏
+                          </a>
+                        )}
+                        {p.socialLinks.instagram && (
+                          <a
+                            href={p.socialLinks.instagram}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-pink-500/15 text-pink-600 dark:text-pink-400 hover:bg-pink-500/25"
+                            title="Instagram"
+                          >
+                            Instagram
+                          </a>
+                        )}
+                        {p.socialLinks.facebook && (
+                          <a
+                            href={p.socialLinks.facebook}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/25"
+                            title="Facebook"
+                          >
+                            Facebook
+                          </a>
+                        )}
+                        {p.socialLinks.whatsapp && (
+                          <a
+                            href={p.socialLinks.whatsapp}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25"
+                            title="WhatsApp"
+                          >
+                            WhatsApp
+                          </a>
+                        )}
+                      </div>
                     )}
                   </td>
 

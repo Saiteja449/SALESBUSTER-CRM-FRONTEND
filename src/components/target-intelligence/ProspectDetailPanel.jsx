@@ -380,6 +380,91 @@ export default function ProspectDetailPanel({
                   </div>
                 </div>
               )}
+
+              {/* Social Channels (RapidAPI) */}
+              {prospect.socialLinks && Object.values(prospect.socialLinks).some(Boolean) && (
+                <div className="p-4 rounded-2xl bg-brand-primary/5 border border-brand-secondary space-y-2.5">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-primary/50">
+                    Verified Social Channels
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {prospect.socialLinks.linkedin && (
+                      <a
+                        href={prospect.socialLinks.linkedin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 text-xs font-bold"
+                      >
+                        <span>LinkedIn</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                    {prospect.socialLinks.twitter && (
+                      <a
+                        href={prospect.socialLinks.twitter}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-500/10 text-slate-700 dark:text-slate-300 hover:bg-slate-500/20 text-xs font-bold"
+                      >
+                        <span>Twitter / X</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                    {prospect.socialLinks.instagram && (
+                      <a
+                        href={prospect.socialLinks.instagram}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-pink-500/10 text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 text-xs font-bold"
+                      >
+                        <span>Instagram</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                    {prospect.socialLinks.facebook && (
+                      <a
+                        href={prospect.socialLinks.facebook}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 text-xs font-bold"
+                      >
+                        <span>Facebook</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                    {prospect.socialLinks.whatsapp && (
+                      <a
+                        href={prospect.socialLinks.whatsapp}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold"
+                      >
+                        <span>WhatsApp Direct</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Technologies (RapidAPI) */}
+              {Array.isArray(prospect.technologies) && prospect.technologies.length > 0 && (
+                <div className="p-4 rounded-2xl bg-brand-primary/5 border border-brand-secondary space-y-2">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-brand-primary/50">
+                    Detected Website Technologies
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {prospect.technologies.map((tech, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-brand-secondary/50 text-brand-primary/80"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
