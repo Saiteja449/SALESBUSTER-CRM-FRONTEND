@@ -75,6 +75,7 @@ export const targetIntelligenceService = {
         need: filters.need,
         roles: filters.roles,
         searchType: filters.searchType || "all",
+        limit: filters.limit || 10,
       });
 
       if (response.data?.success && response.data?.data) {

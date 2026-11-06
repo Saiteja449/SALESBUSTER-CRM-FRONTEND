@@ -90,9 +90,18 @@ export default function TargetIntelligence() {
       setHasSearched(true);
       loadSearches();
       loadResolvedHistory();
-      if (result.excludedResolvedCount > 0) {
+      const cachedCount = (result.prospects || []).filter((p) => p.cached).length;
+      if (result.excludedResolvedCount > 0 && cachedCount > 0) {
+        showToast(
+          `Found ${result.prospects?.length || 0} companies (${cachedCount} from cache, ${result.excludedResolvedCount} resolved excluded)`
+        );
+      } else if (result.excludedResolvedCount > 0) {
         showToast(
           `Found ${result.prospects?.length || 0} fresh companies (${result.excludedResolvedCount} previously resolved companies excluded)`
+        );
+      } else if (cachedCount > 0) {
+        showToast(
+          `Found ${result.prospects?.length || 0} companies (${cachedCount} retrieved instantly from cache)`
         );
       }
     } catch (err) {
