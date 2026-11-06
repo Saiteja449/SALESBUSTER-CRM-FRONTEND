@@ -13,6 +13,7 @@ import {
   History,
   CheckCircle2,
   Clock,
+  Hash,
 } from "lucide-react";
 import { targetIntelligenceService } from "../../services/targetIntelligence.js";
 
@@ -63,6 +64,8 @@ export default function TargetProfileForm({
 }) {
   const [nlPrompt, setNlPrompt] = useState("");
   const [isInterpreting, setIsInterpreting] = useState(false);
+  const [autoExtractOnDiscover, setAutoExtractOnDiscover] = useState(true);
+  const [limit, setLimit] = useState(initialFilters.limit || 10);
 
   // Structured filters (No employee count, No social media)
   const [industry, setIndustry] = useState(initialFilters.industry || "All");
@@ -89,7 +92,7 @@ export default function TargetProfileForm({
 
   const handleInterpretPrompt = async (textToInterpret) => {
     const promptText = textToInterpret || nlPrompt;
-    if (!promptText.trim()) return;
+    if (!promptText.trim()) return null;
 
     setIsInterpreting(true);
     try {
@@ -117,12 +120,14 @@ export default function TargetProfileForm({
         if (Array.isArray(parsed.decisionMakerRoles) && parsed.decisionMakerRoles.length > 0) {
           setSelectedRoles(parsed.decisionMakerRoles);
         }
+        return parsed;
       }
     } catch (err) {
       console.warn("AI prompt interpretation notice:", err.message);
     } finally {
       setIsInterpreting(false);
     }
+    return null;
   };
 
   const handleResetFilters = () => {
@@ -132,18 +137,68 @@ export default function TargetProfileForm({
     setCustomCity("");
     setNeed("");
     setSelectedRoles(["Founder & CEO", "Managing Director"]);
+    setLimit(10);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    const finalCity = city === "Custom" ? customCity.trim() || "All" : city;
+
+    let targetIndustry = industry;
+    let targetCity = city === "Custom" ? customCity.trim() || "All" : city;
+    let targetNeed = need.trim();
+    let targetRoles = selectedRoles;
+
+    // Option: If auto-extract is checked and user provided a natural language prompt, auto-extract criteria first!
+    if (autoExtractOnDiscover && nlPrompt.trim()) {
+      setIsInterpreting(true);
+      try {
+        const parsed = await targetIntelligenceService.interpretPrompt(nlPrompt.trim());
+        if (parsed) {
+          if (parsed.city && parsed.city !== "All") {
+            const matchedCity = CITIES.find(
+              (c) => c.toLowerCase() === parsed.city.toLowerCase()
+            );
+            if (matchedCity) {
+              targetCity = matchedCity;
+              setCity(matchedCity);
+              setCustomCity("");
+            } else {
+              targetCity = parsed.city;
+              setCity("Custom");
+              setCustomCity(parsed.city);
+            }
+          }
+          if (parsed.industry) {
+            const matchedInd = INDUSTRIES.find((i) =>
+              i.toLowerCase().includes(parsed.industry.toLowerCase())
+            );
+            targetIndustry = matchedInd || parsed.industry;
+            setIndustry(targetIndustry);
+          }
+          if (parsed.need) {
+            targetNeed = parsed.need;
+            setNeed(parsed.need);
+          }
+          if (Array.isArray(parsed.decisionMakerRoles) && parsed.decisionMakerRoles.length > 0) {
+            targetRoles = parsed.decisionMakerRoles;
+            setSelectedRoles(parsed.decisionMakerRoles);
+          }
+        }
+      } catch (err) {
+        console.warn("AI prompt auto-extract notice:", err?.message);
+      } finally {
+        setIsInterpreting(false);
+      }
+    }
+
     onSearch({
       prompt: nlPrompt.trim(),
-      industry,
-      city: finalCity,
-      need: need.trim(),
-      roles: selectedRoles,
+      industry: targetIndustry,
+      city: targetCity,
+      need: targetNeed,
+      roles: targetRoles,
       searchType: "all",
+      limit,
     });
   };
 
@@ -223,7 +278,7 @@ export default function TargetProfileForm({
           />
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-brand-secondary/40">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => handleInterpretPrompt()}
@@ -233,6 +288,19 @@ export default function TargetProfileForm({
                 <Sparkles className={`w-3.5 h-3.5 text-emerald-500 ${isInterpreting ? "animate-spin" : ""}`} />
                 <span>{isInterpreting ? "Extracting Filters..." : "AI Auto-Extract"}</span>
               </button>
+
+              <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold text-brand-primary/80 hover:text-brand-primary bg-brand-secondary/20 hover:bg-brand-secondary/40 transition cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={autoExtractOnDiscover}
+                  onChange={(e) => setAutoExtractOnDiscover(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 accent-emerald-500 cursor-pointer"
+                />
+                <span className="flex items-center gap-1 text-[11px]">
+                  <Sparkles className="w-3 h-3 text-emerald-500" />
+                  Auto-Extract & Search
+                </span>
+              </label>
 
               <button
                 type="button"
@@ -247,11 +315,25 @@ export default function TargetProfileForm({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isLoading}
+              disabled={isLoading || isInterpreting}
               className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs sm:text-sm font-black bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white shadow-sm shadow-emerald-500/20 disabled:opacity-50 transition cursor-pointer"
             >
-              <Search className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-              <span>{isLoading ? "Discovering Businesses..." : "Discover Businesses"}</span>
+              {isInterpreting ? (
+                <>
+                  <Sparkles className="w-4 h-4 animate-spin text-white" />
+                  <span>AI Auto-Extracting...</span>
+                </>
+              ) : isLoading ? (
+                <>
+                  <Search className="w-4 h-4 animate-spin" />
+                  <span>Discovering Businesses...</span>
+                </>
+              ) : (
+                <>
+                  <Search className="w-4 h-4" />
+                  <span>Discover {limit} Businesses</span>
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -292,7 +374,7 @@ export default function TargetProfileForm({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Industry Filter */}
           <div className="space-y-1">
             <label className="text-[11px] font-extrabold uppercase tracking-wider text-brand-primary/60 flex items-center gap-1">
@@ -344,8 +426,28 @@ export default function TargetProfileForm({
             )}
           </div>
 
+          {/* Companies Count / Limit Selector */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-extrabold uppercase tracking-wider text-brand-primary/60 flex items-center gap-1">
+              <Hash className="w-3 h-3 text-emerald-500" />
+              <span>Companies to Discover</span>
+            </label>
+            <select
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="w-full px-3 py-2 text-xs rounded-xl bg-brand-light border border-brand-secondary text-brand-primary focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer font-bold"
+            >
+              <option value={5}>5 Companies (Fast)</option>
+              <option value={10}>10 Companies (Standard)</option>
+              <option value={15}>15 Companies</option>
+              <option value={20}>20 Companies</option>
+              <option value={25}>25 Companies</option>
+              <option value={50}>50 Companies (Deep Search)</option>
+            </select>
+          </div>
+
           {/* Decision Maker Roles Filter */}
-          <div className="space-y-1 col-span-2">
+          <div className="space-y-1 col-span-1 sm:col-span-3">
             <label className="text-[11px] font-extrabold uppercase tracking-wider text-brand-primary/60 flex items-center gap-1">
               <Users className="w-3 h-3 text-emerald-500" />
               <span>Target Decision Makers</span>

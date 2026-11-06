@@ -495,6 +495,11 @@ export default function ApolloResultsTable({
                       <div className="space-y-0.5">
                         <div className="font-extrabold text-brand-primary flex items-center gap-1.5">
                           <span>{p.companyName}</span>
+                          {p.cached && (
+                            <span className="px-1.5 py-0.2 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold border border-sky-500/20" title="Retrieved instantly from database cache (no API call)">
+                              Cached
+                            </span>
+                          )}
                         </div>
                         {p.industry ? (
                       <span className="inline-block px-2 py-0.5 rounded-md bg-brand-secondary/40 text-[11px] font-medium">
