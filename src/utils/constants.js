@@ -66,6 +66,7 @@ export const API_ENDPOINTS = {
   },
   ANALYTICS: {
     BASE: `${API_BASE_URL}/analytics`,
+    DASHBOARD: `${API_BASE_URL}/analytics/dashboard`,
     TODAY: `${API_BASE_URL}/analytics/today`,
     AI_LIMITS: `${API_BASE_URL}/analytics/ai-limits`,
     AI_LIMITS_REFRESH: `${API_BASE_URL}/analytics/ai-limits/refresh`,

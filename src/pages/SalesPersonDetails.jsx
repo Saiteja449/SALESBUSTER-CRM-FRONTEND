@@ -72,8 +72,14 @@ function getStatusBadgeStyle(statusName) {
 export default function SalesPersonDetails() {
   const { id, name } = useParams();
   const navigate = useNavigate();
-  const { leads = [] } = useLeads();
+  const { leads = [], ensureDataLoaded } = useLeads();
   const { allUsers = [] } = useAuth();
+
+  useEffect(() => {
+    if (typeof ensureDataLoaded === "function") {
+      ensureDataLoaded();
+    }
+  }, [ensureDataLoaded]);
 
   const paramVal = id || name;
   const decodedParam = decodeURIComponent(paramVal || "");

@@ -25,7 +25,7 @@ const mapServicesToActive = (rawServices) => {
 };
 
 export function LeadsProvider({ children }) {
-  const { organization, allUsers } = useAuth();
+  const { organization, allUsers, isAuthenticated } = useAuth();
   const [leads, setLeads] = useState([]);
 
   const [activeServices, setActiveServices] = useState(() => {
@@ -128,7 +128,18 @@ export function LeadsProvider({ children }) {
     };
   }, []);
 
-  const refreshData = React.useCallback(async () => {
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const lastFetchedRef = React.useRef(0);
+
+  const refreshData = React.useCallback(async (force = false) => {
+    if (!isAuthenticated) return;
+    // Prevent refetching if data was fetched within the last 2 minutes and force is not specified
+    const now = Date.now();
+    if (!force && lastFetchedRef.current && now - lastFetchedRef.current < 120000) {
+      return;
+    }
+    setLoading(true);
     try {
       const [leadsRes, followupsRes] = await Promise.all([
         axios.get(API_ENDPOINTS.LEADS.BASE),
@@ -136,14 +147,21 @@ export function LeadsProvider({ children }) {
       ]);
       setLeads(leadsRes.data.data || leadsRes.data);
       setFollowups(followupsRes.data.data || followupsRes.data);
+      lastFetchedRef.current = Date.now();
+      setIsDataLoaded(true);
     } catch (error) {
       console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
-  useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+  const ensureDataLoaded = React.useCallback(async () => {
+    if (!isAuthenticated) return;
+    if (!isDataLoaded) {
+      await refreshData();
+    }
+  }, [isAuthenticated, isDataLoaded, refreshData]);
 
   // Add a new lead
   const addLead = async (leadData, author = "System") => {
@@ -318,6 +336,9 @@ export function LeadsProvider({ children }) {
         toggleFollowupDone,
         deleteLead,
         refreshData,
+        ensureDataLoaded,
+        isDataLoaded,
+        loading,
       }}
     >
       {children}

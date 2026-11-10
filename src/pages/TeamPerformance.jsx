@@ -75,7 +75,13 @@ function CustomChartTooltip({ active, payload, label }) {
 
 export default function TeamPerformance() {
   const navigate = useNavigate();
-  const { performersList = [] } = useDashboard();
+  const { performersList = [], fetchDashboardSummary } = useDashboard();
+
+  useEffect(() => {
+    if (typeof fetchDashboardSummary === "function") {
+      fetchDashboardSummary();
+    }
+  }, [fetchDashboardSummary]);
   const {
     currentUser,
     organization,

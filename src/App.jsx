@@ -117,6 +117,22 @@ function TargetIntelligenceRoute({ children }) {
   return children ? children : <Outlet />;
 }
 
+function ManagerRoute({ children }) {
+  const { isSalesPerson, isManager, currentUser } = useAuth();
+  const isAuthorized =
+    !isSalesPerson &&
+    (isManager ||
+      currentUser?.role === "Sales Manager" ||
+      currentUser?.role === "Super Admin" ||
+      currentUser?.isOrgOwner);
+
+  if (!isAuthorized) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children ? children : <Outlet />;
+}
+
 function AppLayout() {
   const { isAuthenticated, isOrganizationBlocked, currentUser, organization, logout } = useAuth();
   const isGuest = currentUser?.accountType === "guest" || organization?.accountType === "guest";
@@ -139,16 +155,15 @@ function AppLayout() {
     }
   });
   const location = useLocation();
-  const { refreshData } = useLeads();
   const { refreshNotifications } = useNotifications();
 
+  // On-demand route loading: Data is loaded when navigating to specific views.
+  // Only initial notification state is checked once when authenticated.
   useEffect(() => {
     if (isAuthenticated && !isOrganizationBlocked) {
-      refreshData();
       refreshNotifications();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, isAuthenticated, isOrganizationBlocked, refreshData]);
+  }, [isAuthenticated, isOrganizationBlocked]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -241,8 +256,22 @@ export default function App() {
               element={<Navigate to="/dashboard" replace />}
             />
             <Route path="/followups" element={<FollowUpReport />} />
-            <Route path="/performance" element={<TeamPerformance />} />
-            <Route path="/organization" element={<OrganizationProfile />} />
+            <Route
+              path="/performance"
+              element={
+                <ManagerRoute>
+                  <TeamPerformance />
+                </ManagerRoute>
+              }
+            />
+            <Route
+              path="/organization"
+              element={
+                <ManagerRoute>
+                  <OrganizationProfile />
+                </ManagerRoute>
+              }
+            />
             <Route path="/salesperson/:id" element={<SalesPersonDetails />} />
             <Route
               path="/salesperson/:id/reports"

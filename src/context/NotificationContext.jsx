@@ -60,11 +60,19 @@ export function NotificationProvider({ children }) {
   };
 
   useEffect(() => {
+    if (!isAuthenticated || !currentUser?.token) {
+      setLoading(false);
+      return;
+    }
     fetchNotifications(1, false);
-    // Poll every 30 seconds for the first page only to get new alerts in background
-    const interval = setInterval(() => fetchNotifications(1, true), 30000);
+    // Poll every 60 seconds only when tab is actively visible
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchNotifications(1, true);
+      }
+    }, 60000);
     return () => clearInterval(interval);
-  }, [isAuthenticated, currentUser]);
+  }, [isAuthenticated, currentUser?.token]);
 
   const markAsRead = async (id) => {
     // Optimistic UI update
