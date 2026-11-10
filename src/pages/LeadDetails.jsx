@@ -59,7 +59,14 @@ export default function LeadDetails() {
     toggleFollowupDone,
     activeServices = [],
     qualificationFields = [],
+    ensureDataLoaded,
   } = useLeads();
+
+  useEffect(() => {
+    if (typeof ensureDataLoaded === "function") {
+      ensureDataLoaded();
+    }
+  }, [ensureDataLoaded]);
 
   const currentLead = useMemo(() => {
     return leads.find((l) => String(l.id) === String(id) || String(l._id) === String(id));

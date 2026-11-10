@@ -155,9 +155,15 @@ const getFollowupDueInfo = (followup) => {
 };
 
 export default function AIFollowUps() {
-  const { leads, followups, toggleFollowupDone, refreshData } = useLeads();
+  const { leads, followups, toggleFollowupDone, refreshData, ensureDataLoaded } = useLeads();
   const { allUsers, currentUser, isSalesPerson } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof ensureDataLoaded === "function") {
+      ensureDataLoaded();
+    }
+  }, [ensureDataLoaded]);
 
   // Search & Filters State
   const [searchQuery, setSearchQuery] = useState("");

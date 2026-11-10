@@ -100,7 +100,19 @@ const CustomChartTooltip = ({ active, payload, total }) => {
 export default function Dashboard() {
   const navigate = useNavigate();
   const stats = useDashboard();
-  const { leads } = useLeads();
+  const { leads, ensureDataLoaded } = useLeads();
+
+  useEffect(() => {
+    if (typeof stats.fetchDashboardSummary === "function") {
+      stats.fetchDashboardSummary();
+      const interval = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          stats.fetchDashboardSummary(true);
+        }
+      }, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [stats.fetchDashboardSummary]);
   const {
     currentUser,
     organization,
@@ -126,9 +138,6 @@ export default function Dashboard() {
     ) ||
     currentUser?.isOrgOwner
   );
-
-  const [aiLimits, setAiLimits] = useState(null);
-  const [aiLimitsLoading, setAiLimitsLoading] = useState(true);
 
   // ── WhatsApp Dashboard Widget State ─────────────────────────────────
   const [repWaStatus, setRepWaStatus] = useState(null); // Sales rep's own session status
@@ -322,7 +331,10 @@ export default function Dashboard() {
         console.error("Failed to fetch global AI settings:", err);
       }
     };
-    fetchGlobalSettings();
+    // Only managers configure global AI automation settings
+    if (isManagerRole) {
+      fetchGlobalSettings();
+    }
 
     const handleSettingsUpdate = (data) => {
       if (data) {
@@ -467,37 +479,12 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    const fetchAILimits = async () => {
-      try {
-        const res = await axios.get(API_ENDPOINTS.ANALYTICS.AI_LIMITS);
-        if (res.data.success) {
-          setAiLimits(res.data.data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch previous AI limits:", err);
-      } finally {
-        setAiLimitsLoading(false);
+  const handleExport = async () => {
+    if (!leads || leads.length === 0) {
+      if (typeof ensureDataLoaded === "function") {
+        await ensureDataLoaded();
       }
-    };
-    fetchAILimits();
-  }, []);
-
-  const handleRefreshAILimits = async () => {
-    setAiLimitsLoading(true);
-    try {
-      const res = await axios.post(API_ENDPOINTS.ANALYTICS.AI_LIMITS_REFRESH);
-      if (res.data.success) {
-        setAiLimits(res.data.data);
-      }
-    } catch (err) {
-      console.error("Failed to refresh AI limits:", err);
-    } finally {
-      setAiLimitsLoading(false);
     }
-  };
-
-  const handleExport = () => {
     exportToCSV(leads, "dashboard_leads_export.csv");
   };
 
@@ -524,7 +511,7 @@ export default function Dashboard() {
 
   // ── Derived High-Impact Metrics & Urgent Action Data ───────────────────
   const unassignedLeads = useMemo(() => {
-    return leads.filter(
+    return (leads || []).filter(
       (l) =>
         !l.assignedTo ||
         l.assignedTo.trim() === "" ||
@@ -533,9 +520,12 @@ export default function Dashboard() {
   }, [leads]);
 
   const activePipelineLeadsCount = useMemo(() => {
-    return leads.filter((l) => l.status !== "Converted" && l.status !== "Lost")
+    return (leads || []).filter((l) => l.status !== "Converted" && l.status !== "Lost")
       .length;
   }, [leads]);
+
+  const unassignedCount = stats.unassignedCount !== undefined ? stats.unassignedCount : unassignedLeads.length;
+  const activePipelineCount = stats.activePipelineCount !== undefined ? stats.activePipelineCount : activePipelineLeadsCount;
 
   const overdueFollowupsCount = stats.overdueFollowupsCount || 0;
   const todaysFollowupsCount = stats.todaysFollowupsCount || 0;
@@ -553,7 +543,7 @@ export default function Dashboard() {
 
   const hasUrgentWork =
     overdueFollowupsCount > 0 ||
-    (isManagerRole && unassignedLeads.length > 0) ||
+    (isManagerRole && unassignedCount > 0) ||
     isWaDisconnected ||
     (!isOrgSetupComplete && isManagerRole);
 
@@ -680,7 +670,7 @@ export default function Dashboard() {
                 In Pipeline
               </span>
               <div className="text-2xl md:text-3xl font-extrabold text-blue-600 dark:text-blue-400 mt-1 tracking-tight">
-                {activePipelineLeadsCount}
+                {activePipelineCount}
               </div>
               <p className="text-xs font-medium text-brand-primary/60 mt-1 flex items-center gap-1">
                 <TrendingUp className="w-3.5 h-3.5 text-blue-500" />

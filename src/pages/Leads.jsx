@@ -89,7 +89,7 @@ export default function Leads() {
     activeServices = [],
     qualificationFields,
   } = useLeads();
-  const { allUsers, currentUser } = useAuth();
+  const { allUsers, currentUser, isAuthenticated } = useAuth();
 
   const isSalesRep =
     currentUser?.role === "Sales Representative" ||
@@ -210,6 +210,10 @@ export default function Leads() {
     let isCancelled = false;
 
     const fetchLeads = async () => {
+      if (!isAuthenticated || !currentUser) {
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       setFetchError("");
       try {

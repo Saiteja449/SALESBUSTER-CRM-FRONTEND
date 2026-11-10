@@ -14,30 +14,48 @@ import { normalizeServices, getLocalTodayDateString } from "../utils/helpers.js"
 const DashboardContext = createContext(null);
 
 export function DashboardProvider({ children }) {
-  const { currentUser, allUsers } = useAuth();
-  const { leads: rawLeads, followups: rawFollowups } = useLeads();
-  const [todayAnalytics, setTodayAnalytics] = useState([]);
+  const { currentUser, allUsers, isAuthenticated } = useAuth();
+  const { leads: rawLeads = [], followups: rawFollowups = [] } = useLeads();
+  const [serverDashboardData, setServerDashboardData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const lastFetchedRef = React.useRef(0);
 
-  useEffect(() => {
-    const role = String(currentUser?.role || "").toLowerCase().trim();
-    const isSalesRep = ["sales person", "sales representative", "sales_person"].includes(role);
-    if (!currentUser || isSalesRep) {
-      setTodayAnalytics([]);
-      return undefined;
-    }
-
-    const fetchAnalytics = async () => {
-      try {
-        const res = await axios.get(API_ENDPOINTS.ANALYTICS.TODAY);
-        setTodayAnalytics(res.data.data || []);
-      } catch (err) {
-        console.error("Failed to fetch today analytics:", err);
+  const fetchDashboardSummary = useCallback(
+    async (force = false) => {
+      if (!isAuthenticated || !currentUser) return;
+      const now = Date.now();
+      // Cache for 60 seconds unless forced
+      if (!force && lastFetchedRef.current && now - lastFetchedRef.current < 60000) {
+        return;
       }
-    };
-    fetchAnalytics();
-    const interval = setInterval(fetchAnalytics, 60000); // refresh every minute
-    return () => clearInterval(interval);
-  }, [currentUser?.id, currentUser?._id, currentUser?.role]);
+
+      setLoading(true);
+      setError(null);
+      try {
+        const clientDate = getLocalTodayDateString();
+        const res = await axios.get(
+          `${API_ENDPOINTS.ANALYTICS.DASHBOARD}?clientDate=${clientDate}`
+        );
+        if (res.data?.success && res.data?.data) {
+          setServerDashboardData(res.data.data);
+          lastFetchedRef.current = Date.now();
+        }
+      } catch (err) {
+        console.error("Failed to fetch dashboard summary:", err);
+        setError(err.response?.data?.message || err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [currentUser]
+  );
+
+  const refreshDashboard = useCallback(() => {
+    return fetchDashboardSummary(true);
+  }, [fetchDashboardSummary]);
+
+  const [todayAnalytics, setTodayAnalytics] = useState([]);
 
   // Filter based on user role: if Sales Representative, only show their assigned leads for simple dashboard KPIs
   const leads = useMemo(() => {
@@ -250,7 +268,7 @@ export function DashboardProvider({ children }) {
       })
       .sort((a, b) => b.won - a.won);
 
-    return {
+    const computedStats = {
       totalLeads,
       totalWonCount,
       conversionRate,
@@ -258,13 +276,36 @@ export function DashboardProvider({ children }) {
       wonLeadsByServiceData,
       convertedCount,
       jobsAssignedCount: convertedCount,
+      unassignedCount: 0,
+      activePipelineCount: 0,
       todaysFollowupsCount: todaysFws.length,
       overdueFollowupsCount: overdueFws.length,
       leadSourceData,
       performersList,
       recentActivities: followups.filter((f) => f.done).slice(0, 10),
     };
-  }, [leads, followups, rawLeads, rawFollowups, allUsers, todayAnalytics]);
+
+    return {
+      ...(serverDashboardData || computedStats),
+      fetchDashboardSummary,
+      refreshDashboard,
+      loading,
+      error,
+      isLoaded: Boolean(serverDashboardData),
+    };
+  }, [
+    serverDashboardData,
+    fetchDashboardSummary,
+    refreshDashboard,
+    loading,
+    error,
+    leads,
+    followups,
+    rawLeads,
+    rawFollowups,
+    allUsers,
+    todayAnalytics,
+  ]);
 
   return (
     <DashboardContext.Provider value={stats}>

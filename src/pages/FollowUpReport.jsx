@@ -13,8 +13,14 @@ import { formatDate, getRepName } from "../utils/helpers.js";
 
 export default function FollowUpReport() {
   const navigate = useNavigate();
-  const { leads, followups } = useLeads();
+  const { leads, followups, ensureDataLoaded } = useLeads();
   const { allUsers } = useAuth();
+
+  React.useEffect(() => {
+    if (typeof ensureDataLoaded === "function") {
+      ensureDataLoaded();
+    }
+  }, [ensureDataLoaded]);
 
   const reportData = useMemo(() => {
     const today = new Date();

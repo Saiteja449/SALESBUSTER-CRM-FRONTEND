@@ -103,6 +103,24 @@ export function AuthProvider({ children }) {
     }
   });
 
+  const userRole = (currentUser?.role || "").toLowerCase();
+  const isSalesPerson =
+    userRole === "sales person" ||
+    userRole === "sales representative" ||
+    userRole === "sales_person" ||
+    currentUser?.role === "Sales Representative";
+  const isManager =
+    Boolean(currentUser?.isOrgOwner) ||
+    userRole === "sales manager" ||
+    userRole === "super admin" ||
+    userRole === "super_admin" ||
+    currentUser?.role === "Sales Manager" ||
+    currentUser?.role === "Super Admin";
+  const isSuperAdmin =
+    userRole === "super admin" ||
+    userRole === "super_admin" ||
+    currentUser?.role === "Super Admin";
+
   const logout = useCallback(() => {
     const orgId = organization?.id || organization?._id || currentUser?.organizationId;
     if (orgId) {
@@ -116,10 +134,13 @@ export function AuthProvider({ children }) {
     clearStoredAuth();
   }, [organization?.id, organization?._id, currentUser?.organizationId]);
 
-  // Fetch users from backend
-  const fetchUsers = async () => {
+  // Fetch users from backend (Managers & Admins only)
+  const fetchUsers = useCallback(async () => {
     const token = getStoredToken();
-    if (!token) return;
+    if (!token || !isTokenValid(token)) return;
+
+    // Sales representatives do NOT manage users or seats - skip API call entirely
+    if (isSalesPerson && !isManager) return;
 
     try {
       const response = await axios.get(API_ENDPOINTS.USERS.BASE, {
@@ -166,7 +187,7 @@ export function AuthProvider({ children }) {
       }
       console.error("Failed to fetch users:", error);
     }
-  };
+  }, [isSalesPerson, isManager, logout, organization]);
 
   // Set up global Axios interceptor for 401 unauthorized / 404 deleted org / 403 suspension responses
   useEffect(() => {
@@ -232,10 +253,42 @@ export function AuthProvider({ children }) {
     };
   }, [logout]);
 
-  // Fetch full organization profile from backend to ensure fresh license seats & subscription dates
-  const fetchOrganization = async () => {
+  // Set up global Axios request interceptor to prevent requests when unauthenticated
+  useEffect(() => {
+    const reqInterceptor = axios.interceptors.request.use(
+      (config) => {
+        const url = config.url || "";
+        const isPublicAuth =
+          url.includes("/auth/login") ||
+          url.includes("/auth/register") ||
+          url.includes("/auth/forgot-password") ||
+          url.includes("/auth/reset-password");
+
+        if (!isPublicAuth && url.includes("/api/")) {
+          const token = getStoredToken();
+          if (!token || !isTokenValid(token)) {
+            const controller = new AbortController();
+            controller.abort("Unauthenticated: Protected request blocked");
+            config.signal = controller.signal;
+          }
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    return () => {
+      axios.interceptors.request.eject(reqInterceptor);
+    };
+  }, []);
+
+  // Fetch full organization profile from backend (Managers & Admins only)
+  const fetchOrganization = useCallback(async () => {
     const token = getStoredToken();
-    if (!token) return;
+    if (!token || !isTokenValid(token)) return;
+
+    // Sales representatives do NOT manage organization billing/addons/licenses
+    if (isSalesPerson && !isManager) return;
 
     try {
       const res = await axios.get(API_ENDPOINTS.ORGANIZATIONS.MY_ORG, {
@@ -273,16 +326,24 @@ export function AuthProvider({ children }) {
         }
       }
     }
-  };
+  }, [isSalesPerson, isManager, logout]);
 
   useEffect(() => {
     if (isAuthenticated) {
       const token = getStoredToken();
-      if (token) {
+      if (token && isTokenValid(token)) {
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      } else {
+        clearStoredAuth();
+        setIsAuthenticated(false);
+        return;
       }
-      fetchUsers();
-      fetchOrganization();
+
+      // Only Managers / Org Admins fetch users roster and organization profile
+      if (isManager && !isSalesPerson) {
+        fetchUsers();
+        fetchOrganization();
+      }
 
       const orgId = organization?.id || organization?._id || currentUser?.organizationId;
       const joinOrg = () => {
@@ -490,25 +551,6 @@ export function AuthProvider({ children }) {
   );
 
   const isOrganizationBlocked = isAccountSuspended || isSubscriptionExpired;
-
-  const userRole = (currentUser?.role || "").toLowerCase();
-  const isSalesPerson =
-    userRole === "sales person" ||
-    userRole === "sales representative" ||
-    userRole === "sales_person" ||
-    currentUser?.role === "Sales Representative";
-  const isManager =
-    Boolean(currentUser?.isOrgOwner) ||
-    userRole === "sales manager" ||
-    userRole === "super admin" ||
-    userRole === "super_admin" ||
-    currentUser?.role === "Sales Manager" ||
-    currentUser?.role === "Super Admin";
-
-  const isSuperAdmin =
-    userRole === "super admin" ||
-    userRole === "super_admin" ||
-    currentUser?.role === "Super Admin";
 
   const hasWhatsAppCampaignsAddon = Boolean(
     isSuperAdmin || organization?.addons?.whatsappCampaigns
