@@ -26,6 +26,7 @@ import {
   Info,
   AlertCircle,
   FileSpreadsheet,
+  Edit,
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -47,6 +48,7 @@ export default function EventDashboard() {
 
   // Modals
   const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+  const [showEditEventModal, setShowEditEventModal] = useState(false);
   const [showAttendeeModal, setShowAttendeeModal] = useState(false);
   const [activeAttendee, setActiveAttendee] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
@@ -59,6 +61,15 @@ export default function EventDashboard() {
     eventDate: new Date().toISOString().split("T")[0],
   });
   const [creatingEvent, setCreatingEvent] = useState(false);
+
+  // Edit Event Form State
+  const [editEventData, setEditEventData] = useState({
+    name: "",
+    description: "",
+    location: "",
+    eventDate: "",
+  });
+  const [updatingEvent, setUpdatingEvent] = useState(false);
 
   // Fetch Events
   const loadEvents = useCallback(async (selectId = null) => {
@@ -197,6 +208,45 @@ export default function EventDashboard() {
     }
   };
 
+  // Open Edit Event Modal
+  const handleOpenEditEvent = (evt = selectedEvent) => {
+    if (!evt) return;
+    setEditEventData({
+      name: evt.name || "",
+      description: evt.customMessage || evt.description || evt.whatsappTemplate || "",
+      location: evt.venue || evt.location || "",
+      eventDate: evt.eventDate
+        ? new Date(evt.eventDate).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+    });
+    setShowEditEventModal(true);
+  };
+
+  // Update Event Submit
+  const handleUpdateEvent = async (e) => {
+    e.preventDefault();
+    if (!editEventData.name.trim() || !selectedEventId) return;
+
+    try {
+      setUpdatingEvent(true);
+      await eventService.updateEvent(selectedEventId, {
+        name: editEventData.name.trim(),
+        venue: editEventData.location.trim(),
+        location: editEventData.location.trim(),
+        eventDate: editEventData.eventDate,
+        customMessage: editEventData.description.trim(),
+        description: editEventData.description.trim(),
+      });
+      setShowEditEventModal(false);
+      await loadEvents(selectedEventId);
+    } catch (err) {
+      console.error("Failed to update event:", err);
+      alert(err.message || "Failed to update event");
+    } finally {
+      setUpdatingEvent(false);
+    }
+  };
+
   // Copy WhatsApp Message
   const handleCopyMessage = (text, id) => {
     if (!text) return;
@@ -297,6 +347,17 @@ export default function EventDashboard() {
             <Download className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>Export Excel</span>
           </button>
+
+          {selectedEvent && (
+            <button
+              type="button"
+              onClick={() => handleOpenEditEvent(selectedEvent)}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-border-main bg-bg-card text-text-primary hover:bg-bg-secondary text-xs md:text-sm font-bold transition-colors cursor-pointer shadow-2xs focus-visible:ring-2 focus-visible:ring-pilot-blue focus-visible:outline-none"
+            >
+              <Edit className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <span>Edit Event</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -1134,6 +1195,120 @@ export default function EventDashboard() {
                 >
                   {creatingEvent && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>{creatingEvent ? "Creating..." : "Save Event"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ── Edit Event Modal ────────────────────────────────────────── */}
+      {showEditEventModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setShowEditEventModal(false)}
+        >
+          <div
+            className="bg-bg-card border border-border-main rounded-2xl w-full max-w-md shadow-2xl p-5 md:p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3.5 border-b border-border-main">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <Edit className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-text-primary text-base">
+                  Edit Event
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditEventModal(false)}
+                aria-label="Close modal"
+                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateEvent} className="space-y-4 text-xs md:text-sm">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1.5">
+                  Event Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Tech Expo 2026, Global Summit"
+                  value={editEventData.name}
+                  onChange={(e) =>
+                    setEditEventData({ ...editEventData, name: e.target.value })
+                  }
+                  className="w-full bg-bg-main border border-border-main rounded-xl px-3.5 py-2.5 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-pilot-blue/40 focus:border-pilot-blue transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1.5">
+                  Event Date
+                </label>
+                <input
+                  type="date"
+                  value={editEventData.eventDate}
+                  onChange={(e) =>
+                    setEditEventData({ ...editEventData, eventDate: e.target.value })
+                  }
+                  className="w-full bg-bg-main border border-border-main rounded-xl px-3.5 py-2.5 text-text-primary focus:outline-none focus:ring-2 focus:ring-pilot-blue/40 focus:border-pilot-blue transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1.5">
+                  Location / Venue
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Hall 4, HITEX Hyderabad"
+                  value={editEventData.location}
+                  onChange={(e) =>
+                    setEditEventData({ ...editEventData, location: e.target.value })
+                  }
+                  className="w-full bg-bg-main border border-border-main rounded-xl px-3.5 py-2.5 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-pilot-blue/40 focus:border-pilot-blue transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-text-secondary mb-1.5">
+                  Custom Message / Description
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Custom WhatsApp text or event notes..."
+                  value={editEventData.description}
+                  onChange={(e) =>
+                    setEditEventData({
+                      ...editEventData,
+                      description: e.target.value,
+                    })
+                  }
+                  className="w-full bg-bg-main border border-border-main rounded-xl px-3.5 py-2.5 text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:ring-2 focus:ring-pilot-blue/40 focus:border-pilot-blue transition-all resize-none"
+                />
+              </div>
+
+              <div className="pt-3.5 border-t border-border-main flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowEditEventModal(false)}
+                  className="px-4 py-2 rounded-xl border border-border-main bg-bg-card text-text-primary font-bold text-xs cursor-pointer hover:bg-bg-secondary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingEvent || !editEventData.name.trim()}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-pilot-blue hover:bg-pilot-blue-hover text-white font-bold text-xs cursor-pointer shadow-xs active:scale-98 transition-all disabled:opacity-50"
+                >
+                  {updatingEvent && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{updatingEvent ? "Updating..." : "Update Event"}</span>
                 </button>
               </div>
             </form>
