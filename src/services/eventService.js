@@ -70,6 +70,25 @@ export const eventService = {
   },
 
   /**
+   * Update an existing event
+   */
+  async updateEvent(eventId, updateData) {
+    try {
+      const response = await axios.put(
+        API_ENDPOINTS.EVENTS.EVENT(eventId),
+        updateData,
+        { headers: getAuthHeaders() }
+      );
+      return response.data?.data;
+    } catch (err) {
+      console.error("[eventService] updateEvent error:", err);
+      throw new Error(
+        err.response?.data?.message || "Failed to update event."
+      );
+    }
+  },
+
+  /**
    * Get contacts captured strictly under an event
    */
   async getEventContacts(eventId, { search = "", page = 1, limit = 100 } = {}) {

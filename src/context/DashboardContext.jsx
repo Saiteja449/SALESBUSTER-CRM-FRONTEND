@@ -4,6 +4,7 @@ import React, {
   useMemo,
   useState,
   useEffect,
+  useCallback,
 } from "react";
 import axios from "axios";
 import { API_ENDPOINTS } from "../utils/constants.js";
